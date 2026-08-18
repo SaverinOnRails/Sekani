@@ -1,2 +1,6 @@
 <Solution>
+  <Folder Name="/Source/" />
+  <Folder Name="/Source/UI/">
+    <Project Path="Source/UI/SekaniUI.csproj" />
+  </Folder>
 </Solution>
