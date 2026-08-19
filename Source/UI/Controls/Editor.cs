@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -12,12 +11,12 @@ using Line = System.Collections.Generic.List<SekaniUI.Controls.Glyph>;
 
 namespace SekaniUI.Controls;
 
-public class MainTextArea : Control
+public class Editor : Control
 {
 	private Typeface _editorFontFace = Typeface.Default;
 	private float _charAdvance;
 	private float _lineHeight;
-	private readonly float _fontSize = 14;
+	private readonly float _fontSize = 16;
 	private List<Line> _lines = [new Line()];
 	private Coordinate _caretPosition = new(0, 0);
 	private readonly float _editorHorizontalMargin = 10F;
@@ -26,7 +25,7 @@ public class MainTextArea : Control
 	private readonly int _tabSize = 4;
 	private readonly static string TAB_CHAR = "\t";
 	private readonly static string NEW_LINE_CHAR = Environment.NewLine;
-	public MainTextArea()
+	public Editor()
 	{
 		SetAvaloniaProperties();
 		MeasureFont();
@@ -55,7 +54,7 @@ public class MainTextArea : Control
 
 	private void MeasureFont()
 	{
-		_editorFontFace = new Typeface("JetBrains Mono");
+		_editorFontFace = new Typeface("Cascadia Code");
 		var text = new FormattedText(
 			"#",
 			CultureInfo.InvariantCulture,
@@ -105,7 +104,7 @@ public class MainTextArea : Control
 						_fontSize,
 						Brushes.White);
 					Coordinate coord = new(c, l);
-					var point = TextGridToUICoord(coord);
+					var point = TextGridToUICoord(coord, glyph.S);
 					context.DrawText(text, point);
 				}
 			}
@@ -135,7 +134,7 @@ public class MainTextArea : Control
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
-	private Point TextGridToUICoord(Coordinate coord)
+	private Point TextGridToUICoord(Coordinate coord, string? p = null)
 	{
 		var line = _lines[coord.Line];
 		int visualCol = 0;
@@ -172,15 +171,126 @@ public class MainTextArea : Control
 			case Key.Return:
 				InsertNewLine();
 				break;
+			case Key.Up:
+				CaretUp();
+				break;
+			case Key.Left:
+				CaretLeft();
+				break;
+			case Key.Right:
+				CaretRight();
+				break;
+			case Key.Down:
+				CaretDown();
+				break;
+			case Key.Back:
+				Backspace();
+				break;
 
 		}
 	}
 
+	private void Backspace()
+	{
+		var lineIndex = _caretPosition.Line;
+		var col = _caretPosition.Col;
+
+		var line = _lines[lineIndex];
+
+		if (col > 0)
+		{
+			line.RemoveAt(col - 1);
+			_caretPosition.AdvanceCol(-1);
+		}
+		if (col == 0 && lineIndex > 0)
+		{
+			var previousLine = _lines[lineIndex - 1];
+			var previousLength = previousLine.Count;
+			previousLine.AddRange(line);
+			_lines.RemoveAt(lineIndex);
+			_caretPosition = new(previousLength, lineIndex - 1);
+		}
+		HoldCaretAndRedraw();
+	}
+	private void CaretLeft()
+	{
+		if (_caretPosition.Col == 0)
+		{
+			if (_caretPosition.Line == 0)
+				return;
+
+			_caretPosition = new(
+				_lines[_caretPosition.Line - 1].Count,
+				_caretPosition.Line - 1);
+
+			HoldCaretAndRedraw();
+			return;
+		}
+
+		_caretPosition.AdvanceCol(-1);
+		HoldCaretAndRedraw();
+	}
+
+	private void CaretRight()
+	{
+		var line = _lines[_caretPosition.Line];
+
+		if (_caretPosition.Col < line.Count)
+		{
+			_caretPosition.AdvanceCol(1);
+			HoldCaretAndRedraw();
+			return;
+		}
+
+		if (_caretPosition.Line == _lines.Count - 1)
+			return;
+
+		_caretPosition = new(0, _caretPosition.Line + 1);
+		HoldCaretAndRedraw();
+	}
+
+	private void CaretUp()
+	{
+		if (_caretPosition.Line == 0)
+			return;
+
+		var line = _lines[_caretPosition.Line - 1];
+
+		_caretPosition = new(
+			Math.Min(_caretPosition.Col, line.Count),
+			_caretPosition.Line - 1);
+
+		HoldCaretAndRedraw();
+	}
+
+	private void CaretDown()
+	{
+		if (_caretPosition.Line == _lines.Count - 1)
+			return;
+
+		var line = _lines[_caretPosition.Line + 1];
+
+		_caretPosition = new(
+			Math.Min(_caretPosition.Col, line.Count),
+			_caretPosition.Line + 1);
+
+		HoldCaretAndRedraw();
+	}
+
 	private void InsertNewLine()
 	{
-		var line = _lines.Last();
-		_lines.Add(new());
-		_caretPosition = new(0, _lines.Count - 1);
+		var lineIndex = _caretPosition.Line;
+		var col = _caretPosition.Col;
+		var line = _lines[lineIndex];
+		var rightSplit = line.GetRange(col, line.Count - col);
+		line.RemoveRange(col, line.Count - col);
+		_lines.Insert(lineIndex + 1, rightSplit);
+		_caretPosition = new(0, lineIndex + 1);
+
+		HoldCaretAndRedraw();
+	}
+	private void HoldCaretAndRedraw()
+	{
 		ResetCaretBlink();
 		Redraw();
 	}
@@ -214,25 +324,29 @@ public class MainTextArea : Control
 
 	private void InsertUTF8(ReadOnlySpan<byte> text)
 	{
-		var line = _lines.Last();
 		var data = Encoding.UTF8.GetString(text);
+		if (data == NEW_LINE_CHAR)
+		{
+			InsertNewLine();
+			return;
+		}
+		var line = _lines[_caretPosition.Line];
+		line.Insert(_caretPosition.Col, new Glyph(data));
 		_caretPosition.AdvanceCol();
-		line.Add(new Glyph(data));
-		ResetCaretBlink();
-		Redraw();
+		HoldCaretAndRedraw();
 	}
 }
 
 readonly record struct Glyph(string S);
 
-class Coordinate(int Col, int Line)
+struct Coordinate(int Col, int Line)
 {
 	public int Col { get; private set; } = Col;
 	public int Line { get; private set; } = Line;
 
-	public void AdvanceCol()
+	public void AdvanceCol(int count = 1)
 	{
-		Col++;
+		Col += count;
 	}
 }
 
