@@ -160,8 +160,7 @@ public class Editor : Control
 			0,
 			GetDocumentHeight() - EditorAreaHeight);
 
-		// Scale wheel "ticks" into pixels.
-		var scrollAmount = 40.0;
+		var scrollAmount = 60.0;
 
 		_scrollYOffset = Math.Clamp(
 			_scrollYOffset - (e.Delta.Y * scrollAmount),
@@ -346,8 +345,8 @@ public class Editor : Control
 			if (line.Count == 0)
 				continue;
 
-			var x = GridToUICoord(new(line.Count - 1, i)).X
-				  + _charAdvance;
+			var x = GridToUICoord(new(line.Count , i)).X;
+				  
 
 			maxWidth = Math.Max(maxWidth, x);
 		}
@@ -381,12 +380,11 @@ public class Editor : Control
 
 		return new Rect(x, y, width, thumbHeight);
 	}
-	//TODO: Optimize this
+
 	private void DrawText(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
 
-		//only visible line, worst case scenario
 		int firstLine =
 			Math.Max(0, (int)(_scrollYOffset / _lineHeight));
 		int lastLine =
@@ -396,26 +394,12 @@ public class Editor : Control
 
 		for (int l = firstLine; l < lastLine; l++)
 		{
-			for (int c = 0; c < _lines[l].Count; c++)
-			{
-				var glyph = _lines[l][c];
-				if (glyph.S == TAB_CHAR) continue;
-				else
-				{
-					var text = new FormattedText(
-						glyph.S,
-						CultureInfo.InvariantCulture,
-						FlowDirection.LeftToRight,
-						_editorFontFace,
-						_fontSize,
-						Brushes.White);
-					Coordinate coord = new(c, l);
-					var point = GridToUICoord(coord, glyph.S);
-					point = point.WithX(point.X - _scrollXOffset);
-					point = point.WithY(point.Y - _scrollYOffset);
-					context.DrawText(text, point);
-				}
-			}
+			var ft = RasterizeLine(_lines[l]);
+			Coordinate coord = new(0, l);
+			var point = GridToUICoord(coord);
+			point = point.WithX(point.X - _scrollXOffset);
+			point = point.WithY(point.Y - _scrollYOffset);
+			context.DrawText(ft, point);
 		}
 	}
 
@@ -427,7 +411,7 @@ public class Editor : Control
 	}
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#224248"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#0F3040"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	private void Redraw() => InvalidateVisual();
@@ -445,7 +429,38 @@ public class Editor : Control
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
-	private Point GridToUICoord(Coordinate coord, string? p = null)
+	private FormattedText RasterizeLine(Line line)
+	{
+		var builder = new StringBuilder();
+		int visualColumn = 0;
+
+		for (int c = 0; c < line.Count; c++)
+		{
+			var glyph = line[c];
+
+			if (glyph.S == TAB_CHAR)
+			{
+				int spaces = _tabSize - (visualColumn % _tabSize);
+				builder.Append(' ', spaces);
+				visualColumn += spaces;
+			}
+			else
+			{
+				builder.Append(glyph.S);
+				visualColumn++;
+			}
+		}
+
+		return new FormattedText(
+			builder.ToString(),
+			CultureInfo.InvariantCulture,
+			FlowDirection.LeftToRight,
+			_editorFontFace,
+			_fontSize,
+			Brushes.White);
+	}
+
+	private Point GridToUICoord(Coordinate coord)
 	{
 		var line = _lines[coord.Line];
 		int visualCol = 0;
@@ -459,7 +474,7 @@ public class Editor : Control
 				visualCol++;
 		}
 		return new(
-			visualCol * _charAdvance + EditorArea.X,
+			visualCol * _charAdvance + EditorArea.Left,
 			coord.Line * _lineHeight);
 	}
 	protected override void OnKeyDown(KeyEventArgs e)
