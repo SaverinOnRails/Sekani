@@ -16,15 +16,40 @@ public class Editor : Control
 	private Typeface _editorFontFace = Typeface.Default;
 	private float _charAdvance;
 	private float _lineHeight;
+	private readonly double _caretWidth = 2;
 	private readonly float _fontSize = 16;
 	private List<Line> _lines = [new Line()];
 	private Coordinate _caretPosition = new(0, 0);
+
+	private Coordinate CaretPosition
+	{
+		get => _caretPosition;
+		set
+		{
+			_caretPosition = value;
+			EnsureCaretVisible();
+		}
+	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private bool _caretVisible = true;
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private readonly int _tabSize = 4;
 	private readonly static string TAB_CHAR = "\t";
 	private readonly static string NEW_LINE_CHAR = Environment.NewLine;
+	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
+
+	//TODO: Optimize this
+	private bool _canScrollX => GetDocumentWidth() > EditorAreaWidth;
+	private bool _canScrollY => GetDocumentHeight() > EditorAreaHeight;
+	private double _scrollXOffset = 0;
+	private double _scrollYOffset = 0;
+	private bool _pointerPressedOnHorizontalScrollbar = false;
+	private bool _pointerPressedOnVerticalScrollbar;
+
+	private double _scrollbarPointerStartX = 0;
+	private double _scrollbarScrollStartX = 0;
+	private double _scrollbarPointerStartY;
+	private double _scrollbarScrollStartY;
 	public Editor()
 	{
 		SetAvaloniaProperties();
@@ -43,6 +68,8 @@ public class Editor : Control
 		_caretBlinkTimer.Start();
 	}
 
+	public double EditorAreaWidth => Bounds.Width;
+	public double EditorAreaHeight => Bounds.Height;
 
 	private void SetAvaloniaProperties()
 	{
@@ -52,6 +79,28 @@ public class Editor : Control
 		Cursor = new Cursor(StandardCursorType.Ibeam);
 	}
 
+	private void EnsureCaretVisible()
+	{
+		var pos = TextGridToUICoord(_caretPosition);
+
+		if (pos.X + _caretWidth > _scrollXOffset + EditorAreaWidth)
+		{
+			_scrollXOffset = pos.X + _caretWidth - EditorAreaWidth;
+		}
+		if (pos.X < _scrollXOffset)
+		{
+			_scrollXOffset = pos.X;
+		}
+		if (pos.Y + _lineHeight > _scrollYOffset + EditorAreaHeight)
+		{
+			_scrollYOffset = pos.Y + _lineHeight - EditorAreaHeight;
+		}
+
+		if (pos.Y < _scrollYOffset)
+		{
+			_scrollYOffset = pos.Y;
+		}
+	}
 	private void MeasureFont()
 	{
 		_editorFontFace = new Typeface("Cascadia Code");
@@ -71,11 +120,140 @@ public class Editor : Control
 	{
 		base.OnAttachedToVisualTree(e);
 		Focus();
+
 	}
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
 		Focus();
+		TryHittestScrollbars(e);
 		base.OnPointerPressed(e);
+	}
+
+	protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+	{
+		base.OnPointerWheelChanged(e);
+
+		if (!_canScrollY)
+			return;
+
+		var maxScrollOffset = Math.Max(
+			0,
+			GetDocumentHeight() - EditorAreaHeight);
+
+		// Scale wheel "ticks" into pixels.
+		var scrollAmount = 40.0;
+
+		_scrollYOffset = Math.Clamp(
+			_scrollYOffset - (e.Delta.Y * scrollAmount),
+			0,
+			maxScrollOffset);
+
+		Redraw();
+
+		e.Handled = true;
+	}
+	private void TryHittestScrollbars(PointerEventArgs e)
+	{
+		var point = e.GetPosition(this);
+
+		if (_canScrollX &&
+			GetHorizontalScrollbarRect().Contains(point))
+		{
+			e.Handled = true;
+
+			_pointerPressedOnHorizontalScrollbar = true;
+			_scrollbarPointerStartX = point.X;
+			_scrollbarScrollStartX = _scrollXOffset;
+
+			return;
+		}
+
+		if (_canScrollY &&
+			GetVerticalScrollbarRect().Contains(point))
+		{
+			e.Handled = true;
+
+			_pointerPressedOnVerticalScrollbar = true;
+			_scrollbarPointerStartY = point.Y;
+			_scrollbarScrollStartY = _scrollYOffset;
+
+			return;
+		}
+	}
+
+	protected override void OnPointerMoved(PointerEventArgs e)
+	{
+		TryMoveScrollbars(e);
+	}
+
+	private void TryMoveScrollbars(PointerEventArgs e)
+	{
+		var point = e.GetPosition(this);
+		if (_pointerPressedOnHorizontalScrollbar)
+		{
+			var pointerDelta = point.X - _scrollbarPointerStartX;
+
+			var documentWidth = GetDocumentWidth();
+			var thumbRect = GetHorizontalScrollbarRect();
+
+			var maxScrollOffset =
+				Math.Max(0, documentWidth - EditorAreaWidth);
+
+			var maxThumbOffset =
+				EditorAreaWidth - thumbRect.Width;
+
+			if (maxThumbOffset > 0)
+			{
+				var scrollDelta =
+					pointerDelta / maxThumbOffset * maxScrollOffset;
+
+				_scrollXOffset = Math.Clamp(
+					_scrollbarScrollStartX + scrollDelta,
+					0,
+					maxScrollOffset);
+			}
+
+			Redraw();
+			return;
+		}
+
+		if (_pointerPressedOnVerticalScrollbar)
+		{
+			var pointerDelta = point.Y - _scrollbarPointerStartY;
+
+			var documentHeight = GetDocumentHeight();
+			var thumbRect = GetVerticalScrollbarRect();
+
+			var maxScrollOffset =
+				Math.Max(0, documentHeight - EditorAreaHeight);
+
+			var maxThumbOffset =
+				EditorAreaHeight - thumbRect.Height;
+
+			if (maxThumbOffset > 0)
+			{
+				var scrollDelta =
+					pointerDelta / maxThumbOffset * maxScrollOffset;
+
+				_scrollYOffset = Math.Clamp(
+					_scrollbarScrollStartY + scrollDelta,
+					0,
+					maxScrollOffset);
+			}
+
+			Redraw();
+		}
+	}
+	protected override void OnPointerReleased(PointerReleasedEventArgs e)
+	{
+		ResetPointerPressed();
+	}
+
+	private void ResetPointerPressed()
+	{
+		_pointerPressedOnHorizontalScrollbar = false;
+		_pointerPressedOnVerticalScrollbar = false;
+		Cursor = new Cursor(StandardCursorType.Ibeam);
 	}
 
 	public override void Render(DrawingContext context)
@@ -84,8 +262,99 @@ public class Editor : Control
 		DrawMainRectangle(context);
 		DrawCaret(context);
 		DrawText(context);
+		if (_canScrollX)
+		{
+			DrawHorizontalScrollbar(context);
+		}
+		if (_canScrollY)
+		{
+			DrawVerticalScrollbar(context);
+		}
 	}
 
+	private void DrawVerticalScrollbar(DrawingContext context)
+	{
+		var rect = GetVerticalScrollbarRect();
+		context.FillRectangle(_scollBarBrush, rect);
+	}
+
+	private void DrawHorizontalScrollbar(DrawingContext context)
+	{
+		var rect = GetHorizontalScrollbarRect();
+		context.FillRectangle(_scollBarBrush, rect);
+	}
+
+	private Rect GetHorizontalScrollbarRect()
+	{
+		var height = 7;
+		var editorHeight = Bounds.Height;
+
+		var documentWidth = GetDocumentWidth();
+
+		var thumbWidth = documentWidth <= EditorAreaWidth
+			? EditorAreaWidth
+			: (EditorAreaWidth / documentWidth) * EditorAreaWidth;
+
+		var maxScrollOffset = Math.Max(0, documentWidth - EditorAreaWidth);
+		var maxThumbX = EditorAreaWidth - thumbWidth;
+
+		var x = maxScrollOffset <= 0
+			? 0
+			: (_scrollXOffset / maxScrollOffset) * maxThumbX;
+
+		var y = editorHeight - height;
+
+		return new Rect(x, y, thumbWidth, height);
+	}
+
+	private double GetDocumentWidth()
+	{
+		var maxWidth = 0.0;
+
+		for (int i = 0; i < _lines.Count; i++)
+		{
+			var line = _lines[i];
+
+			if (line.Count == 0)
+				continue;
+
+			var x = TextGridToUICoord(new(line.Count - 1, i)).X
+				  + _charAdvance;
+
+			maxWidth = Math.Max(maxWidth, x);
+		}
+
+		return maxWidth;
+	}
+
+	private double GetDocumentHeight()
+	{
+		return _lines.Count * _lineHeight;
+	}
+
+	private Rect GetVerticalScrollbarRect()
+	{
+		var width = 7;
+		var editorWidth = Bounds.Width;
+
+		var documentHeight = GetDocumentHeight();
+
+		var thumbHeight = documentHeight <= EditorAreaHeight
+			? EditorAreaHeight
+			: (EditorAreaHeight / documentHeight) * EditorAreaHeight;
+
+		var maxScrollOffset = Math.Max(0, documentHeight - EditorAreaHeight);
+		var maxThumbY = EditorAreaHeight - thumbHeight;
+
+		var y = maxScrollOffset <= 0
+			? 0
+			: (_scrollYOffset / maxScrollOffset) * maxThumbY;
+
+		var x = editorWidth - width;
+
+		return new Rect(x, y, width, thumbHeight);
+	}
+	//TODO: Optimize this
 	private void DrawText(DrawingContext context)
 	{
 		for (int l = 0; l < _lines.Count; l++)
@@ -105,6 +374,8 @@ public class Editor : Control
 						Brushes.White);
 					Coordinate coord = new(c, l);
 					var point = TextGridToUICoord(coord, glyph.S);
+					point = point.WithX(point.X - _scrollXOffset);
+					point = point.WithY(point.Y - _scrollYOffset);
 					context.DrawText(text, point);
 				}
 			}
@@ -127,10 +398,12 @@ public class Editor : Control
 	private void DrawCaret(DrawingContext context)
 	{
 		if (!_caretVisible) return;
-		var point = TextGridToUICoord(_caretPosition);
+		var point = TextGridToUICoord(CaretPosition);
+		point = point.WithX(point.X - _scrollXOffset);
+		point = point.WithY(point.Y - _scrollYOffset);
 		var caretRect = new Rect(
 			point,
-			new Size(2, _lineHeight));
+			new Size(_caretWidth, _lineHeight));
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
@@ -190,17 +463,23 @@ public class Editor : Control
 		}
 	}
 
+	private void AdvanceCaretCol(int count)
+	{
+		CaretPosition = new(
+			CaretPosition.Col + count,
+			CaretPosition.Line);
+	}
 	private void Backspace()
 	{
-		var lineIndex = _caretPosition.Line;
-		var col = _caretPosition.Col;
+		var lineIndex = CaretPosition.Line;
+		var col = CaretPosition.Col;
 
 		var line = _lines[lineIndex];
 
 		if (col > 0)
 		{
 			line.RemoveAt(col - 1);
-			_caretPosition.AdvanceCol(-1);
+			AdvanceCaretCol(-1);
 		}
 		if (col == 0 && lineIndex > 0)
 		{
@@ -208,84 +487,84 @@ public class Editor : Control
 			var previousLength = previousLine.Count;
 			previousLine.AddRange(line);
 			_lines.RemoveAt(lineIndex);
-			_caretPosition = new(previousLength, lineIndex - 1);
+			CaretPosition = new(previousLength, lineIndex - 1);
 		}
 		HoldCaretAndRedraw();
 	}
 	private void CaretLeft()
 	{
-		if (_caretPosition.Col == 0)
+		if (CaretPosition.Col == 0)
 		{
-			if (_caretPosition.Line == 0)
+			if (CaretPosition.Line == 0)
 				return;
 
-			_caretPosition = new(
-				_lines[_caretPosition.Line - 1].Count,
-				_caretPosition.Line - 1);
+			CaretPosition = new(
+				_lines[CaretPosition.Line - 1].Count,
+				CaretPosition.Line - 1);
 
 			HoldCaretAndRedraw();
 			return;
 		}
 
-		_caretPosition.AdvanceCol(-1);
+		AdvanceCaretCol(-1);
 		HoldCaretAndRedraw();
 	}
 
 	private void CaretRight()
 	{
-		var line = _lines[_caretPosition.Line];
+		var line = _lines[CaretPosition.Line];
 
-		if (_caretPosition.Col < line.Count)
+		if (CaretPosition.Col < line.Count)
 		{
-			_caretPosition.AdvanceCol(1);
+			AdvanceCaretCol(1);
 			HoldCaretAndRedraw();
 			return;
 		}
 
-		if (_caretPosition.Line == _lines.Count - 1)
+		if (CaretPosition.Line == _lines.Count - 1)
 			return;
 
-		_caretPosition = new(0, _caretPosition.Line + 1);
+		CaretPosition = new(0, CaretPosition.Line + 1);
 		HoldCaretAndRedraw();
 	}
 
 	private void CaretUp()
 	{
-		if (_caretPosition.Line == 0)
+		if (CaretPosition.Line == 0)
 			return;
 
-		var line = _lines[_caretPosition.Line - 1];
+		var line = _lines[CaretPosition.Line - 1];
 
-		_caretPosition = new(
-			Math.Min(_caretPosition.Col, line.Count),
-			_caretPosition.Line - 1);
+		CaretPosition = new(
+			Math.Min(CaretPosition.Col, line.Count),
+			CaretPosition.Line - 1);
 
 		HoldCaretAndRedraw();
 	}
 
 	private void CaretDown()
 	{
-		if (_caretPosition.Line == _lines.Count - 1)
+		if (CaretPosition.Line == _lines.Count - 1)
 			return;
 
-		var line = _lines[_caretPosition.Line + 1];
+		var line = _lines[CaretPosition.Line + 1];
 
-		_caretPosition = new(
-			Math.Min(_caretPosition.Col, line.Count),
-			_caretPosition.Line + 1);
+		CaretPosition = new(
+			Math.Min(CaretPosition.Col, line.Count),
+			CaretPosition.Line + 1);
 
 		HoldCaretAndRedraw();
 	}
 
 	private void InsertNewLine()
 	{
-		var lineIndex = _caretPosition.Line;
-		var col = _caretPosition.Col;
+		var lineIndex = CaretPosition.Line;
+		var col = CaretPosition.Col;
 		var line = _lines[lineIndex];
 		var rightSplit = line.GetRange(col, line.Count - col);
 		line.RemoveRange(col, line.Count - col);
 		_lines.Insert(lineIndex + 1, rightSplit);
-		_caretPosition = new(0, lineIndex + 1);
+		CaretPosition = new(0, lineIndex + 1);
 
 		HoldCaretAndRedraw();
 	}
@@ -330,9 +609,9 @@ public class Editor : Control
 			InsertNewLine();
 			return;
 		}
-		var line = _lines[_caretPosition.Line];
-		line.Insert(_caretPosition.Col, new Glyph(data));
-		_caretPosition.AdvanceCol();
+		var line = _lines[CaretPosition.Line];
+		line.Insert(CaretPosition.Col, new Glyph(data));
+		AdvanceCaretCol(1);
 		HoldCaretAndRedraw();
 	}
 }
@@ -344,9 +623,5 @@ struct Coordinate(int Col, int Line)
 	public int Col { get; private set; } = Col;
 	public int Line { get; private set; } = Line;
 
-	public void AdvanceCol(int count = 1)
-	{
-		Col += count;
-	}
 }
 
