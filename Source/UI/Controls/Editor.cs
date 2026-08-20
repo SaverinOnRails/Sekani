@@ -18,6 +18,7 @@ public class Editor : Control
 	private float _lineHeight;
 	private readonly double _caretWidth = 2;
 	private readonly float _fontSize = 16;
+	private readonly float _scrollBarDimension = 7;
 	private List<Line> _lines = [new Line()];
 	private Coordinate _caretPosition = new(0, 0);
 
@@ -41,7 +42,15 @@ public class Editor : Control
 	//TODO: Optimize this
 	private bool _canScrollX => GetDocumentWidth() > EditorAreaWidth;
 	private bool _canScrollY => GetDocumentHeight() > EditorAreaHeight;
-	private double _scrollXOffset = 0;
+
+	//Bounds of the actual text and only text area
+	public Rect EditorArea =>
+		new(
+			new Point(_editorHorizontalMargin, 0),
+			new Size(
+				Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension,
+				Bounds.Height - _scrollBarDimension)); private double _scrollXOffset = 0;
+
 	private double _scrollYOffset = 0;
 	private bool _pointerPressedOnHorizontalScrollbar = false;
 	private bool _pointerPressedOnVerticalScrollbar;
@@ -68,8 +77,8 @@ public class Editor : Control
 		_caretBlinkTimer.Start();
 	}
 
-	public double EditorAreaWidth => Bounds.Width;
-	public double EditorAreaHeight => Bounds.Height;
+	public double EditorAreaWidth => EditorArea.Width;
+	public double EditorAreaHeight => EditorArea.Height;
 
 	private void SetAvaloniaProperties()
 	{
@@ -81,25 +90,36 @@ public class Editor : Control
 
 	private void EnsureCaretVisible()
 	{
-		var pos = TextGridToUICoord(_caretPosition);
+		var pos = GridToUICoord(_caretPosition);
+		if (pos.X + _caretWidth > _scrollXOffset + EditorArea.Right)
+		{
+			_scrollXOffset =
+				pos.X + _caretWidth - EditorArea.Right;
+		}
+		if (pos.X < _scrollXOffset + EditorArea.Left)
+		{
+			_scrollXOffset =
+				pos.X - EditorArea.Left;
+		}
+		if (pos.Y + _lineHeight > _scrollYOffset + EditorArea.Bottom)
+		{
+			_scrollYOffset =
+				pos.Y + _lineHeight - EditorArea.Bottom;
+		}
+		if (pos.Y < _scrollYOffset + EditorArea.Top)
+		{
+			_scrollYOffset =
+				pos.Y - EditorArea.Top;
+		}
+		_scrollXOffset = Math.Clamp(
+			_scrollXOffset,
+			0,
+			Math.Max(0, GetDocumentWidth() - EditorArea.Width));
 
-		if (pos.X + _caretWidth > _scrollXOffset + EditorAreaWidth)
-		{
-			_scrollXOffset = pos.X + _caretWidth - EditorAreaWidth;
-		}
-		if (pos.X < _scrollXOffset)
-		{
-			_scrollXOffset = pos.X;
-		}
-		if (pos.Y + _lineHeight > _scrollYOffset + EditorAreaHeight)
-		{
-			_scrollYOffset = pos.Y + _lineHeight - EditorAreaHeight;
-		}
-
-		if (pos.Y < _scrollYOffset)
-		{
-			_scrollYOffset = pos.Y;
-		}
+		_scrollYOffset = Math.Clamp(
+			_scrollYOffset,
+			0,
+			Math.Max(0, GetDocumentHeight() - EditorArea.Height));
 	}
 	private void MeasureFont()
 	{
@@ -286,7 +306,7 @@ public class Editor : Control
 
 	private Rect GetHorizontalScrollbarRect()
 	{
-		var height = 7;
+		var height = _scrollBarDimension;
 		var editorHeight = Bounds.Height;
 
 		var documentWidth = GetDocumentWidth();
@@ -318,7 +338,7 @@ public class Editor : Control
 			if (line.Count == 0)
 				continue;
 
-			var x = TextGridToUICoord(new(line.Count - 1, i)).X
+			var x = GridToUICoord(new(line.Count - 1, i)).X
 				  + _charAdvance;
 
 			maxWidth = Math.Max(maxWidth, x);
@@ -334,8 +354,7 @@ public class Editor : Control
 
 	private Rect GetVerticalScrollbarRect()
 	{
-		var width = 7;
-		var editorWidth = Bounds.Width;
+		var width = _scrollBarDimension;
 
 		var documentHeight = GetDocumentHeight();
 
@@ -350,13 +369,14 @@ public class Editor : Control
 			? 0
 			: (_scrollYOffset / maxScrollOffset) * maxThumbY;
 
-		var x = editorWidth - width;
+		var x = EditorArea.Right + _editorHorizontalMargin;
 
 		return new Rect(x, y, width, thumbHeight);
 	}
 	//TODO: Optimize this
 	private void DrawText(DrawingContext context)
 	{
+		using var clip = context.PushClip(EditorArea);
 		for (int l = 0; l < _lines.Count; l++)
 		{
 			for (int c = 0; c < _lines[l].Count; c++)
@@ -373,7 +393,7 @@ public class Editor : Control
 						_fontSize,
 						Brushes.White);
 					Coordinate coord = new(c, l);
-					var point = TextGridToUICoord(coord, glyph.S);
+					var point = GridToUICoord(coord, glyph.S);
 					point = point.WithX(point.X - _scrollXOffset);
 					point = point.WithY(point.Y - _scrollYOffset);
 					context.DrawText(text, point);
@@ -397,8 +417,9 @@ public class Editor : Control
 
 	private void DrawCaret(DrawingContext context)
 	{
+		using var clip = context.PushClip(EditorArea);
 		if (!_caretVisible) return;
-		var point = TextGridToUICoord(CaretPosition);
+		var point = GridToUICoord(CaretPosition);
 		point = point.WithX(point.X - _scrollXOffset);
 		point = point.WithY(point.Y - _scrollYOffset);
 		var caretRect = new Rect(
@@ -407,7 +428,7 @@ public class Editor : Control
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
-	private Point TextGridToUICoord(Coordinate coord, string? p = null)
+	private Point GridToUICoord(Coordinate coord, string? p = null)
 	{
 		var line = _lines[coord.Line];
 		int visualCol = 0;
@@ -421,7 +442,7 @@ public class Editor : Control
 				visualCol++;
 		}
 		return new(
-			visualCol * _charAdvance + _editorHorizontalMargin,
+			visualCol * _charAdvance + EditorArea.X,
 			coord.Line * _lineHeight);
 	}
 	protected override void OnKeyDown(KeyEventArgs e)
