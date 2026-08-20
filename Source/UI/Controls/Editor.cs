@@ -19,8 +19,16 @@ public class Editor : Control
 	private readonly double _caretWidth = 2;
 	private readonly float _fontSize = 16;
 	private readonly float _scrollBarDimension = 7;
-	private List<Line> _lines = [new Line()];
+
+	private const float _baseLineNumberWidth = 20;
+	private float _lineNumberSectDisplayWidth =>
+		_baseLineNumberWidth +
+		Math.Max(0, _lines.Count.ToString().Length - 1) * _charAdvance;
+
+	private float _lineNumberSectWidth =>
+		_drawLineNumbers ? _lineNumberSectDisplayWidth : 0; private List<Line> _lines = [new Line()];
 	private Coordinate _caretPosition = new(0, 0);
+	private bool _drawLineNumbers = true;
 
 	private Coordinate CaretPosition
 	{
@@ -38,18 +46,27 @@ public class Editor : Control
 	private readonly static string TAB_CHAR = "\t";
 	private readonly static string NEW_LINE_CHAR = Environment.NewLine;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
+	private double _scrollXOffset = 0;
 
 	//TODO: Optimize this
 	private bool _canScrollX => GetDocumentWidth() > EditorAreaWidth;
 	private bool _canScrollY => GetDocumentHeight() > EditorAreaHeight;
 
-	//Bounds of the actual text and only text area
-	public Rect EditorArea =>
+	//Bounds of the actual textarea
+	private Rect EditorArea =>
 		new(
-			new Point(_editorHorizontalMargin, 0),
+			new Point(_editorHorizontalMargin + _lineNumberSectWidth, 0),
 			new Size(
-				Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension,
-				Bounds.Height - _scrollBarDimension)); private double _scrollXOffset = 0;
+				Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension - _lineNumberSectWidth,
+				Bounds.Height - _scrollBarDimension));
+
+	private Rect LineNumbersSectRect =>
+		new(
+			new Point(0, 0),
+			new Size(
+			_lineNumberSectWidth,
+			EditorArea.Height
+		));
 
 	private double _scrollYOffset = 0;
 	private bool _pointerPressedOnHorizontalScrollbar = false;
@@ -59,6 +76,7 @@ public class Editor : Control
 	private double _scrollbarScrollStartX = 0;
 	private double _scrollbarPointerStartY;
 	private double _scrollbarScrollStartY;
+
 	public Editor()
 	{
 		SetAvaloniaProperties();
@@ -140,7 +158,6 @@ public class Editor : Control
 	{
 		base.OnAttachedToVisualTree(e);
 		Focus();
-
 	}
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
@@ -280,33 +297,73 @@ public class Editor : Control
 		base.Render(context);
 		DrawMainRectangle(context);
 		DrawCaret(context);
+		DrawLineNumbers(context);
 		DrawText(context);
-		if (_canScrollX)
-		{
-			DrawHorizontalScrollbar(context);
-		}
-		if (_canScrollY)
-		{
-			DrawVerticalScrollbar(context);
-		}
+		DrawHorizontalScrollbar(context);
+		DrawVerticalScrollbar(context);
 	}
 
+	private void DrawLineNumbers(DrawingContext context)
+	{
+		if (!_drawLineNumbers || _lineNumberSectWidth == 0)
+			return;
+
+		using var clip = context.PushClip(LineNumbersSectRect);
+
+		// gutter
+		// context.DrawLine(
+		// 	new Pen(Brushes.White),
+		// 	new Point(LineNumbersSectRect.Right, 0),
+		// 	new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
+
+		int firstLine =
+				Math.Max(0, (int)(_scrollYOffset / _lineHeight));
+
+		int lastLine =
+			Math.Min(
+				_lines.Count,
+				(int)((_scrollYOffset + EditorArea.Height) / _lineHeight) + 1);
+
+		for (int l = firstLine; l < lastLine; l++)
+		{
+			var number = (l + 1).ToString();
+
+			var ft = new FormattedText(
+				number,
+				CultureInfo.InvariantCulture,
+				FlowDirection.LeftToRight,
+				_editorFontFace,
+				_fontSize,
+				new SolidColorBrush(Colors.White, 0.4));
+
+			var x = _lineNumberSectWidth - ft.Width - 5;
+
+			var point = new Point(
+				x,
+				l * _lineHeight - _scrollYOffset);
+
+			context.DrawText(ft, point);
+		}
+	}
 	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
 		if (e.Property == BoundsProperty)
 		{
 			EnsureCaretVisible();
 		}
+		base.OnPropertyChanged(e);
 	}
 
 	private void DrawVerticalScrollbar(DrawingContext context)
 	{
+		if (!_canScrollY) return;
 		var rect = GetVerticalScrollbarRect();
 		context.FillRectangle(_scollBarBrush, rect);
 	}
 
 	private void DrawHorizontalScrollbar(DrawingContext context)
 	{
+		if (!_canScrollX) return;
 		var rect = GetHorizontalScrollbarRect();
 		context.FillRectangle(_scollBarBrush, rect);
 	}
@@ -345,8 +402,7 @@ public class Editor : Control
 			if (line.Count == 0)
 				continue;
 
-			var x = GridToUICoord(new(line.Count , i)).X;
-				  
+			var x = GridToUICoord(new(line.Count, i)).X;
 
 			maxWidth = Math.Max(maxWidth, x);
 		}
