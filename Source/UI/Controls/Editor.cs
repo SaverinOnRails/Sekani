@@ -292,6 +292,14 @@ public class Editor : Control
 		}
 	}
 
+	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
+	{
+		if (e.Property == BoundsProperty)
+		{
+			EnsureCaretVisible();
+		}
+	}
+
 	private void DrawVerticalScrollbar(DrawingContext context)
 	{
 		var rect = GetVerticalScrollbarRect();
@@ -377,7 +385,16 @@ public class Editor : Control
 	private void DrawText(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
-		for (int l = 0; l < _lines.Count; l++)
+
+		//only visible line, worst case scenario
+		int firstLine =
+			Math.Max(0, (int)(_scrollYOffset / _lineHeight));
+		int lastLine =
+			Math.Min(
+				_lines.Count,
+				(int)((_scrollYOffset + EditorArea.Height) / _lineHeight) + 1);
+
+		for (int l = firstLine; l < lastLine; l++)
 		{
 			for (int c = 0; c < _lines[l].Count; c++)
 			{
@@ -410,7 +427,7 @@ public class Editor : Control
 	}
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#1D2128"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#224248"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	private void Redraw() => InvalidateVisual();
