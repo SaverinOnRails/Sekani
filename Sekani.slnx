@@ -3,4 +3,5 @@
   <Folder Name="/Source/UI/">
     <Project Path="Source/UI/SekaniUI.csproj" />
   </Folder>
+  <Project Path="Tests/Tests.csproj" />
 </Solution>
