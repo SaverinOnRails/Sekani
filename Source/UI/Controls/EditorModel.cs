@@ -13,6 +13,7 @@ public sealed class EditorModel(EditorMetrics metrics)
 	public readonly static string TAB_CHAR = "\t";
 	public readonly static string NEW_LINE_CHAR = Environment.NewLine;
 
+	private int _maxLastSetCaretVisualCol = 0;
 	private Coordinate _caretPosition = new(0, 0);
 	public Coordinate CaretPosition
 	{
@@ -24,9 +25,6 @@ public sealed class EditorModel(EditorMetrics metrics)
 		}
 	}
 
-	//Bounds of the actual textarea
-	public Rect EditorArea { get; set; }
-
 	public Coordinate LogicalToVisual(Coordinate coord)
 	{
 		var line = Lines[coord.Line];
@@ -34,6 +32,23 @@ public sealed class EditorModel(EditorMetrics metrics)
 		return new Coordinate(
 			visualCol,
 			coord.Line);
+	}
+
+	//will not work for wrapping
+	public Coordinate VisualToLogical(Coordinate coord, Line line)
+	{
+		if (coord.Col >= line.VisualLength)
+			return new Coordinate(line.GraphemeCount, coord.Line);
+		Console.WriteLine(coord.Col);
+		Console.WriteLine(line.VisualToLogical[coord.Col]);
+		for (int i = 0; i < line.VisualToLogical.Count; i++)
+		{
+			Console.WriteLine($"visual :{i} logical {line.VisualToLogical[i]}");
+		}
+		Console.WriteLine();
+		return new Coordinate(
+				   line.VisualToLogical[coord.Col],
+				   coord.Line);
 	}
 
 	public void HandleTextInput(string? text)
@@ -79,6 +94,7 @@ public sealed class EditorModel(EditorMetrics metrics)
 		CaretPosition = new(
 			CaretPosition.Col + count,
 			CaretPosition.Line);
+		_maxLastSetCaretVisualCol = LogicalToVisual(CaretPosition).Col;
 	}
 
 	public void InsertTab()
@@ -96,6 +112,7 @@ public sealed class EditorModel(EditorMetrics metrics)
 			CaretPosition = new(
 				Lines[CaretPosition.Line - 1].GraphemeCount,
 				CaretPosition.Line - 1);
+			_maxLastSetCaretVisualCol = LogicalToVisual(CaretPosition).Col;
 
 			return;
 		}
@@ -115,6 +132,7 @@ public sealed class EditorModel(EditorMetrics metrics)
 		if (CaretPosition.Line == Lines.Count - 1)
 			return;
 		CaretPosition = new(0, CaretPosition.Line + 1);
+		_maxLastSetCaretVisualCol = LogicalToVisual(CaretPosition).Col;
 	}
 
 	public void CaretUp()
@@ -124,8 +142,9 @@ public sealed class EditorModel(EditorMetrics metrics)
 
 		var line = Lines[CaretPosition.Line - 1];
 
+		var logicalPos = VisualToLogical(new(_maxLastSetCaretVisualCol, 1), line);
 		CaretPosition = new(
-			Math.Min(CaretPosition.Col, line.GraphemeCount),
+			logicalPos.Col,
 			CaretPosition.Line - 1);
 	}
 
@@ -136,8 +155,9 @@ public sealed class EditorModel(EditorMetrics metrics)
 
 		var line = Lines[CaretPosition.Line + 1];
 
+		var logicalPos = VisualToLogical(new(_maxLastSetCaretVisualCol, 1), line);
 		CaretPosition = new(
-			Math.Min(CaretPosition.Col, line.GraphemeCount),
+			logicalPos.Col,
 			CaretPosition.Line + 1);
 	}
 
@@ -183,6 +203,8 @@ public sealed class Grapheme
 
 	public int VisualColumn { get; internal set; }
 
+	public int VisualLine { get; internal set; } = 1;
+
 	public Grapheme(string data)
 	{
 		Data = data;
@@ -192,40 +214,61 @@ public sealed class Grapheme
 public sealed class Line(int tabSize)
 {
 	private readonly List<Grapheme> _graphemes = [];
+	private readonly List<int> _visualToLogical = [];
 
 	public IReadOnlyList<Grapheme> Graphemes => _graphemes;
+	public IReadOnlyList<int> VisualToLogical => _visualToLogical;
 
 	public int VisualLength { get; private set; }
+
+	public string LineString { get; private set; } = "";
 
 	public int GraphemeCount => Graphemes.Count;
 
 	public int TabSize { get; init; } = tabSize;
 
-
-	public void SetVisualLength()
+	public void DoLayout()
 	{
+		var builder = new StringBuilder();
+		_visualToLogical.Clear();
 		int visualCol = 0;
-
+		// Console.WriteLine(GraphemeCount);
 		for (int i = 0; i < GraphemeCount; i++)
 		{
 			var grapheme = Graphemes[i];
-
 			grapheme.VisualColumn = visualCol;
 
-			visualCol += grapheme.Data == EditorModel.TAB_CHAR
+			var tabWidth = grapheme.Data == EditorModel.TAB_CHAR
 				? VisualTabWidth(visualCol, TabSize)
 				: 1;
+
+			//so we don't skip visual cols inside tabs
+			for (int v = 0; v < tabWidth; v++)
+			{
+				_visualToLogical.Add(i);
+				// Console.WriteLine(i);
+			}
+			if (grapheme.Data == EditorModel.TAB_CHAR)
+			{
+				builder.Append(' ', tabWidth);
+			}
+			else
+			{
+				builder.Append(grapheme.Data);
+			}
+			visualCol += tabWidth;
 		}
 		VisualLength = visualCol;
+		LineString = builder.ToString();
+		// Console.WriteLine();
 	}
 
 	public static int VisualTabWidth(int visualCol, int tabSize)
 		=> tabSize - (visualCol % tabSize);
 
-
 	public int VisualColumnAt(int logicalCol)
 	{
-		return logicalCol == GraphemeCount //this can also try to get the caret position
+		return logicalCol == GraphemeCount //this can also try to get the caret position which can appear after any characters
 			? VisualLength
 			: Graphemes[logicalCol].VisualColumn;
 	}
@@ -233,25 +276,25 @@ public sealed class Line(int tabSize)
 	public void Insert(int index, Grapheme grapheme)
 	{
 		_graphemes.Insert(index, grapheme);
-		SetVisualLength();
+		LineChanged();
 	}
 
 	public void Add(Grapheme grapheme)
 	{
 		_graphemes.Add(grapheme);
-		SetVisualLength();
+		LineChanged();
 	}
 
 	public void RemoveAt(int index)
 	{
 		_graphemes.RemoveAt(index);
-		SetVisualLength();
+		LineChanged();
 	}
 
 	public void RemoveRange(int index, int count)
 	{
 		_graphemes.RemoveRange(index, count);
-		SetVisualLength();
+		LineChanged();
 	}
 
 	public List<Grapheme> GetRange(int index, int count)
@@ -261,5 +304,11 @@ public sealed class Line(int tabSize)
 	public void AddRange(IEnumerable<Grapheme> data)
 	{
 		_graphemes.AddRange(data);
+		LineChanged();
+	}
+
+	private void LineChanged()
+	{
+		DoLayout();
 	}
 }

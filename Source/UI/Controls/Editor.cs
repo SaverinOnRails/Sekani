@@ -24,7 +24,7 @@ internal class Editor : Control
 		Math.Max(0, _editorModel.Lines.Count.ToString().Length - 1) * _editorModel.Metrics.CharAdvance;
 	private float LineNumberSectWidth =>
 		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 	private bool _wordWrap = false;
 	private readonly float _editorHorizontalMargin = 10F;
 	private bool _caretVisible = true;
@@ -34,12 +34,20 @@ internal class Editor : Control
 	private bool _canScrollX => _wordWrap == false && GetDocumentWidthInPixels() > EditorAreaWidth;
 	private bool _canScrollY => GetDocumentHeight() > EditorAreaHeight;
 
+	//Bounds of the actual textarea
+	public Rect EditorArea =>
+			new(
+				new Point(_editorHorizontalMargin + LineNumberSectWidth, 0),
+				new Size(
+					Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension - LineNumberSectWidth,
+					Bounds.Height - _scrollBarDimension));
+
 	private Rect LineNumbersSectRect =>
 		new(
 			new Point(0, 0),
 			new Size(
 			LineNumberSectWidth,
-			_editorModel.EditorArea.Height
+			EditorArea.Height
 		));
 
 	private double _scrollYOffset = 0;
@@ -59,15 +67,6 @@ internal class Editor : Control
 		TimeCaret();
 	}
 
-	private void SetEditorArea()
-	{
-		_editorModel.EditorArea =
-			new(
-				new Point(_editorHorizontalMargin + LineNumberSectWidth, 0),
-				new Size(
-					Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension - LineNumberSectWidth,
-					Bounds.Height - _scrollBarDimension));
-	}
 
 	private void TimeCaret()
 	{
@@ -79,8 +78,8 @@ internal class Editor : Control
 		_caretBlinkTimer.Start();
 	}
 
-	public double EditorAreaWidth => _editorModel.EditorArea.Width;
-	public double EditorAreaHeight => _editorModel.EditorArea.Height;
+	public double EditorAreaWidth => EditorArea.Width;
+	public double EditorAreaHeight => EditorArea.Height;
 
 	private void SetAvaloniaProperties()
 	{
@@ -93,35 +92,35 @@ internal class Editor : Control
 	private void EnsureCaretVisible()
 	{
 		var pos = LogicalToUI(_editorModel.CaretPosition);
-		if (pos.X + _caretWidth > _scrollXOffset + _editorModel.EditorArea.Right)
+		if (pos.X + _caretWidth > _scrollXOffset + EditorArea.Right)
 		{
 			_scrollXOffset =
-				pos.X + _caretWidth - _editorModel.EditorArea.Right;
+				pos.X + _caretWidth - EditorArea.Right;
 		}
-		if (pos.X < _scrollXOffset + _editorModel.EditorArea.Left)
+		if (pos.X < _scrollXOffset + EditorArea.Left)
 		{
 			_scrollXOffset =
-				pos.X - _editorModel.EditorArea.Left;
+				pos.X - EditorArea.Left;
 		}
-		if (pos.Y + _editorModel.Metrics.LineHeight > _scrollYOffset + _editorModel.EditorArea.Bottom)
+		if (pos.Y + _editorModel.Metrics.LineHeight > _scrollYOffset + EditorArea.Bottom)
 		{
 			_scrollYOffset =
-				pos.Y + _editorModel.Metrics.LineHeight - _editorModel.EditorArea.Bottom;
+				pos.Y + _editorModel.Metrics.LineHeight - EditorArea.Bottom;
 		}
-		if (pos.Y < _scrollYOffset + _editorModel.EditorArea.Top)
+		if (pos.Y < _scrollYOffset + EditorArea.Top)
 		{
 			_scrollYOffset =
-				pos.Y - _editorModel.EditorArea.Top;
+				pos.Y - EditorArea.Top;
 		}
 		_scrollXOffset = Math.Clamp(
 			_scrollXOffset,
 			0,
-			Math.Max(0, GetDocumentWidthInPixels() - _editorModel.EditorArea.Width));
+			Math.Max(0, GetDocumentWidthInPixels() - EditorArea.Width));
 
 		_scrollYOffset = Math.Clamp(
 			_scrollYOffset,
 			0,
-			Math.Max(0, GetDocumentHeight() - _editorModel.EditorArea.Height));
+			Math.Max(0, GetDocumentHeight() - EditorArea.Height));
 	}
 	private void SetEditorMetrics()
 	{
@@ -150,7 +149,8 @@ internal class Editor : Control
 
 	private void LoadDummyText()
 	{
-		var text = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		// var text = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		var text = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
 		_editorModel.HandleTextInput(text);
 		// _editorModel.HandleTextInput("é");
 		// _editorModel.HandleTextInput("ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddrffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
@@ -292,7 +292,6 @@ internal class Editor : Control
 	public override void Render(DrawingContext context)
 	{
 		base.Render(context);
-		SetEditorArea();
 		DrawMainRectangle(context);
 		DrawCaret(context);
 		DrawLineNumbers(context);
@@ -320,7 +319,7 @@ internal class Editor : Control
 		int lastLine =
 			Math.Min(
 				_editorModel.Lines.Count,
-				(int)((_scrollYOffset + _editorModel.EditorArea.Height) / _editorModel.Metrics.LineHeight) + 1);
+				(int)((_scrollYOffset + EditorArea.Height) / _editorModel.Metrics.LineHeight) + 1);
 
 		for (int l = firstLine; l < lastLine; l++)
 		{
@@ -346,26 +345,8 @@ internal class Editor : Control
 
 	private FormattedText GetFormattedTextWhole(Line line)
 	{
-		var builder = new StringBuilder();
-		int visualColumn = 0;
-		for (int c = 0; c < line.GraphemeCount; c++)
-		{
-			var grapheme = line.Graphemes[c];
-
-			if (grapheme.Data == EditorModel.TAB_CHAR)
-			{
-				int spaces = _editorModel.Metrics.TabSize - (visualColumn % _editorModel.Metrics.TabSize);
-				builder.Append(' ', spaces);
-				visualColumn += spaces;
-			}
-			else
-			{
-				builder.Append(grapheme.Data);
-				visualColumn++;
-			}
-		}
 		return new FormattedText(
-					builder.ToString(),
+					line.LineString,
 					CultureInfo.InvariantCulture,
 					FlowDirection.LeftToRight,
 					_editorFontFace,
@@ -376,7 +357,6 @@ internal class Editor : Control
 	{
 		if (e.Property == BoundsProperty)
 		{
-			SetEditorArea();
 			EnsureCaretVisible();
 		}
 		base.OnPropertyChanged(e);
@@ -416,7 +396,7 @@ internal class Editor : Control
 
 		var y = editorHeight - height;
 
-		return new Rect(x + _editorModel.EditorArea.Left - _editorHorizontalMargin, y, thumbWidth + _editorHorizontalMargin, height);
+		return new Rect(x + EditorArea.Left - _editorHorizontalMargin, y, thumbWidth + _editorHorizontalMargin, height);
 	}
 
 
@@ -449,21 +429,21 @@ internal class Editor : Control
 			? 0
 			: (_scrollYOffset / maxScrollOffset) * maxThumbY;
 
-		var x = _editorModel.EditorArea.Right + _editorHorizontalMargin;
+		var x = EditorArea.Right + _editorHorizontalMargin;
 
 		return new Rect(x, y, width, thumbHeight);
 	}
 
 	private void DrawText(DrawingContext context)
 	{
-		using var clip = context.PushClip(_editorModel.EditorArea);
+		using var clip = context.PushClip(EditorArea);
 
 		int firstLine =
 			Math.Max(0, (int)(_scrollYOffset / _editorModel.Metrics.LineHeight));
 		int lastLine =
 			Math.Min(
 				_editorModel.Lines.Count,
-				(int)((_scrollYOffset + _editorModel.EditorArea.Height) / _editorModel.Metrics.LineHeight) + 1);
+				(int)((_scrollYOffset + EditorArea.Height) / _editorModel.Metrics.LineHeight) + 1);
 
 
 		for (int l = firstLine; l < lastLine; l++)
@@ -492,7 +472,7 @@ internal class Editor : Control
 
 	private void DrawCaret(DrawingContext context)
 	{
-		using var clip = context.PushClip(_editorModel.EditorArea);
+		using var clip = context.PushClip(EditorArea);
 		if (!_caretVisible) return;
 		var point = LogicalToUI(_editorModel.CaretPosition);
 		point = point.WithX(point.X - _scrollXOffset);
@@ -505,7 +485,7 @@ internal class Editor : Control
 
 	private Point VisualToUI(Coordinate visualCoord)
 	{
-		return new(visualCoord.Col * _editorModel.Metrics.CharAdvance + _editorModel.EditorArea.Left,
+		return new(visualCoord.Col * _editorModel.Metrics.CharAdvance + EditorArea.Left,
 			visualCoord.Line * _editorModel.Metrics.LineHeight
 		);
 	}
@@ -577,5 +557,3 @@ internal class Editor : Control
 	}
 
 }
-
-

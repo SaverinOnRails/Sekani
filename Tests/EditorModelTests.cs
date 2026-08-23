@@ -9,8 +9,6 @@ public class EditorModelTests
 	{
 		EditorModel model = new(new EditorMetrics(charAdvance, lineHeight, tabSize));
 		 
-		//800x600 editor area, no gutters
-		model.EditorArea = new(new Avalonia.Point(0, 0), new Avalonia.Size(800, 600));
 		return model;
 	}
 
