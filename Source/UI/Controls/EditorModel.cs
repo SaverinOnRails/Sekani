@@ -1,14 +1,15 @@
-global using Line = System.Collections.Generic.List<SekaniUI.Controls.Glyph>;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Avalonia;
 namespace SekaniUI.Controls;
 
-public class EditorModel(EditorMetrics metrics)
+public sealed class EditorModel(EditorMetrics metrics)
 {
 	public EditorMetrics Metrics { get; init; } = metrics;
-	public List<Line> Lines = [[]];
+	public List<Line> Lines { get; } = [new Line(metrics.TabSize)];
+
 	public readonly static string TAB_CHAR = "\t";
 	public readonly static string NEW_LINE_CHAR = Environment.NewLine;
 
@@ -26,28 +27,20 @@ public class EditorModel(EditorMetrics metrics)
 	//Bounds of the actual textarea
 	public Rect EditorArea { get; set; }
 
-	public Point GridToUICoord(Coordinate coord)
+	public Coordinate LogicalToVisual(Coordinate coord)
 	{
 		var line = Lines[coord.Line];
-		int visualCol = 0;
-		for (int i = 0; i < coord.Col; i++)
-		{
-			var glyph = line[i];
-
-			if (glyph.S == TAB_CHAR)
-				visualCol += Metrics.TabSize - (visualCol % Metrics.TabSize);
-			else
-				visualCol++;
-		}
-		return new(
-			visualCol * Metrics.CharAdvance + EditorArea.Left,
-			coord.Line * Metrics.LineHeight);
+		int visualCol = line.VisualColumnAt(coord.Col);
+		return new Coordinate(
+			visualCol,
+			coord.Line);
 	}
 
 	public void HandleTextInput(string? text)
 	{
 		if (string.IsNullOrEmpty(text)) return;
 		Span<byte> buffer = stackalloc byte[4];
+		//does not properly handle grapheme clusters yet
 		foreach (var rune in text.EnumerateRunes())
 		{
 			int length = rune.EncodeToUtf8(buffer);
@@ -64,7 +57,7 @@ public class EditorModel(EditorMetrics metrics)
 			return;
 		}
 		var line = Lines[CaretPosition.Line];
-		line.Insert(CaretPosition.Col, new Glyph(data));
+		line.Insert(CaretPosition.Col, new Grapheme(data));
 		AdvanceCaretCol(1);
 	}
 
@@ -73,8 +66,10 @@ public class EditorModel(EditorMetrics metrics)
 		var lineIndex = CaretPosition.Line;
 		var col = CaretPosition.Col;
 		var line = Lines[lineIndex];
-		var rightSplit = line.GetRange(col, line.Count - col);
-		line.RemoveRange(col, line.Count - col);
+		var rightSplit = new Line(Metrics.TabSize);
+		rightSplit.AddRange(
+			line.GetRange(col, line.GraphemeCount - col));
+		line.RemoveRange(col, line.GraphemeCount - col);
 		Lines.Insert(lineIndex + 1, rightSplit);
 		CaretPosition = new(0, lineIndex + 1);
 	}
@@ -99,7 +94,7 @@ public class EditorModel(EditorMetrics metrics)
 				return;
 
 			CaretPosition = new(
-				Lines[CaretPosition.Line - 1].Count,
+				Lines[CaretPosition.Line - 1].GraphemeCount,
 				CaretPosition.Line - 1);
 
 			return;
@@ -111,7 +106,7 @@ public class EditorModel(EditorMetrics metrics)
 	{
 		var line = Lines[CaretPosition.Line];
 
-		if (CaretPosition.Col < line.Count)
+		if (CaretPosition.Col < line.GraphemeCount)
 		{
 			AdvanceCaretCol(1);
 			return;
@@ -130,7 +125,7 @@ public class EditorModel(EditorMetrics metrics)
 		var line = Lines[CaretPosition.Line - 1];
 
 		CaretPosition = new(
-			Math.Min(CaretPosition.Col, line.Count),
+			Math.Min(CaretPosition.Col, line.GraphemeCount),
 			CaretPosition.Line - 1);
 	}
 
@@ -142,7 +137,7 @@ public class EditorModel(EditorMetrics metrics)
 		var line = Lines[CaretPosition.Line + 1];
 
 		CaretPosition = new(
-			Math.Min(CaretPosition.Col, line.Count),
+			Math.Min(CaretPosition.Col, line.GraphemeCount),
 			CaretPosition.Line + 1);
 	}
 
@@ -161,8 +156,8 @@ public class EditorModel(EditorMetrics metrics)
 		if (col == 0 && lineIndex > 0)
 		{
 			var previousLine = Lines[lineIndex - 1];
-			var previousLength = previousLine.Count;
-			previousLine.AddRange(line);
+			var previousLength = previousLine.GraphemeCount;
+			previousLine.AddRange(line.Graphemes);
 			Lines.RemoveAt(lineIndex);
 			CaretPosition = new(previousLength, lineIndex - 1);
 		}
@@ -174,11 +169,97 @@ public readonly record struct EditorMetrics(
 	float LineHeight,
 	int TabSize);
 
-public readonly record struct Glyph(string S);
 
 public struct Coordinate(int Col, int Line)
 {
 	public int Col { get; private set; } = Col;
 	public int Line { get; private set; } = Line;
 
+}
+
+public sealed class Grapheme
+{
+	public string Data { get; }
+
+	public int VisualColumn { get; internal set; }
+
+	public Grapheme(string data)
+	{
+		Data = data;
+	}
+}
+
+public sealed class Line(int tabSize)
+{
+	private readonly List<Grapheme> _graphemes = [];
+
+	public IReadOnlyList<Grapheme> Graphemes => _graphemes;
+
+	public int VisualLength { get; private set; }
+
+	public int GraphemeCount => Graphemes.Count;
+
+	public int TabSize { get; init; } = tabSize;
+
+
+	public void SetVisualLength()
+	{
+		int visualCol = 0;
+
+		for (int i = 0; i < GraphemeCount; i++)
+		{
+			var grapheme = Graphemes[i];
+
+			grapheme.VisualColumn = visualCol;
+
+			visualCol += grapheme.Data == EditorModel.TAB_CHAR
+				? VisualTabWidth(visualCol, TabSize)
+				: 1;
+		}
+		VisualLength = visualCol;
+	}
+
+	public static int VisualTabWidth(int visualCol, int tabSize)
+		=> tabSize - (visualCol % tabSize);
+
+
+	public int VisualColumnAt(int logicalCol)
+	{
+		return logicalCol == GraphemeCount //this can also try to get the caret position
+			? VisualLength
+			: Graphemes[logicalCol].VisualColumn;
+	}
+
+	public void Insert(int index, Grapheme grapheme)
+	{
+		_graphemes.Insert(index, grapheme);
+		SetVisualLength();
+	}
+
+	public void Add(Grapheme grapheme)
+	{
+		_graphemes.Add(grapheme);
+		SetVisualLength();
+	}
+
+	public void RemoveAt(int index)
+	{
+		_graphemes.RemoveAt(index);
+		SetVisualLength();
+	}
+
+	public void RemoveRange(int index, int count)
+	{
+		_graphemes.RemoveRange(index, count);
+		SetVisualLength();
+	}
+
+	public List<Grapheme> GetRange(int index, int count)
+	{
+		return _graphemes.GetRange(index, count);
+	}
+	public void AddRange(IEnumerable<Grapheme> data)
+	{
+		_graphemes.AddRange(data);
+	}
 }

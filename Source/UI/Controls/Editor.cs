@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -14,27 +17,21 @@ internal class Editor : Control
 	private readonly double _caretWidth = 2;
 	private readonly float _fontSize = 16;
 	private readonly float _scrollBarDimension = 7;
-
 	private EditorModel _editorModel = null!;
-
 	private const float _baseLineNumberWidth = 20;
 	private float LineNumberSectDisplayWidth =>
 		_baseLineNumberWidth +
 		Math.Max(0, _editorModel.Lines.Count.ToString().Length - 1) * _editorModel.Metrics.CharAdvance;
-
 	private float LineNumberSectWidth =>
 		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
-	private bool _drawLineNumbers = true;
+	private bool _drawLineNumbers = false;
 	private bool _wordWrap = false;
-
 	private readonly float _editorHorizontalMargin = 10F;
 	private bool _caretVisible = true;
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
 	private double _scrollXOffset = 0;
-
-	//TODO: Optimize this
-	private bool _canScrollX => _wordWrap == false && GetDocumentWidth() > EditorAreaWidth;
+	private bool _canScrollX => _wordWrap == false && GetDocumentWidthInPixels() > EditorAreaWidth;
 	private bool _canScrollY => GetDocumentHeight() > EditorAreaHeight;
 
 	private Rect LineNumbersSectRect =>
@@ -95,7 +92,7 @@ internal class Editor : Control
 
 	private void EnsureCaretVisible()
 	{
-		var pos = _editorModel.GridToUICoord(_editorModel.CaretPosition);
+		var pos = LogicalToUI(_editorModel.CaretPosition);
 		if (pos.X + _caretWidth > _scrollXOffset + _editorModel.EditorArea.Right)
 		{
 			_scrollXOffset =
@@ -119,7 +116,7 @@ internal class Editor : Control
 		_scrollXOffset = Math.Clamp(
 			_scrollXOffset,
 			0,
-			Math.Max(0, GetDocumentWidth() - _editorModel.EditorArea.Width));
+			Math.Max(0, GetDocumentWidthInPixels() - _editorModel.EditorArea.Width));
 
 		_scrollYOffset = Math.Clamp(
 			_scrollYOffset,
@@ -147,7 +144,18 @@ internal class Editor : Control
 	{
 		base.OnAttachedToVisualTree(e);
 		Focus();
+		LoadDummyText();
+		_editorModel.CaretPosition = new(0, 0);
 	}
+
+	private void LoadDummyText()
+	{
+		var text = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		_editorModel.HandleTextInput(text);
+		// _editorModel.HandleTextInput("é");
+		// _editorModel.HandleTextInput("ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddrffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+	}
+
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
 		Focus();
@@ -218,7 +226,7 @@ internal class Editor : Control
 		{
 			var pointerDelta = point.X - _scrollbarPointerStartX;
 
-			var documentWidth = GetDocumentWidth();
+			var documentWidth = GetDocumentWidthInPixels();
 			var thumbRect = GetHorizontalScrollbarRect();
 
 			var maxScrollOffset =
@@ -335,6 +343,35 @@ internal class Editor : Control
 			context.DrawText(ft, point);
 		}
 	}
+
+	private FormattedText GetFormattedTextWhole(Line line)
+	{
+		var builder = new StringBuilder();
+		int visualColumn = 0;
+		for (int c = 0; c < line.GraphemeCount; c++)
+		{
+			var grapheme = line.Graphemes[c];
+
+			if (grapheme.Data == EditorModel.TAB_CHAR)
+			{
+				int spaces = _editorModel.Metrics.TabSize - (visualColumn % _editorModel.Metrics.TabSize);
+				builder.Append(' ', spaces);
+				visualColumn += spaces;
+			}
+			else
+			{
+				builder.Append(grapheme.Data);
+				visualColumn++;
+			}
+		}
+		return new FormattedText(
+					builder.ToString(),
+					CultureInfo.InvariantCulture,
+					FlowDirection.LeftToRight,
+					_editorFontFace,
+					_fontSize,
+					Brushes.White);
+	}
 	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
 		if (e.Property == BoundsProperty)
@@ -364,7 +401,7 @@ internal class Editor : Control
 		var height = _scrollBarDimension;
 		var editorHeight = Bounds.Height;
 
-		var documentWidth = GetDocumentWidth();
+		var documentWidth = GetDocumentWidthInPixels();
 
 		var thumbWidth = documentWidth <= EditorAreaWidth
 			? EditorAreaWidth
@@ -379,26 +416,15 @@ internal class Editor : Control
 
 		var y = editorHeight - height;
 
-		return new Rect(x, y, thumbWidth, height);
+		return new Rect(x + _editorModel.EditorArea.Left - _editorHorizontalMargin, y, thumbWidth + _editorHorizontalMargin, height);
 	}
 
-	private double GetDocumentWidth()
+
+	private double GetDocumentWidthInPixels()
 	{
-		var maxWidth = 0.0;
-
-		for (int i = 0; i < _editorModel.Lines.Count; i++)
-		{
-			var line = _editorModel.Lines[i];
-
-			if (line.Count == 0)
-				continue;
-
-			var x = _editorModel.GridToUICoord(new(line.Count, i)).X;
-
-			maxWidth = Math.Max(maxWidth, x);
-		}
-
-		return maxWidth;
+		var longestLine = _editorModel.Lines.MaxBy(p => p.VisualLength);
+		if (longestLine is null) return EditorAreaWidth;
+		return VisualToUI(new(longestLine.VisualLength, 0)).X;
 	}
 
 	private double GetDocumentHeight()
@@ -439,11 +465,12 @@ internal class Editor : Control
 				_editorModel.Lines.Count,
 				(int)((_scrollYOffset + _editorModel.EditorArea.Height) / _editorModel.Metrics.LineHeight) + 1);
 
+
 		for (int l = firstLine; l < lastLine; l++)
 		{
-			var ft = RasterizeLine(_editorModel.Lines[l]);
+			var ft = GetFormattedTextWhole(_editorModel.Lines[l]);
 			Coordinate coord = new(0, l);
-			var point = _editorModel.GridToUICoord(coord);
+			var point = LogicalToUI(coord);
 			point = point.WithX(point.X - _scrollXOffset);
 			point = point.WithY(point.Y - _scrollYOffset);
 			context.DrawText(ft, point);
@@ -467,7 +494,7 @@ internal class Editor : Control
 	{
 		using var clip = context.PushClip(_editorModel.EditorArea);
 		if (!_caretVisible) return;
-		var point = _editorModel.GridToUICoord(_editorModel.CaretPosition);
+		var point = LogicalToUI(_editorModel.CaretPosition);
 		point = point.WithX(point.X - _scrollXOffset);
 		point = point.WithY(point.Y - _scrollYOffset);
 		var caretRect = new Rect(
@@ -476,35 +503,16 @@ internal class Editor : Control
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
-	private FormattedText RasterizeLine(Line line)
+	private Point VisualToUI(Coordinate visualCoord)
 	{
-		var builder = new StringBuilder();
-		int visualColumn = 0;
+		return new(visualCoord.Col * _editorModel.Metrics.CharAdvance + _editorModel.EditorArea.Left,
+			visualCoord.Line * _editorModel.Metrics.LineHeight
+		);
+	}
 
-		for (int c = 0; c < line.Count; c++)
-		{
-			var glyph = line[c];
-
-			if (glyph.S == EditorModel.TAB_CHAR)
-			{
-				int spaces = _editorModel.Metrics.TabSize - (visualColumn % _editorModel.Metrics.TabSize);
-				builder.Append(' ', spaces);
-				visualColumn += spaces;
-			}
-			else
-			{
-				builder.Append(glyph.S);
-				visualColumn++;
-			}
-		}
-
-		return new FormattedText(
-			builder.ToString(),
-			CultureInfo.InvariantCulture,
-			FlowDirection.LeftToRight,
-			_editorFontFace,
-			_fontSize,
-			Brushes.White);
+	private Point LogicalToUI(Coordinate logicalCoord)
+	{
+		return VisualToUI(_editorModel.LogicalToVisual(logicalCoord));
 	}
 
 	protected override void OnKeyDown(KeyEventArgs e)
