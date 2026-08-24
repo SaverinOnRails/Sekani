@@ -5,10 +5,11 @@ using SekaniUI.Controls;
 [TestClass]
 public class EditorModelTests
 {
+
 	public EditorModel CreateEditorModel(int charAdvance, int lineHeight, int tabSize)
 	{
 		EditorModel model = new(new EditorMetrics(charAdvance, lineHeight, tabSize));
-		 
+
 		return model;
 	}
 
@@ -124,5 +125,51 @@ public class EditorModelTests
 		Assert.AreEqual(1, model.Lines.Count);
 		Assert.AreEqual(0, model.Lines[0].GraphemeCount);
 		Assert.AreEqual(new Coordinate(0, 0), model.CaretPosition);
+	}
+
+	[TestMethod]
+	public void CaretUp_AtLineSecondLineMiddlePosition_EntersEndOfFirstLine()
+	{
+		var model = CreateEditorModel(8, 15, 4);
+		model.HandleTextInput("ab cd ef gh");
+		model.InsertNewLine();
+		model.HandleTextInput("hab cd ef gh ij kl mn op");
+		model.CaretUp();
+		Assert.AreEqual(11, model.CaretPosition.Col);
+		Assert.AreEqual(0, model.CaretPosition.Line);
+	}
+
+	[TestMethod]
+	public void CaretUp_AtBeginningOfSecondLine_EntersBeginningOfFirstLine()
+	{
+		var model = CreateEditorModel(8, 15, 4);
+		model.HandleTextInput("hello world");
+		model.InsertNewLine();
+		var line2text = "goodbye world";
+		model.HandleTextInput(line2text);
+		for (int i = 0; i < line2text.Length; i++)
+		{
+			model.CaretLeft();
+		}
+
+		model.CaretUp();
+		Assert.AreEqual(0, model.CaretPosition.Col);
+		Assert.AreEqual(0, model.CaretPosition.Line);
+	}
+
+	[TestMethod]
+	public void CaretDown_AtFirstLine_RetainsMaxVisualColumnWhenGoingDownWithTabs()
+	{
+		var model = CreateEditorModel(8, 15, 4);
+		var line1text = "hi\t\t\t\t";
+		var line2text = "hello hello hello hello hello";
+		model.HandleTextInput(line1text);
+		model.InsertNewLine();
+		model.HandleTextInput(line2text);
+		model.CaretPosition = new(0, 0);
+		for (int i = 0; i < line1text.Length; i++) model.CaretRight();
+		model.CaretDown();
+		Assert.AreEqual(16, model.CaretPosition.Col);
+		Assert.AreEqual(1, model.CaretPosition.Line);
 	}
 }
