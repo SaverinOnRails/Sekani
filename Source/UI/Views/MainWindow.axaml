@@ -20,5 +20,5 @@
         -->
         <vm:MainViewModel />
     </Design.DataContext>
-    <controls:Editor />
 </Window>
+
