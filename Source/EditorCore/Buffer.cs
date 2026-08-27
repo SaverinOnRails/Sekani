@@ -16,18 +16,18 @@ public sealed class SekaniBuffer
 		return _lines[lineIndex];
 	}
 
-	public void InsertText(int line, int col, string text)
+	public Coordinate InsertText(int line, int col, string text)
 	{
 		if (string.IsNullOrEmpty(text))
-			return;
+			return new Coordinate(col, line);
 
 		var insertLine = GetLine(line);
 
 		if (insertLine is null)
-			return;
+			return new Coordinate(col, line);
 
 		if (col < 0 || col > insertLine.Text.Length)
-			return;
+			return new Coordinate(col, line);
 
 		var insertedLines = text.Split(
 			Environment.NewLine,
@@ -37,13 +37,17 @@ public sealed class SekaniBuffer
 		{
 			insertLine.InsertText(col, insertedLines[0]);
 			RaiseBufferChangedEvent(line);
-			return;
+
+			return new Coordinate(
+				col + insertedLines[0].Length,
+				line);
 		}
 
 		var before = insertLine.Text[..col];
 		var after = insertLine.Text[col..];
 
 		insertLine.Text = before + insertedLines[0];
+		RaiseBufferChangedEvent(line);
 
 		for (int i = 1; i < insertedLines.Length; i++)
 		{
@@ -55,7 +59,13 @@ public sealed class SekaniBuffer
 			_lines.Insert(line + i, newLine);
 			RaiseBufferChangedEvent(line + i);
 		}
-		_lines[line + insertedLines.Length - 1].Text += after;
+
+		var lastLine = _lines[line + insertedLines.Length - 1];
+		lastLine.Text += after;
+
+		return new Coordinate(
+			insertedLines[^1].Length,
+			line + insertedLines.Length - 1);
 	}
 	private void RaiseBufferChangedEvent(int line)
 	{
