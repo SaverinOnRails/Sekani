@@ -72,6 +72,30 @@ public sealed class SekaniBuffer
 		BufferChangedEvent?.Invoke(this, new(line));
 	}
 
+	public void Backspace(int line, int col)
+	{
+		if (line < 0 || line >= _lines.Count)
+			return;
+
+		var currentLine = _lines[line];
+
+		if (col > 0)
+		{
+			currentLine.Text = currentLine.Text.Remove(col - 1, 1);
+			RaiseBufferChangedEvent(line);
+			return;
+		}
+
+		if (line == 0)
+			return;
+
+		var previousLine = _lines[line - 1];
+
+		previousLine.Text += currentLine.Text;
+		_lines.RemoveAt(line);
+
+		RaiseBufferChangedEvent(line - 1);
+	}
 	public event EventHandler<BufferChangeData>? BufferChangedEvent;
 }
 

@@ -48,7 +48,6 @@ public sealed class SekaniDocument
 		_preferredLogicalColumn = 0;
 	}
 
-
 	private void MoveCaretVertical(int direction)
 	{
 		var targetLineIndex = CaretPosition.Line + direction;
@@ -83,6 +82,38 @@ public sealed class SekaniDocument
 
 		_preferredLogicalColumn = CaretPosition.Col;
 	}
+
+	public void Backspace()
+	{
+		var position = CaretPosition;
+
+		if (position.Col > 0)
+		{
+			_buffer.Backspace(position.Line, position.Col);
+
+			CaretPosition = new Coordinate(
+				position.Col - 1,
+				position.Line);
+		}
+		else if (position.Line > 0)
+		{
+			var previousLine = _buffer.GetLine(position.Line - 1);
+
+			if (previousLine is null)
+				return;
+
+			var newCol = previousLine.Text.Length;
+
+			_buffer.Backspace(position.Line, position.Col);
+
+			CaretPosition = new Coordinate(
+				newCol,
+				position.Line - 1);
+		}
+
+		_preferredLogicalColumn = CaretPosition.Col;
+	}
+
 	public void CaretUp()
 	{
 		MoveCaretVertical(-1);

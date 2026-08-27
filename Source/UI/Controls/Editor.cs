@@ -17,6 +17,13 @@ public class Editor : Control
 	private Typeface _editorFontFace = Typeface.Default;
 	private readonly float _fontSize = 20;
 	private LineCache _lineCache;
+	private const float _baseLineNumberWidth = 20;
+	private float LineNumberSectDisplayWidth =>
+		_baseLineNumberWidth +
+		Math.Max(0, _document.Lines.Count.ToString().Length - 1) * _editorMetrics.CharAdvance;
+	private bool _drawLineNumbers = true;
+	private float LineNumberSectWidth =>
+		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
 	private double _scrollYOffset = 0;
 	private readonly double _caretWidth = 2;
@@ -33,6 +40,13 @@ public class Editor : Control
 
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
 	private readonly DispatcherTimer _caretBlinkTimer;
+	private Rect LineNumbersSectRect =>
+		new(
+			new Point(0, 0),
+			new Size(
+			LineNumberSectWidth,
+			EditorArea.Height
+		));
 
 	public Editor()
 	{
@@ -40,7 +54,8 @@ public class Editor : Control
 		SetEditorMetrics();
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		var file = File.ReadAllText("/home/noble/longfile.text");
+		var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		// var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize); _document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
@@ -127,9 +142,9 @@ public class Editor : Control
 			case Key.Down:
 				_document.CaretDown();
 				break;
-				// case Key.Back:
-				// 	_editorModel.Backspace();
-				// 	break;
+			case Key.Back:
+				_document.Backspace();
+				break;
 
 		}
 		HoldCaretAndRedraw();
@@ -165,7 +180,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code");
+		_editorFontFace = new Typeface("Monospace");
 		var text = new FormattedText(
 			"#",
 			CultureInfo.InvariantCulture,
@@ -176,7 +191,7 @@ public class Editor : Control
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = (float)text.Height;
-		var tabSize = 4;
+		var tabSize = 6;
 		_editorMetrics = new(charAdvance, lineHeight, tabSize);
 	}
 
@@ -196,9 +211,9 @@ public class Editor : Control
 	//Bounds of the actual textarea
 	public Rect EditorArea =>
 			new(
-				new Point(_editorHorizontalMargin, 0),
+				new Point(_editorHorizontalMargin + LineNumberSectWidth, 0),
 				new Size(
-					Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension,
+					Bounds.Width - 2 * _editorHorizontalMargin - _scrollBarDimension - LineNumberSectWidth,
 					Bounds.Height - _scrollBarDimension));
 
 	public override void Render(DrawingContext context)
@@ -206,9 +221,53 @@ public class Editor : Control
 		base.Render(context);
 		DrawMainRectangle(context);
 		DrawText(context);
+		DrawLineNumbers(context);
 		DrawCaret(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
+	}
+
+	private void DrawLineNumbers(DrawingContext context)
+	{
+		if (!_drawLineNumbers || LineNumberSectWidth == 0)
+			return;
+
+		using var clip = context.PushClip(LineNumbersSectRect);
+
+		// gutter
+		context.DrawLine(
+			new Pen(new SolidColorBrush(Colors.White, 0.4)),
+			new Point(LineNumbersSectRect.Right, 0),
+			new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
+
+		int firstLine =
+				Math.Max(0, (int)(_scrollYOffset / _editorMetrics.LineHeight));
+
+		int lastLine =
+			Math.Min(
+				_document.Lines.Count,
+				(int)((_scrollYOffset + EditorArea.Height) / _editorMetrics.LineHeight) + 1);
+
+		for (int l = firstLine; l < lastLine; l++)
+		{
+			var number = (l + 1).ToString();
+
+			var ft = new FormattedText(
+				number,
+				CultureInfo.InvariantCulture,
+				FlowDirection.LeftToRight,
+				_editorFontFace,
+				_fontSize,
+				new SolidColorBrush(Colors.White, 0.4));
+
+			var x = LineNumberSectWidth - ft.Width - 5;
+
+			var point = new Point(
+				x,
+				l * _editorMetrics.LineHeight - _scrollYOffset);
+
+			context.DrawText(ft, point);
+		}
 	}
 
 	private void DrawHorizontalScrollbar(DrawingContext context)
