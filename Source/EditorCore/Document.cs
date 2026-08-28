@@ -33,7 +33,6 @@ public sealed class SekaniDocument
 		{
 			AdvanceCaretCol(1);
 
-			// Horizontal movement establishes a new preferred column.
 			_preferredLogicalColumn = CaretPosition.Col;
 			return;
 		}
