@@ -11,3 +11,4 @@ public sealed class Line
 		Text = Text.Insert(col, text);
 	}
 }
+

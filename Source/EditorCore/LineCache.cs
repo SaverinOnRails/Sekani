@@ -7,11 +7,15 @@ public sealed class LineCache
 	public int Width { get; private set; }
 	private Line? _longestLine;
 	private readonly int _tabSize;
+	private readonly bool _wordWrap;
+	private int _maxVisualColsPerLine;
 
-	public LineCache(SekaniBuffer buffer, int tabSize)
+	public LineCache(SekaniBuffer buffer, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
 		_buffer = buffer;
 		_tabSize = tabSize;
+		_wordWrap = wordWrap;
+		_maxVisualColsPerLine = maxVisualColsPerLine;
 		_buffer.BufferChangedEvent += BufferChanged;
 	}
 
@@ -55,13 +59,24 @@ public sealed class LineCache
 		if (_layoutCache.TryGetValue(line, out var layout))
 			return layout;
 
-		var lineLayout = new LineLayout(line, _tabSize);
+		var lineLayout = new LineLayout(line, _tabSize, _wordWrap, _maxVisualColsPerLine);
 		_layoutCache[line] = lineLayout;
 
 		return lineLayout;
 	}
-	public void InvalidateLayout(Line line)
+	private void InvalidateLayout(Line line)
 	{
 		_layoutCache.Remove(line);
+	}
+
+	private void InvalidateAll()
+	{
+		_layoutCache.Clear();
+	}
+
+	public void SetMaxVisualColsForWrap(int maxVisualColsPerLine)
+	{
+		_maxVisualColsPerLine = maxVisualColsPerLine;
+		InvalidateAll();
 	}
 }

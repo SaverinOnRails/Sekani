@@ -130,9 +130,9 @@ public sealed class SekaniDocument
 			CaretPosition.Col + count,
 			CaretPosition.Line);
 	}
-	public LineCache CreateLineCache(int tabSize)
+	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
-		return new LineCache(_buffer, tabSize);
+		return new LineCache(_buffer, tabSize, wordWrap, maxVisualColsPerLine);
 	}
 
 	public void TypeChars(object newLine)

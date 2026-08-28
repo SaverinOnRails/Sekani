@@ -15,7 +15,7 @@ public class Editor : Control
 	private SekaniDocument _document;
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
-	private readonly float _fontSize = 20;
+	private readonly float _fontSize = 15;
 	private LineCache _lineCache;
 	private const float _baseLineNumberWidth = 20;
 	private float LineNumberSectDisplayWidth =>
@@ -34,6 +34,7 @@ public class Editor : Control
 	private bool _caretVisible = true;
 	private double _scrollbarPointerStartY;
 	private double _scrollbarScrollStartY;
+	private bool _softWordWrap = true;
 
 	private bool _canScrollX => GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
@@ -54,9 +55,11 @@ public class Editor : Control
 		SetEditorMetrics();
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
-		// var file = File.ReadAllText("/home/noble/longfile.text");
-		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize); _document.TypeChars(file);
+		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		var file = File.ReadAllText("/home/noble/longfile.text");
+		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
+		_document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
 		TimeCaret();
@@ -122,6 +125,11 @@ public class Editor : Control
 	}
 	private void HandleKeyInput(KeyEventArgs e)
 	{
+
+		if (e.KeyModifiers != KeyModifiers.None)
+		{
+			return;
+		}
 		switch (e.Key)
 		{
 			case Key.Tab:
@@ -157,10 +165,16 @@ public class Editor : Control
 		Focus();
 	}
 
+	private int MaxVisualColsPerLine => (int)(EditorArea.Width / _editorMetrics.CharAdvance);
+
 	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
 		if (e.Property == BoundsProperty)
 		{
+			if (_softWordWrap)
+			{
+				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
+			}
 			EnsureCaretVisible();
 		}
 		base.OnPropertyChanged(e);
@@ -180,7 +194,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Monospace");
+		_editorFontFace = new Typeface("Jetbrains Mono");
 		var text = new FormattedText(
 			"#",
 			CultureInfo.InvariantCulture,
@@ -240,16 +254,28 @@ public class Editor : Control
 			new Point(LineNumbersSectRect.Right, 0),
 			new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
-		int firstLine =
-				Math.Max(0, (int)(_scrollYOffset / _editorMetrics.LineHeight));
+		int visualLine = 0;
 
-		int lastLine =
-			Math.Min(
-				_document.Lines.Count,
-				(int)((_scrollYOffset + EditorArea.Height) / _editorMetrics.LineHeight) + 1);
-
-		for (int l = firstLine; l < lastLine; l++)
+		for (int l = 0; l < _document.Lines.Count; l++)
 		{
+			var line = _document.Lines[l];
+			var lineLayout = _lineCache.GetOrCreate(line);
+			if (lineLayout is null)
+				continue;
+			int visualLineCount = lineLayout.VisualLines.Count;
+
+			if (visualLine + visualLineCount <=
+				_scrollYOffset / _editorMetrics.LineHeight)
+			{
+				visualLine += visualLineCount;
+				continue;
+			}
+
+			if (visualLine * _editorMetrics.LineHeight >
+				_scrollYOffset + EditorArea.Height)
+			{
+				break;
+			}
 			var number = (l + 1).ToString();
 
 			var ft = new FormattedText(
@@ -264,12 +290,13 @@ public class Editor : Control
 
 			var point = new Point(
 				x,
-				l * _editorMetrics.LineHeight - _scrollYOffset);
+				visualLine * _editorMetrics.LineHeight - _scrollYOffset);
 
 			context.DrawText(ft, point);
+
+			visualLine += visualLineCount;
 		}
 	}
-
 	private void DrawHorizontalScrollbar(DrawingContext context)
 	{
 
@@ -335,10 +362,29 @@ public class Editor : Control
 	{
 		var line = _document.Lines[coord.Line];
 		var layout = _lineCache.GetOrCreate(line);
-		if (layout is null) return null;
-		return new(layout.GetVisualCol(coord.Col), coord.Line);
-	}
 
+		if (layout is null)
+			return null;
+
+		var localVisualCoord = layout.GetVisualCoordinate(coord.Col);
+
+		int globalVisualLine = 0;
+
+		for (int i = 0; i < coord.Line; i++)
+		{
+			var previousLine = _document.Lines[i];
+			var previousLayout = _lineCache.GetOrCreate(previousLine);
+
+			if (previousLayout is null)
+				continue;
+
+			globalVisualLine += previousLayout.VisualLines.Count;
+		}
+
+		return new VisualCoordinate(
+			localVisualCoord.Col,
+			globalVisualLine + localVisualCoord.Line);
+	}
 	private void TryMoveScrollbars(PointerEventArgs e)
 	{
 		var point = e.GetPosition(this);
@@ -437,34 +483,60 @@ public class Editor : Control
 	}
 	private void DrawText(DrawingContext context)
 	{
-		var height = EditorArea.Height;
-		int firstLine =
-			Math.Max(0, (int)(_scrollYOffset / _editorMetrics.LineHeight));
-		int lastLine =
-			Math.Min(
-				_document.Lines.Count,
-				(int)((_scrollYOffset + EditorArea.Height) / _editorMetrics.LineHeight) + 1);
-		for (int i = firstLine; i < lastLine; i++)
+		using var clip = context.PushClip(EditorArea);
+
+		int firstVisualLine =
+			Math.Max(
+				0,
+				(int)(_scrollYOffset / _editorMetrics.LineHeight));
+
+		int lastVisualLine =
+			(int)((_scrollYOffset + EditorArea.Height)
+				/ _editorMetrics.LineHeight) + 1;
+
+		int currentVisualLine = 0;
+
+		for (int i = 0; i < _document.Lines.Count; i++)
 		{
 			var line = _document.Lines[i];
 			var lineLayout = _lineCache.GetOrCreate(line);
-			if (lineLayout is null) continue;
-			Point point = VisualToUI(new VisualCoordinate(0, i));
-			point = point.WithY(point.Y - _scrollYOffset);
-			point = point.WithX(point.X - _scrollXOffset);
 
-			var ft = new FormattedText(
-				lineLayout.LineText,
-				CultureInfo.InvariantCulture,
-				FlowDirection.LeftToRight,
-				_editorFontFace,
-				_fontSize,
-				Brushes.White);
+			if (lineLayout is null)
+				continue;
+			foreach (var visualLine in lineLayout.VisualLines)
+			{
+				if (currentVisualLine >= lastVisualLine)
+					return;
 
-			context.DrawText(ft, point);
+				if (currentVisualLine >= firstVisualLine)
+				{
+					var text = lineLayout.LineText.AsSpan(
+						visualLine.Offset,
+						visualLine.Length);
+
+					var ft = new FormattedText(
+						text.ToString(),
+						CultureInfo.InvariantCulture,
+						FlowDirection.LeftToRight,
+						_editorFontFace,
+						_fontSize,
+						Brushes.White);
+
+					Point point = VisualToUI(
+						new VisualCoordinate(
+							0,
+							currentVisualLine));
+
+					point = point.WithY(point.Y - _scrollYOffset);
+					point = point.WithX(point.X - _scrollXOffset);
+
+					context.DrawText(ft, point);
+				}
+
+				currentVisualLine++;
+			}
 		}
 	}
-
 	private void DrawCaret(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
@@ -480,7 +552,7 @@ public class Editor : Control
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 
-	private Point VisualToUI(Coordinate visualCoord)
+	private Point VisualToUI(VisualCoordinate visualCoord)
 	{
 		return new(visualCoord.Col * _editorMetrics.CharAdvance + EditorArea.Left,
 			visualCoord.Line * _editorMetrics.LineHeight
