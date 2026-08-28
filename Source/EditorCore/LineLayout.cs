@@ -3,7 +3,8 @@ namespace Sekani.EditorCore;
 
 public class LineLayout
 {
-	public string LineText { get; set; } = "";
+	public string VisualText { get; set; } = "";
+	private string _logicalText = "";
 	private readonly int _tabSize;
 	private List<VisualLine> _visualLines = [];
 	public IReadOnlyList<VisualLine> VisualLines => _visualLines;
@@ -18,79 +19,109 @@ public class LineLayout
 	}
 	private void DoLayout(Line line)
 	{
+		_logicalText = line.Text;
+
 		int visualCol = 0;
+		int logicalLineStart = 0;
 		int visualLineStart = 0;
+
 		var builder = new StringBuilder();
+
 		for (int i = 0; i < line.Text.Length; i++)
 		{
-			var width = line.Text[i] == '\t' ? VisualTabWidth(visualCol, _tabSize) : 1;
+			char c = line.Text[i];
 
-			if (_wrap && visualCol + width > _maxVisualColsPerLine && i > visualLineStart)
+			int width = c == '\t'
+				? VisualTabWidth(visualCol, _tabSize)
+				: 1;
+
+			if (_wrap &&
+				visualCol + width > _maxVisualColsPerLine &&
+				i > logicalLineStart)
 			{
-				_visualLines.Add(new VisualLine(visualLineStart, i - visualLineStart));
-				visualLineStart = i;
+				_visualLines.Add(
+					new VisualLine(
+						LogicalOffset: logicalLineStart,
+						LogicalLength: i - logicalLineStart,
+						VisualOffset: visualLineStart,
+						VisualLength: builder.Length - visualLineStart));
+
+				logicalLineStart = i;
+				visualLineStart = builder.Length;
 				visualCol = 0;
+
+				width = c == '\t'
+					? VisualTabWidth(visualCol, _tabSize)
+					: 1;
 			}
 
-			if (line.Text[i] == '\t')
+			if (c == '\t')
 				builder.Append(' ', width);
 			else
-				builder.Append(line.Text[i]);
+				builder.Append(c);
 
 			visualCol += width;
 		}
-		_visualLines.Add(new VisualLine(visualLineStart, line.Text.Length - visualLineStart));
 
-		LineText = builder.ToString();
+		_visualLines.Add(
+			new VisualLine(
+				LogicalOffset: logicalLineStart,
+				LogicalLength: line.Text.Length - logicalLineStart,
+				VisualOffset: visualLineStart,
+				VisualLength: builder.Length - visualLineStart));
+
+		VisualText = builder.ToString();
 	}
-
 	public VisualCoordinate GetVisualCoordinate(int logicalCol)
 	{
-        var targetVisualLine = GetVisualLine(logicalCol, out int targetVlineIndex);
+		var targetVisualLine =
+			GetVisualLine(logicalCol, out int targetVlineIndex);
 
-        if (targetVisualLine is null)
+		if (targetVisualLine is null)
 			return new(0, 0);
 
 		var visualLine = targetVisualLine.Value;
 
 		int visualCol = 0;
 
-		for (int i = visualLine.Offset;
-			 i < visualLine.Offset + visualLine.Length;
+		for (int i = visualLine.LogicalOffset;
+			 i < visualLine.LogicalOffset + visualLine.LogicalLength;
 			 i++)
 		{
 			if (i == logicalCol)
 				return new(visualCol, targetVlineIndex);
 
-			var width = LineText[i] == '\t'
+			visualCol += _logicalText[i] == '\t'
 				? VisualTabWidth(visualCol, _tabSize)
 				: 1;
-
-			visualCol += width;
 		}
 
-		return new(visualCol, _visualLines.Count - 1);
+		return new(visualCol, targetVlineIndex);
 	}
-
 	private VisualLine? GetVisualLine(int logicalCol, out int index)
 	{
 		for (int i = 0; i < _visualLines.Count; i++)
 		{
 			var vl = _visualLines[i];
 
-			if (logicalCol >= vl.Offset &&
-				logicalCol <= vl.Offset + vl.Length)
+			if (logicalCol >= vl.LogicalOffset &&
+				logicalCol <= vl.LogicalOffset + vl.LogicalLength)
 			{
 				index = i;
 				return vl;
 			}
 		}
+
 		index = 0;
 		return null;
 	}
-	public static int VisualTabWidth(int visualCol, int tabSize)
-		=> tabSize - (visualCol % tabSize);
-}
-public readonly record struct VisualLine(int Offset, int Length);
 
+	public static int VisualTabWidth(int visualCol, int tabSize)
+			=> tabSize - (visualCol % tabSize);
+}
+public readonly record struct VisualLine(
+	int LogicalOffset,
+	int LogicalLength,
+	int VisualOffset,
+	int VisualLength);
 

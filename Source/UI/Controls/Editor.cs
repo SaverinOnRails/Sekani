@@ -54,15 +54,15 @@ public class Editor : Control
 		SetAvaloniaProperties();
 		SetEditorMetrics();
 		_document = new();
-		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
-		// var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		// // var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
+		// // var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
 		var file = File.ReadAllText("/home/noble/longfile.text");
-		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
+		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
-		TimeCaret();
+		// TimeCaret();
 	}
 
 	private void TimeCaret()
@@ -358,6 +358,7 @@ public class Editor : Control
 		TryMoveScrollbars(e);
 	}
 
+	//todo, can probably make this faster
 	private VisualCoordinate? LogicalToVisual(Coordinate coord)
 	{
 		var line = _document.Lines[coord.Line];
@@ -495,7 +496,6 @@ public class Editor : Control
 				/ _editorMetrics.LineHeight) + 1;
 
 		int currentVisualLine = 0;
-
 		for (int i = 0; i < _document.Lines.Count; i++)
 		{
 			var line = _document.Lines[i];
@@ -510,10 +510,9 @@ public class Editor : Control
 
 				if (currentVisualLine >= firstVisualLine)
 				{
-					var text = lineLayout.LineText.AsSpan(
-						visualLine.Offset,
-						visualLine.Length);
-
+					var text = lineLayout.VisualText.AsSpan(
+						visualLine.VisualOffset,
+						visualLine.VisualLength);
 					var ft = new FormattedText(
 						text.ToString(),
 						CultureInfo.InvariantCulture,
