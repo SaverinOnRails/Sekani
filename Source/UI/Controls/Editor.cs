@@ -55,14 +55,15 @@ public class Editor : Control
 		SetEditorMetrics();
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
 		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
-		// var file = File.ReadAllText("/home/noble/longfile.text");
-		_document.TypeChars(file);
-		_document.CaretPosition = new(0, 0);
+		var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
+		_document.TypeChars(file);
+		// _document.TypeChars("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
-		// TimeCaret();
+		TimeCaret();
 	}
 
 	private void TimeCaret()
@@ -90,6 +91,7 @@ public class Editor : Control
 
 	private void EnsureCaretVisible()
 	{
+		return;
 		var visualCoords = LogicalToVisual(_document.CaretPosition);
 		if (visualCoords is null) return;
 		var pos = VisualToUI(visualCoords);
@@ -236,7 +238,7 @@ public class Editor : Control
 		DrawMainRectangle(context);
 		DrawText(context);
 		DrawLineNumbers(context);
-		DrawCaret(context);
+		// DrawCaret(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
 	}
@@ -299,7 +301,6 @@ public class Editor : Control
 	}
 	private void DrawHorizontalScrollbar(DrawingContext context)
 	{
-
 		if (!_canScrollX) return;
 		var rect = GetHorizontalScrollbarRect();
 		context.FillRectangle(_scollBarBrush, rect);
@@ -367,8 +368,7 @@ public class Editor : Control
 		if (layout is null)
 			return null;
 
-		var localVisualCoord = layout.GetVisualCoordinate(coord.Col);
-
+		var localVisualCoord = layout.GetVisualCoordinate(coord);
 		int globalVisualLine = 0;
 
 		for (int i = 0; i < coord.Line; i++)

@@ -58,7 +58,7 @@ public sealed class SekaniDocument
 		if (layout is null)
 			return;
 
-		var visual = layout.GetVisualCoordinate(CaretPosition.Col);
+		var visual = layout.GetVisualCoordinate(CaretPosition);
 
 		_preferredVisualColumn = visual.Col;
 	}
@@ -77,21 +77,19 @@ public sealed class SekaniDocument
 		if (layout.VisualLines.Count > 1)
 		{
 			var visualLineIndex =
-				layout.GetVisualCoordinate(CaretPosition.Col).Line;
+				layout.GetVisualCoordinate(CaretPosition).Line;
 			if (direction == CaretVerticalDirection.Down &&
 				visualLineIndex < layout.VisualLines.Count - 1)
 			{
 				var targetVisualPos = new VisualCoordinate(
 					_preferredVisualColumn,
 					visualLineIndex + 1);
-				// Console.WriteLine($"Currently at {CaretPosition}");
-				// Console.WriteLine($"currently at   visual {layout.GetVisualCoordinate(CaretPosition.Col)}");
 				CaretPosition = new(
 					layout.GetLogicalColumn(targetVisualPos),
-					CaretPosition.Line);
-				// Console.WriteLine($"Now at  {CaretPosition}");
-				// Console.WriteLine($"Now at  visual {layout.GetVisualCoordinate(CaretPosition.Col)}");
-				// Console.WriteLine();
+					CaretPosition.Line)
+				{
+					TrailVisualLine = _preferredVisualColumn == 0
+				};
 
 				return;
 			}
@@ -105,12 +103,13 @@ public sealed class SekaniDocument
 
 				CaretPosition = new(
 					layout.GetLogicalColumn(targetVisualPos),
-					CaretPosition.Line);
-
+					CaretPosition.Line)
+				{
+					TrailVisualLine = _preferredVisualColumn == 0
+				};
 				return;
 			}
 		}
-
 		if (direction == CaretVerticalDirection.Up)
 		{
 			if (CaretPosition.Line == 0)
@@ -128,7 +127,10 @@ public sealed class SekaniDocument
 
 			CaretPosition = new(
 				targetLineLayout.GetLogicalColumn(targetVisual),
-				CaretPosition.Line - 1);
+				CaretPosition.Line - 1)
+			{
+				TrailVisualLine = _preferredVisualColumn == 0
+			};
 		}
 		else
 		{

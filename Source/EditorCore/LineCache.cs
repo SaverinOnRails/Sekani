@@ -22,7 +22,6 @@ public sealed class LineCache
 	private void BufferChanged(object? sender, BufferChangeData e)
 	{
 		var line = _buffer.GetLine(e.Line);
-
 		if (line is null)
 			return;
 
@@ -43,7 +42,6 @@ public sealed class LineCache
 	{
 		_longestLine = null;
 		Width = 0;
-
 		foreach (var line in _buffer.Lines)
 		{
 			if (line.Text.Length > Width)

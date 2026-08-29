@@ -2,12 +2,13 @@ namespace Sekani.EditorCore;
 
 public class Coordinate(int col, int line)
 {
-	public int Col { get; set; } = col;
-	public int Line { get; set; } = line;
+	public int Col { get;  } = col;
+	public int Line { get;  } = line;
+	public bool TrailVisualLine { get; set; } = false;
 
 	public override string ToString()
 	{
-		return $"({Col},{Line})";
+		return $"({Col},{Line}). TrailVisualLine: {TrailVisualLine}";
 	}
 }
 

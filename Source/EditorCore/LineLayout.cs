@@ -72,8 +72,9 @@ public class LineLayout
 
 		VisualText = builder.ToString();
 	}
-	public VisualCoordinate GetVisualCoordinate(int logicalCol)
+	public VisualCoordinate GetVisualCoordinate(Coordinate coord)
 	{
+		var logicalCol = coord.Col;
 		var targetVisualLine =
 			GetVisualLine(logicalCol, out int targetVlineIndex);
 
@@ -89,13 +90,18 @@ public class LineLayout
 			 i++)
 		{
 			if (i == logicalCol)
+			{
 				return new(visualCol, targetVlineIndex);
+			}
 
 			visualCol += _logicalText[i] == '\t'
 				? VisualTabWidth(visualCol, _tabSize)
 				: 1;
 		}
-
+		if (coord.TrailVisualLine && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
+		{
+			return new(0, targetVlineIndex + 1);
+		}
 		return new(visualCol, targetVlineIndex);
 	}
 
