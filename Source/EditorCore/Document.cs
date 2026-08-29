@@ -5,8 +5,9 @@ public sealed class SekaniDocument
 	public bool IsReadOnly { get; set; } = false;
 	private SekaniBuffer _buffer = new();
 	public Coordinate CaretPosition { get; set; } = new(0, 0);
-	private int _preferredLogicalColumn = 0;
+	private int _preferredVisualColumn = 0;
 	public IReadOnlyList<Line> Lines => _buffer.Lines;
+	private LineCache? _lineCache;
 
 	public void TypeChars(string text)
 	{
@@ -23,7 +24,7 @@ public sealed class SekaniDocument
 			position.Col,
 			text);
 
-		_preferredLogicalColumn = CaretPosition.Col;
+		UpdatePreferredVisualColumn();
 	}
 	public void CaretRight()
 	{
@@ -32,8 +33,7 @@ public sealed class SekaniDocument
 		if (CaretPosition.Col < line.Text.Length)
 		{
 			AdvanceCaretCol(1);
-
-			_preferredLogicalColumn = CaretPosition.Col;
+			UpdatePreferredVisualColumn();
 			return;
 		}
 
@@ -44,29 +44,118 @@ public sealed class SekaniDocument
 			0,
 			CaretPosition.Line + 1);
 
-		_preferredLogicalColumn = 0;
+		UpdatePreferredVisualColumn();
 	}
 
-	private void MoveCaretVertical(int direction)
+	private void UpdatePreferredVisualColumn()
 	{
-		var targetLineIndex = CaretPosition.Line + direction;
-
-		if (targetLineIndex < 0 || targetLineIndex >= Lines.Count)
+		if (_lineCache is null)
 			return;
 
-		var targetLine = Lines[targetLineIndex];
+		var line = Lines[CaretPosition.Line];
+		var layout = _lineCache.GetOrCreate(line);
 
-		CaretPosition = new Coordinate(
-			Math.Min(_preferredLogicalColumn, targetLine.Text.Length),
-			targetLineIndex);
+		if (layout is null)
+			return;
+
+		var visual = layout.GetVisualCoordinate(CaretPosition.Col);
+
+		_preferredVisualColumn = visual.Col;
 	}
 
+	private void MoveCaretVertical(CaretVerticalDirection direction)
+	{
+		if (_lineCache is null)
+			throw new InvalidOperationException();
+
+		var line = Lines[CaretPosition.Line];
+		var layout = _lineCache.GetOrCreate(line);
+
+		if (layout is null)
+			return;
+
+		if (layout.VisualLines.Count > 1)
+		{
+			var visualLineIndex =
+				layout.GetVisualCoordinate(CaretPosition.Col).Line;
+			if (direction == CaretVerticalDirection.Down &&
+				visualLineIndex < layout.VisualLines.Count - 1)
+			{
+				var targetVisualPos = new VisualCoordinate(
+					_preferredVisualColumn,
+					visualLineIndex + 1);
+				// Console.WriteLine($"Currently at {CaretPosition}");
+				// Console.WriteLine($"currently at   visual {layout.GetVisualCoordinate(CaretPosition.Col)}");
+				CaretPosition = new(
+					layout.GetLogicalColumn(targetVisualPos),
+					CaretPosition.Line);
+				// Console.WriteLine($"Now at  {CaretPosition}");
+				// Console.WriteLine($"Now at  visual {layout.GetVisualCoordinate(CaretPosition.Col)}");
+				// Console.WriteLine();
+
+				return;
+			}
+
+			if (direction == CaretVerticalDirection.Up &&
+				visualLineIndex > 0)
+			{
+				var targetVisualPos = new VisualCoordinate(
+					_preferredVisualColumn,
+					visualLineIndex - 1);
+
+				CaretPosition = new(
+					layout.GetLogicalColumn(targetVisualPos),
+					CaretPosition.Line);
+
+				return;
+			}
+		}
+
+		if (direction == CaretVerticalDirection.Up)
+		{
+			if (CaretPosition.Line == 0)
+				return;
+
+			var targetLine = Lines[CaretPosition.Line - 1];
+			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
+
+			if (targetLineLayout is null)
+				return;
+
+			var targetVisual = new VisualCoordinate(
+				_preferredVisualColumn,
+				targetLineLayout.VisualLines.Count - 1);
+
+			CaretPosition = new(
+				targetLineLayout.GetLogicalColumn(targetVisual),
+				CaretPosition.Line - 1);
+		}
+		else
+		{
+			if (CaretPosition.Line >= Lines.Count - 1)
+				return;
+
+			var targetLine = Lines[CaretPosition.Line + 1];
+			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
+
+			if (targetLineLayout is null)
+				return;
+
+			var targetVisual = new VisualCoordinate(
+				_preferredVisualColumn,
+				0);
+
+			CaretPosition = new(
+				targetLineLayout.GetLogicalColumn(targetVisual),
+				CaretPosition.Line + 1);
+		}
+	}
 	public void CaretLeft()
 	{
 		if (CaretPosition.Col > 0)
 		{
 			AdvanceCaretCol(-1);
-			_preferredLogicalColumn = CaretPosition.Col;
+			UpdatePreferredVisualColumn();
 			return;
 		}
 
@@ -79,9 +168,8 @@ public sealed class SekaniDocument
 			previousLine.Text.Length,
 			CaretPosition.Line - 1);
 
-		_preferredLogicalColumn = CaretPosition.Col;
+		UpdatePreferredVisualColumn();
 	}
-
 	public void Backspace()
 	{
 		var position = CaretPosition;
@@ -110,17 +198,17 @@ public sealed class SekaniDocument
 				position.Line - 1);
 		}
 
-		_preferredLogicalColumn = CaretPosition.Col;
+		UpdatePreferredVisualColumn();
 	}
 
 	public void CaretUp()
 	{
-		MoveCaretVertical(-1);
+		MoveCaretVertical(CaretVerticalDirection.Up);
 	}
 
 	public void CaretDown()
 	{
-		MoveCaretVertical(1);
+		MoveCaretVertical(CaretVerticalDirection.Down);
 	}
 
 	private void AdvanceCaretCol(int count)
@@ -131,11 +219,18 @@ public sealed class SekaniDocument
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
-		return new LineCache(_buffer, tabSize, wordWrap, maxVisualColsPerLine);
+		_lineCache = new LineCache(_buffer, tabSize, wordWrap, maxVisualColsPerLine);
+		return _lineCache;
 	}
 
 	public void TypeChars(object newLine)
 	{
 		throw new NotImplementedException();
 	}
+}
+
+public enum CaretVerticalDirection
+{
+	Up,
+	Down
 }

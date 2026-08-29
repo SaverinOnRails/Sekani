@@ -36,7 +36,7 @@ public class Editor : Control
 	private double _scrollbarScrollStartY;
 	private bool _softWordWrap = true;
 
-	private bool _canScrollX => GetDocumentWidthInPixels() > EditorArea.Width;
+	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
@@ -54,10 +54,10 @@ public class Editor : Control
 		SetAvaloniaProperties();
 		SetEditorMetrics();
 		_document = new();
-		// // var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		// // var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
+		var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
 		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
-		var file = File.ReadAllText("/home/noble/longfile.text");
+		// var file = File.ReadAllText("/home/noble/longfile.text");
 		_document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
@@ -358,7 +358,7 @@ public class Editor : Control
 		TryMoveScrollbars(e);
 	}
 
-	//todo, can probably make this faster
+	//TODO:, can probably make this faster
 	private VisualCoordinate? LogicalToVisual(Coordinate coord)
 	{
 		var line = _document.Lines[coord.Line];
@@ -386,6 +386,7 @@ public class Editor : Control
 			localVisualCoord.Col,
 			globalVisualLine + localVisualCoord.Line);
 	}
+
 	private void TryMoveScrollbars(PointerEventArgs e)
 	{
 		var point = e.GetPosition(this);

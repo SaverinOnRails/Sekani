@@ -98,6 +98,29 @@ public class LineLayout
 
 		return new(visualCol, targetVlineIndex);
 	}
+
+	public int GetLogicalColumn(VisualCoordinate coord)
+	{
+		if (coord.Line < 0 || coord.Line >= _visualLines.Count)
+			return 0;
+		var visualLine = _visualLines[coord.Line];
+		int currentVisualCol = 0;
+		for (int i = visualLine.LogicalOffset;
+			 i < visualLine.LogicalOffset + visualLine.LogicalLength;
+			 i++)
+		{
+			int width = _logicalText[i] == '\t'
+				? VisualTabWidth(currentVisualCol, _tabSize)
+				: 1;
+
+			if (coord.Col < currentVisualCol + width)
+				return i;
+
+			currentVisualCol += width;
+		}
+		return visualLine.LogicalOffset + visualLine.LogicalLength;
+	}
+
 	private VisualLine? GetVisualLine(int logicalCol, out int index)
 	{
 		for (int i = 0; i < _visualLines.Count; i++)
