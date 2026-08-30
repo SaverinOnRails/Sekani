@@ -55,12 +55,11 @@ public class Editor : Control
 		SetEditorMetrics();
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
 		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
-		var file = File.ReadAllText("/home/noble/longfile.text");
+		// var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_document.TypeChars(file);
-		// _document.TypeChars("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
 		TimeCaret();
@@ -91,7 +90,6 @@ public class Editor : Control
 
 	private void EnsureCaretVisible()
 	{
-		return;
 		var visualCoords = LogicalToVisual(_document.CaretPosition);
 		if (visualCoords is null) return;
 		var pos = VisualToUI(visualCoords);
@@ -176,6 +174,7 @@ public class Editor : Control
 			if (_softWordWrap)
 			{
 				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
+				_lineCache.BuildCacheBlocks();
 			}
 			EnsureCaretVisible();
 		}
@@ -218,7 +217,13 @@ public class Editor : Control
 
 	private double GetDocumentHeightInPixels()
 	{
-		return _document.Lines.Count * _editorMetrics.LineHeight;
+		var blocks = _lineCache.CacheBlocks;
+		var totalVisualLineSum = 0;
+		for (int i = 0; i < blocks.Count; i++)
+		{
+			totalVisualLineSum += blocks[i].VisualLinesSum;
+		}
+		return totalVisualLineSum * _editorMetrics.LineHeight;
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 7;
@@ -238,7 +243,7 @@ public class Editor : Control
 		DrawMainRectangle(context);
 		DrawText(context);
 		DrawLineNumbers(context);
-		// DrawCaret(context);
+		DrawCaret(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
 	}
@@ -247,39 +252,33 @@ public class Editor : Control
 	{
 		if (!_drawLineNumbers || LineNumberSectWidth == 0)
 			return;
-
 		using var clip = context.PushClip(LineNumbersSectRect);
-
 		// gutter
 		context.DrawLine(
 			new Pen(new SolidColorBrush(Colors.White, 0.4)),
 			new Point(LineNumbersSectRect.Right, 0),
 			new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
-		int visualLine = 0;
+		int firstVisualLine =
+			Math.Max(0, (int)(_scrollYOffset / _editorMetrics.LineHeight));
+		int lastVisualLine =
+			(int)((_scrollYOffset + EditorArea.Height)
+				/ _editorMetrics.LineHeight) + 1;
 
-		for (int l = 0; l < _document.Lines.Count; l++)
+		int startLineIndex = _lineCache.LineIndexAtVisualLine(
+			firstVisualLine, out int visualLine);
+
+		for (int l = startLineIndex; l < _document.Lines.Count; l++)
 		{
+			if (visualLine >= lastVisualLine)
+				break;
+
 			var line = _document.Lines[l];
 			var lineLayout = _lineCache.GetOrCreate(line);
 			if (lineLayout is null)
 				continue;
-			int visualLineCount = lineLayout.VisualLines.Count;
 
-			if (visualLine + visualLineCount <=
-				_scrollYOffset / _editorMetrics.LineHeight)
-			{
-				visualLine += visualLineCount;
-				continue;
-			}
-
-			if (visualLine * _editorMetrics.LineHeight >
-				_scrollYOffset + EditorArea.Height)
-			{
-				break;
-			}
 			var number = (l + 1).ToString();
-
 			var ft = new FormattedText(
 				number,
 				CultureInfo.InvariantCulture,
@@ -287,16 +286,12 @@ public class Editor : Control
 				_editorFontFace,
 				_fontSize,
 				new SolidColorBrush(Colors.White, 0.4));
-
 			var x = LineNumberSectWidth - ft.Width - 5;
-
 			var point = new Point(
 				x,
 				visualLine * _editorMetrics.LineHeight - _scrollYOffset);
-
 			context.DrawText(ft, point);
-
-			visualLine += visualLineCount;
+			visualLine += lineLayout.VisualLines.Count;
 		}
 	}
 	private void DrawHorizontalScrollbar(DrawingContext context)
@@ -321,11 +316,60 @@ public class Editor : Control
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
 		Focus();
-		TryHittestScrollbars(e);
+		TryHittestScrollbars(e, out bool didHitTestScrollBars);
+		if (!didHitTestScrollBars)
+		{
+			SetCursorToMousePos(e);
+		}
 		base.OnPointerPressed(e);
 	}
 
-	private void TryHittestScrollbars(PointerEventArgs e)
+	private void SetCursorToMousePos(PointerPressedEventArgs e)
+	{
+		if (_lineCache is null)
+			return;
+
+		var point = e.GetPosition(this);
+
+		var visualCol = Math.Max(
+			0,
+			(int)((point.X - EditorArea.Left + _scrollXOffset)
+				/ _editorMetrics.CharAdvance));
+
+		var targetVisualLine = Math.Max(
+			0,
+			(int)((point.Y - EditorArea.Top + _scrollYOffset)
+				/ _editorMetrics.LineHeight));
+
+		var logicalLineIndex =
+			_lineCache.LineIndexAtVisualLine(
+				targetVisualLine,
+				out int visualLineOffsetOfLineStart);
+
+		var layout =
+			_lineCache.GetOrCreate(
+				_document.Lines[logicalLineIndex]);
+
+		if (layout is null)
+			return;
+
+		int localVisualLine =
+			targetVisualLine - visualLineOffsetOfLineStart;
+
+		var vpos = new VisualCoordinate(
+			visualCol,
+			localVisualLine);
+
+		int logicalColumn =
+			layout.GetLogicalColumn(vpos);
+
+		_document.CaretPosition =
+			new Coordinate(logicalColumn, logicalLineIndex);
+
+		_caretVisible = true;
+		Redraw();
+	}
+	private void TryHittestScrollbars(PointerEventArgs e, out bool didHitTestScrollBars)
 	{
 		var point = e.GetPosition(this);
 
@@ -337,7 +381,7 @@ public class Editor : Control
 			_pointerPressedOnHorizontalScrollbar = true;
 			_scrollbarPointerStartX = point.X;
 			_scrollbarScrollStartX = _scrollXOffset;
-
+			didHitTestScrollBars = true;
 			return;
 		}
 
@@ -349,9 +393,10 @@ public class Editor : Control
 			_pointerPressedOnVerticalScrollbar = true;
 			_scrollbarPointerStartY = point.Y;
 			_scrollbarScrollStartY = _scrollYOffset;
-
+			didHitTestScrollBars = true;
 			return;
 		}
+		didHitTestScrollBars = false;
 	}
 
 	protected override void OnPointerMoved(PointerEventArgs e)
@@ -369,24 +414,14 @@ public class Editor : Control
 			return null;
 
 		var localVisualCoord = layout.GetVisualCoordinate(coord);
-		int globalVisualLine = 0;
 
-		for (int i = 0; i < coord.Line; i++)
-		{
-			var previousLine = _document.Lines[i];
-			var previousLayout = _lineCache.GetOrCreate(previousLine);
-
-			if (previousLayout is null)
-				continue;
-
-			globalVisualLine += previousLayout.VisualLines.Count;
-		}
+		int globalVisualLine =
+			_lineCache.TotalVisualLinesBeforeLine(coord);
 
 		return new VisualCoordinate(
 			localVisualCoord.Col,
 			globalVisualLine + localVisualCoord.Line);
 	}
-
 	private void TryMoveScrollbars(PointerEventArgs e)
 	{
 		var point = e.GetPosition(this);
@@ -486,29 +521,27 @@ public class Editor : Control
 	private void DrawText(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
-
 		int firstVisualLine =
 			Math.Max(
 				0,
 				(int)(_scrollYOffset / _editorMetrics.LineHeight));
-
 		int lastVisualLine =
 			(int)((_scrollYOffset + EditorArea.Height)
 				/ _editorMetrics.LineHeight) + 1;
 
-		int currentVisualLine = 0;
-		for (int i = 0; i < _document.Lines.Count; i++)
+		int startLineIndex = _lineCache.LineIndexAtVisualLine(
+			firstVisualLine, out int currentVisualLine);
+
+		for (int i = startLineIndex; i < _document.Lines.Count; i++)
 		{
 			var line = _document.Lines[i];
 			var lineLayout = _lineCache.GetOrCreate(line);
-
 			if (lineLayout is null)
 				continue;
 			foreach (var visualLine in lineLayout.VisualLines)
 			{
 				if (currentVisualLine >= lastVisualLine)
 					return;
-
 				if (currentVisualLine >= firstVisualLine)
 				{
 					var text = lineLayout.VisualText.AsSpan(
@@ -521,18 +554,14 @@ public class Editor : Control
 						_editorFontFace,
 						_fontSize,
 						Brushes.White);
-
 					Point point = VisualToUI(
 						new VisualCoordinate(
 							0,
 							currentVisualLine));
-
 					point = point.WithY(point.Y - _scrollYOffset);
 					point = point.WithX(point.X - _scrollXOffset);
-
 					context.DrawText(ft, point);
 				}
-
 				currentVisualLine++;
 			}
 		}

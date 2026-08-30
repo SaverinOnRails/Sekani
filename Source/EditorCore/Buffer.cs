@@ -32,7 +32,6 @@ public sealed class SekaniBuffer
 		var insertedLines = text.Split(
 			Environment.NewLine,
 			StringSplitOptions.None);
-
 		if (insertedLines.Length == 1)
 		{
 			insertLine.InsertText(col, insertedLines[0]);
