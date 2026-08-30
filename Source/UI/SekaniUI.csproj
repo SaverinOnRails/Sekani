@@ -11,6 +11,7 @@
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
     <InternalsVisibleTo Include= "Tests"/>
+    <ProjectReference Include="../EditorCore/EditorCore.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
