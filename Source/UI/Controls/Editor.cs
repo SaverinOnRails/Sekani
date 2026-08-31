@@ -34,7 +34,7 @@ public class Editor : Control
 	private bool _caretVisible = true;
 	private double _scrollbarPointerStartY;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = true;
+	private bool _softWordWrap = false;
 
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
@@ -174,8 +174,8 @@ public class Editor : Control
 			if (_softWordWrap)
 			{
 				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
-				_lineCache.BuildCacheBlocks();
 			}
+			_lineCache.BuildCacheBlocks();
 			EnsureCaretVisible();
 		}
 		base.OnPropertyChanged(e);
@@ -195,7 +195,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Jetbrains Mono");
+		_editorFontFace = new Typeface("Cascadia Code");
 		var text = new FormattedText(
 			"#",
 			CultureInfo.InvariantCulture,
@@ -217,13 +217,8 @@ public class Editor : Control
 
 	private double GetDocumentHeightInPixels()
 	{
-		var blocks = _lineCache.CacheBlocks;
-		var totalVisualLineSum = 0;
-		for (int i = 0; i < blocks.Count; i++)
-		{
-			totalVisualLineSum += blocks[i].VisualLinesSum;
-		}
-		return totalVisualLineSum * _editorMetrics.LineHeight;
+		return _lineCache.TotalVisualLines()
+			* _editorMetrics.LineHeight;
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 7;

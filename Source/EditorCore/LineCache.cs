@@ -85,6 +85,10 @@ public sealed class LineCache
 	//yes this is very slow, I Know. Actively build every cache block
 	public void BuildCacheBlocks()
 	{
+		if (!_wordWrap)
+		{
+			return;
+		}
 		_cacheBlocks.Clear();
 		for (int i = 0; i < _buffer.Lines.Count; i++)
 		{
@@ -104,8 +108,11 @@ public sealed class LineCache
 		}
 	}
 
+
 	public int TotalVisualLinesBeforeLine(Coordinate logicalCoords)
 	{
+		if (!_wordWrap)
+			return logicalCoords.Line;
 		int lineIndex = logicalCoords.Line;
 
 		if (lineIndex <= 0)
@@ -135,6 +142,16 @@ public sealed class LineCache
 
 	public int LineIndexAtVisualLine(int targetVisualLine, out int visualLineOffsetOfLineStart)
 	{
+		if (!_wordWrap)
+		{
+			int index = Math.Clamp(
+				targetVisualLine,
+				0,
+				_buffer.Lines.Count - 1);
+
+			visualLineOffsetOfLineStart = index;
+			return index;
+		}
 		if (targetVisualLine <= 0)
 		{
 			visualLineOffsetOfLineStart = 0;
@@ -162,6 +179,21 @@ public sealed class LineCache
 
 		visualLineOffsetOfLineStart = visualLineCount;
 		return Math.Min(lineIndex, _buffer.Lines.Count - 1);
+	}
+
+	public int TotalVisualLines()
+	{
+		if (!_wordWrap)
+			return _buffer.Lines.Count;
+
+		int total = 0;
+
+		foreach (var block in _cacheBlocks)
+		{
+			total += block.VisualLinesSum;
+		}
+
+		return total;
 	}
 }
 
