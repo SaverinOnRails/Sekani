@@ -18,11 +18,11 @@ public class Editor : Control
 	private readonly float _fontSize = 15;
 	private LineCache _lineCache;
 	private const float _baseLineNumberWidth = 20;
-	private float LineNumberSectDisplayWidth =>
+	private double LineNumberSectDisplayWidth =>
 		_baseLineNumberWidth +
 		Math.Max(0, _document.Lines.Count.ToString().Length - 1) * _editorMetrics.CharAdvance;
 	private bool _drawLineNumbers = true;
-	private float LineNumberSectWidth =>
+	private double LineNumberSectWidth =>
 		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
 	private double _scrollYOffset = 0;
@@ -34,7 +34,7 @@ public class Editor : Control
 	private bool _caretVisible = true;
 	private double _scrollbarPointerStartY;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = false;
+	private bool _softWordWrap = true;
 
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
@@ -55,14 +55,14 @@ public class Editor : Control
 		SetEditorMetrics();
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
 		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
-		// var file = File.ReadAllText("/home/noble/longfile.text");
+		var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
-		TimeCaret();
+		// TimeCaret();
 	}
 
 	private void TimeCaret()
@@ -205,9 +205,9 @@ public class Editor : Control
 			Brushes.White);
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
-		var lineHeight = (float)text.Height;
+		var lineHeight = text.Height;
 		var tabSize = 6;
-		_editorMetrics = new(charAdvance, lineHeight, tabSize);
+		_editorMetrics = new(charAdvance, 17, tabSize);
 	}
 
 	private double GetDocumentWidthInPixels()
@@ -262,7 +262,6 @@ public class Editor : Control
 
 		int startLineIndex = _lineCache.LineIndexAtVisualLine(
 			firstVisualLine, out int visualLine);
-
 		for (int l = startLineIndex; l < _document.Lines.Count; l++)
 		{
 			if (visualLine >= lastVisualLine)
@@ -644,7 +643,7 @@ public class Editor : Control
 
 
 public readonly record struct EditorMetrics(
-	float CharAdvance,
-	float LineHeight,
+	double CharAdvance,
+	double LineHeight,
 	int TabSize);
 

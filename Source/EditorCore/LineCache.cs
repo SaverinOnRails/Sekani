@@ -140,6 +140,7 @@ public sealed class LineCache
 		return total;
 	}
 
+	//thanks claude
 	public int LineIndexAtVisualLine(int targetVisualLine, out int visualLineOffsetOfLineStart)
 	{
 		if (!_wordWrap)
