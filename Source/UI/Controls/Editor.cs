@@ -107,10 +107,7 @@ public class Editor : Control
 		int caretVisualLine = lineLayout.GetVisualCoordinate(coord).Line;
 
 		// Number of visual lines belonging to logical lines before the caret's line.
-		int visualLinesBeforeCaret = 0;
-
-		for (int i = 0; i < coord.Line; i++)
-			visualLinesBeforeCaret += _lineCache.VisualLineIndexes[i];
+		int visualLinesBeforeCaret = _lineCache.VisualLinesPrefixSum(coord.Line);
 
 		// Absolute visual-line position of the caret.
 		int absoluteCaretVisualLine =
@@ -159,7 +156,7 @@ public class Editor : Control
 			visualCol * _editorMetrics.CharAdvance;
 
 		double caretRight =
-			caretX  + _caretWidth;
+			caretX + _caretWidth;
 
 		double viewportLeft = _scrollXOffset;
 		double viewportRight = _scrollXOffset + EditorArea.Width;
@@ -345,6 +342,7 @@ public class Editor : Control
 		if (!_drawLineNumbers || LineNumberSectWidth == 0)
 			return;
 		using var clip = context.PushClip(LineNumbersSectRect);
+
 		// gutter
 		context.DrawLine(
 			new Pen(new SolidColorBrush(Colors.White, 0.4)),
@@ -413,33 +411,27 @@ public class Editor : Control
 	{
 		if (_lineCache is null)
 			return;
-
 		var point = e.GetPosition(this);
-
-		var visualCol = Math.Max(
-			0,
-			(int)((point.X - EditorArea.Left + _scrollXOffset)
-				/ _editorMetrics.CharAdvance));
-
-		var targetVisualLine = Math.Max(
+		int targetVisualLine = Math.Max(
 			0,
 			(int)((point.Y - EditorArea.Top + _scrollYOffset)
 				/ _editorMetrics.LineHeight));
 
-		var logicalLineIndex =
-			_lineCache.LineIndexAtVisualLine(
-				targetVisualLine,
-				out int visualLineOffsetOfLineStart);
+		int visualCol = Math.Max(
+			0,
+			(int)((point.X - EditorArea.Left + _scrollXOffset)
+				/ _editorMetrics.CharAdvance));
 
-		var layout =
-			_lineCache.GetOrCreate(
-				_document.Lines[logicalLineIndex]);
+		// Find the logical line containing targetVisualLine.
+		int logicalLineIndex = _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum);
+		var layout = _lineCache.GetOrCreate(
+			_document.Lines[logicalLineIndex]);
 
 		if (layout is null)
 			return;
 
 		int localVisualLine =
-			targetVisualLine - visualLineOffsetOfLineStart;
+			targetVisualLine - visualLineSum;
 
 		var vpos = new VisualCoordinate(
 			visualCol,
@@ -489,24 +481,6 @@ public class Editor : Control
 		TryMoveScrollbars(e);
 	}
 
-	//TODO:, can probably make this faster
-	private VisualCoordinate? LogicalToVisual(Coordinate coord)
-	{
-		var line = _document.Lines[coord.Line];
-		var layout = _lineCache.GetOrCreate(line);
-
-		if (layout is null)
-			return null;
-
-		var localVisualCoord = layout.GetVisualCoordinate(coord);
-
-		int globalVisualLine =
-			_lineCache.TotalVisualLinesBeforeLine(coord);
-
-		return new VisualCoordinate(
-			localVisualCoord.Col,
-			globalVisualLine + localVisualCoord.Line);
-	}
 	private void TryMoveScrollbars(PointerEventArgs e)
 	{
 		var point = e.GetPosition(this);
@@ -610,23 +584,16 @@ public class Editor : Control
 			0,
 			(_scrollYOffset / _editorMetrics.LineHeight));
 
-		int visualSum = 0;
-		int firstLogicalLine = 0;
-		double offset = 0;
-		for (int i = 0; i < _lineCache.VisualLineIndexes.Count; i++)
-		{
-			int count = _lineCache.VisualLineIndexes[i];
-			if (visualSum + count > startAt)
-			{
-				offset = startAt - visualSum;
-				firstLogicalLine = i;
-				break;
-			}
-			visualSum += count;
-		}
-		offset *= _editorMetrics.LineHeight;
+		int targetVisualLine = (int)startAt;
 
-		//worst case, no matter how it wraps we don't ever need to draw more than this amount
+		int firstLogicalLine =
+			_lineCache.FindByPrefixSum(
+				targetVisualLine,
+				out int visualSum);
+		double offset =
+				(startAt - visualSum) * _editorMetrics.LineHeight;
+
+		//worst case, no matter how it wraps we don't ever need to draw more than this amount so this isnt really the last visible logical line
 		int lastLogicalLine = (int)(EditorArea.Height / _editorMetrics.LineHeight) + firstLogicalLine;
 		return (firstLogicalLine, lastLogicalLine, offset);
 	}

@@ -4,21 +4,16 @@ public sealed class LineCache
 {
 	private readonly SekaniBuffer _buffer;
 	private readonly Dictionary<Line, LineLayout> _layoutCache = [];
-	public IReadOnlyList<CacheBlock> CacheBlocks => _cacheBlocks;
 	public int Width { get; private set; }
 	private Line? _longestLine;
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
 	private int _maxVisualColsPerLine;
-	private readonly int _cacheBlockSize = 10_000;
-	public int CacheBlockSize => _cacheBlockSize;
-	private bool _cacheBlocksSetup = false;
-	private List<CacheBlock> _cacheBlocks = [];
+	private int[] _fenwickTree = [];
 
 	//will see to using a fenwick tree here
 	private List<int> _visualLinesIndexes = [];
 	public IReadOnlyList<int> VisualLineIndexes => _visualLinesIndexes;
-	private CancellationTokenSource _cacheBlocksCancellationTokenSource = new();
 
 	public LineCache(SekaniBuffer buffer, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
@@ -46,15 +41,6 @@ public sealed class LineCache
 			RecalculateWidth();
 		}
 		InvalidateLayout(line);
-		if (_cacheBlocksSetup)
-		{
-			if (e.kind == BufferChangeKind.LineChanged)
-			{
-				Console.WriteLine("line changed");
-				int blockIndex = e.Line / _cacheBlockSize;
-				// InvalidateBlock(blockIndex);
-			}
-		}
 	}
 
 
@@ -92,17 +78,18 @@ public sealed class LineCache
 
 			if (_buffer.Lines[index.Value] != line)
 			{
-				_visualLinesIndexes[index.Value] =
+				SetVisualLineCount(index.Value,
 					new LineLayout(
 						line,
 						_tabSize,
 						_wordWrap,
 						_maxVisualColsPerLine)
-					.VisualLines.Count;
+					.VisualLines.Count
+					);
 			}
 			else
 			{
-				_visualLinesIndexes[index.Value] = lineLayout.VisualLines.Count;
+				SetVisualLineCount(index.Value, lineLayout.VisualLines.Count);
 			}
 		}
 		return lineLayout;
@@ -123,48 +110,6 @@ public sealed class LineCache
 		InvalidateAll();
 	}
 
-	public async Task BuildCacheBlocks()
-	{
-		_cacheBlocksCancellationTokenSource.Cancel();
-		_cacheBlocksCancellationTokenSource = new();
-		if (!_wordWrap)
-			return;
-		var token = _cacheBlocksCancellationTokenSource.Token;
-		try
-		{
-			var blocks = await Task.Run(() =>
-			{
-				var result = new List<CacheBlock>();
-
-				for (int i = 0; i < _buffer.Lines.Count; i++)
-				{
-					token.ThrowIfCancellationRequested();
-
-					int blockIndex = i / _cacheBlockSize;
-
-					if (blockIndex == result.Count)
-						result.Add(new CacheBlock());
-
-					var layout = new LineLayout(
-						_buffer.Lines[i],
-						_tabSize,
-						_wordWrap,
-						_maxVisualColsPerLine);
-
-					result[blockIndex].VisualLinesSum +=
-						layout.VisualLines.Count;
-				}
-
-				return result;
-			}, token);
-			_cacheBlocks = blocks;
-			_cacheBlocksSetup = true;
-		}
-		catch
-		{
-			//do nothing
-		}
-	}
 
 	public void BuildVisualLinesIndexes()
 	{
@@ -172,79 +117,94 @@ public sealed class LineCache
 		int n = _buffer.Lines.Count;
 		for (int i = 0; i < n; i++)
 			_visualLinesIndexes.Add(1);
+		BuildFenwickTree();
 	}
 
-	public int TotalVisualLinesBeforeLine(Coordinate logicalCoords)
+	//binary index tree stuff. Courtesy of chatgpt
+	public void BuildFenwickTree()
 	{
-		if (!_wordWrap)
-			return logicalCoords.Line;
-		int lineIndex = logicalCoords.Line;
+		_fenwickTree = new int[_visualLinesIndexes.Count + 1];
 
-		if (lineIndex <= 0)
-			return 0;
-
-		int blockIndex = lineIndex / _cacheBlockSize;
-
-		int total = 0;
-
-		//every block before containing block
-		for (int i = 0; i < blockIndex; i++)
+		for (int i = 0; i < _visualLinesIndexes.Count; i++)
 		{
-			total += _cacheBlocks[i].VisualLinesSum;
+			AddFenwickTreeIndex(i, _visualLinesIndexes[i]);
 		}
-
-		int blockStartIndex = blockIndex * _cacheBlockSize;
-		for (int i = blockStartIndex; i < lineIndex; i++)
-		{
-			var layout = GetOrCreate(_buffer.Lines[i]);
-
-			if (layout is not null)
-				total += layout.VisualLines.Count;
-		}
-
-		return total;
 	}
 
-	//thanks claude
-	public int LineIndexAtVisualLine(int targetVisualLine, out int visualLineOffsetOfLineStart)
+	private void AddFenwickTreeIndex(int index, int value)
 	{
-		if (!_wordWrap)
+		// Fenwick tree uses 1-based indexing.
+		index++;
+		while (index < _fenwickTree.Length)
 		{
-			int index = Math.Clamp(
-				targetVisualLine,
-				0,
-				_buffer.Lines.Count - 1);
+			_fenwickTree[index] += value;
+			index += index & -index;
+		}
+	}
 
-			visualLineOffsetOfLineStart = index;
-			return index;
-		}
-		if (targetVisualLine <= 0)
+	public int VisualLinesPrefixSum(int index)
+	{
+		int sum = 0;
+
+		while (index > 0)
 		{
-			visualLineOffsetOfLineStart = 0;
-			return 0;
-		}
-		int blockIndex = 0;
-		int visualLineCount = 0;
-		for (; blockIndex < _cacheBlocks.Count; blockIndex++)
-		{
-			int blockSum = _cacheBlocks[blockIndex].VisualLinesSum;
-			if (visualLineCount + blockSum > targetVisualLine)
-				break;
-			visualLineCount += blockSum;
-		}
-		int lineIndex = blockIndex * _cacheBlockSize;
-		int lineLimit = Math.Min(lineIndex + _cacheBlockSize, _buffer.Lines.Count);
-		for (; lineIndex < lineLimit; lineIndex++)
-		{
-			var layout = GetOrCreate(_buffer.Lines[lineIndex]);
-			int count = layout?.VisualLines.Count ?? 0;
-			if (visualLineCount + count > targetVisualLine)
-				break;
-			visualLineCount += count;
+			sum += _fenwickTree[index];
+			index -= index & -index;
 		}
 
-		visualLineOffsetOfLineStart = visualLineCount;
-		return Math.Min(lineIndex, _buffer.Lines.Count - 1);
+		return sum;
+	}
+	public void SetVisualLineCount(int index, int newValue)
+	{
+		int oldValue = _visualLinesIndexes[index];
+		_visualLinesIndexes[index] = newValue;
+		int difference = newValue - oldValue;
+		UpdateFenwickTree(index, difference);
+	}
+
+	private void UpdateFenwickTree(int index, int difference)
+	{
+		index++;
+
+		while (index < _fenwickTree.Length)
+		{
+			_fenwickTree[index] += difference;
+			index += index & -index;
+		}
+	}
+
+	public int FindByPrefixSum(int target, out int prefixSum)
+	{
+		int index = 0;
+		prefixSum = 0;
+
+		int bit = HighestPowerOfTwoAtMost(_fenwickTree.Length - 1);
+
+		while (bit != 0)
+		{
+			int next = index + bit;
+
+			if (next < _fenwickTree.Length &&
+				prefixSum + _fenwickTree[next] <= target)
+			{
+				prefixSum += _fenwickTree[next];
+				index = next;
+			}
+
+			bit >>= 1;
+		}
+
+		return index;
+	}
+
+	private static int HighestPowerOfTwoAtMost(int value)
+	{
+		int result = 1;
+
+		while (result << 1 <= value)
+			result <<= 1;
+
+		return result;
 	}
 
 	public int TotalVisualLines()
@@ -252,15 +212,8 @@ public sealed class LineCache
 		if (!_wordWrap)
 			return _buffer.Lines.Count;
 
-		return _visualLinesIndexes.Sum();
+		return VisualLinesPrefixSum(_visualLinesIndexes.Count);
 	}
 }
 
 
-public class CacheBlock
-{
-	public int VisualLinesSum { get; set; }
-
-	public bool Dirty { get; set; } = true;
-
-}
