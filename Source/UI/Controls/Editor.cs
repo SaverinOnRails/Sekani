@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -56,13 +58,13 @@ public class Editor : Control
 		_document = new();
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
 		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
-		// // var file = File.ReadAllText("/home/noble/Projects/focus/src/draw.jai");
+		// var file = File.ReadAllText("/home/noble/Documents/emacs/src/xdisp.c");
 		var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
-		// TimeCaret();
+		TimeCaret();
 	}
 
 	private void TimeCaret()
@@ -88,31 +90,125 @@ public class Editor : Control
 		HandleKeyInput(e);
 	}
 
+	private bool IsCaretVisibleVertical(
+		out bool caretAboveViewport,
+		out double correctiveDistance)
+	{
+		caretAboveViewport = false;
+		correctiveDistance = 0;
+
+		var coord = _document.CaretPosition;
+
+		var line = _document.Lines[coord.Line];
+		var lineLayout = _lineCache.GetOrCreate(line);
+		if (lineLayout is null)
+			return false;
+
+		int caretVisualLine = lineLayout.GetVisualCoordinate(coord).Line;
+
+		// Number of visual lines belonging to logical lines before the caret's line.
+		int visualLinesBeforeCaret = 0;
+
+		for (int i = 0; i < coord.Line; i++)
+			visualLinesBeforeCaret += _lineCache.VisualLineIndexes[i];
+
+		// Absolute visual-line position of the caret.
+		int absoluteCaretVisualLine =
+			visualLinesBeforeCaret + caretVisualLine;
+
+		double caretY =
+			absoluteCaretVisualLine * _editorMetrics.LineHeight;
+
+		double caretBottom =
+			caretY + _editorMetrics.LineHeight;
+
+		double viewportTop = _scrollYOffset;
+		double viewportBottom = _scrollYOffset + EditorArea.Height;
+
+		// Caret is completely above the viewport.
+		if (caretY < viewportTop)
+		{
+			caretAboveViewport = true;
+			correctiveDistance = viewportTop - caretY;
+			return false;
+		}
+
+		// Caret is completely below the viewport.
+		if (caretBottom > viewportBottom)
+		{
+			caretAboveViewport = false;
+			correctiveDistance = caretBottom - viewportBottom;
+			return false;
+		}
+
+		// Entire visual line containing the caret is visible.
+		return true;
+	}
+	private bool IsCaretVisibleHorizontal(
+		out bool caretLeftOfViewport,
+		out double correctiveDistance)
+	{
+		caretLeftOfViewport = false;
+		correctiveDistance = 0;
+
+		var coord = _document.CaretPosition;
+		var layout = _lineCache.GetOrCreate(_document.Lines[coord.Line]);
+		if (layout is null) return false;
+		var visualCol = layout.GetVisualCoordinate(coord).Col;
+		double caretX =
+			visualCol * _editorMetrics.CharAdvance;
+
+		double caretRight =
+			caretX  + _caretWidth;
+
+		double viewportLeft = _scrollXOffset;
+		double viewportRight = _scrollXOffset + EditorArea.Width;
+
+		// Caret is completely to the left of the viewport.
+		if (caretX < viewportLeft)
+		{
+			caretLeftOfViewport = true;
+			correctiveDistance = viewportLeft - caretX;
+			return false;
+		}
+
+		// Caret is completely to the right of the viewport.
+		if (caretRight > viewportRight)
+		{
+			caretLeftOfViewport = false;
+			correctiveDistance = caretRight - viewportRight;
+			return false;
+		}
+
+		return true;
+	}
 	private void EnsureCaretVisible()
 	{
-		var visualCoords = LogicalToVisual(_document.CaretPosition);
-		if (visualCoords is null) return;
-		var pos = VisualToUI(visualCoords);
-		if (pos.X + _caretWidth > _scrollXOffset + EditorArea.Right)
+		if (!IsCaretVisibleVertical(
+			out bool caretAboveViewport,
+			out double correctiveDistance))
 		{
-			_scrollXOffset =
-				pos.X + _caretWidth - EditorArea.Right;
+			if (caretAboveViewport)
+				_scrollYOffset -= correctiveDistance;
+			else
+				_scrollYOffset += correctiveDistance;
 		}
-		if (pos.X < _scrollXOffset + EditorArea.Left)
+
+		if (!IsCaretVisibleHorizontal(
+			  out bool caretLeftOfViewport,
+			  out double xCorrectiveDistance))
+
 		{
-			_scrollXOffset =
-				pos.X - EditorArea.Left;
+			if (caretLeftOfViewport)
+				_scrollXOffset -= xCorrectiveDistance;
+			else
+				_scrollXOffset += xCorrectiveDistance;
 		}
-		if (pos.Y + _editorMetrics.LineHeight > _scrollYOffset + EditorArea.Bottom)
-		{
-			_scrollYOffset =
-				pos.Y + _editorMetrics.LineHeight - EditorArea.Bottom;
-		}
-		if (pos.Y < _scrollYOffset + EditorArea.Top)
-		{
-			_scrollYOffset =
-				pos.Y - EditorArea.Top;
-		}
+		CorrectScrollBarOffsetOnResize();
+	}
+
+	private void CorrectScrollBarOffsetOnResize()
+	{
 		_scrollXOffset = Math.Clamp(
 			_scrollXOffset,
 			0,
@@ -167,7 +263,7 @@ public class Editor : Control
 
 	private int MaxVisualColsPerLine => (int)(EditorArea.Width / _editorMetrics.CharAdvance);
 
-	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
+	protected override async void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
 		if (e.Property == BoundsProperty)
 		{
@@ -175,8 +271,9 @@ public class Editor : Control
 			{
 				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
 			}
-			_lineCache.BuildCacheBlocks();
-			EnsureCaretVisible();
+			// await _lineCache.BuildCacheBlocks();
+			_lineCache.BuildVisualLinesIndexes();
+			CorrectScrollBarOffsetOnResize();
 		}
 		base.OnPropertyChanged(e);
 	}
@@ -254,25 +351,19 @@ public class Editor : Control
 			new Point(LineNumbersSectRect.Right, 0),
 			new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
-		int firstVisualLine =
-			Math.Max(0, (int)(_scrollYOffset / _editorMetrics.LineHeight));
-		int lastVisualLine =
-			(int)((_scrollYOffset + EditorArea.Height)
-				/ _editorMetrics.LineHeight) + 1;
+		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
 
-		int startLineIndex = _lineCache.LineIndexAtVisualLine(
-			firstVisualLine, out int visualLine);
-		for (int l = startLineIndex; l < _document.Lines.Count; l++)
+		int visualLine = 0;
+		lastLogicalLine += 5;
+		for (int i = firstLogicalLine; i < lastLogicalLine; i++)
 		{
-			if (visualLine >= lastVisualLine)
-				break;
-
-			var line = _document.Lines[l];
+			if (i >= _document.Lines.Count) return;
+			var line = _document.Lines[i];
 			var lineLayout = _lineCache.GetOrCreate(line);
 			if (lineLayout is null)
 				continue;
 
-			var number = (l + 1).ToString();
+			var number = (i + 1).ToString();
 			var ft = new FormattedText(
 				number,
 				CultureInfo.InvariantCulture,
@@ -283,7 +374,7 @@ public class Editor : Control
 			var x = LineNumberSectWidth - ft.Width - 5;
 			var point = new Point(
 				x,
-				visualLine * _editorMetrics.LineHeight - _scrollYOffset);
+				visualLine * _editorMetrics.LineHeight - pixelOffset);
 			context.DrawText(ft, point);
 			visualLine += lineLayout.VisualLines.Count;
 		}
@@ -304,7 +395,7 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#0F3040"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brushes.Black, new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -512,50 +603,81 @@ public class Editor : Control
 
 		e.Handled = true;
 	}
+
+	private (int firstLogicalLine, int lastLogicalLine, double pixelOffset) ComputeVisibleText()
+	{
+		double startAt = Math.Max(
+			0,
+			(_scrollYOffset / _editorMetrics.LineHeight));
+
+		int visualSum = 0;
+		int firstLogicalLine = 0;
+		double offset = 0;
+		for (int i = 0; i < _lineCache.VisualLineIndexes.Count; i++)
+		{
+			int count = _lineCache.VisualLineIndexes[i];
+			if (visualSum + count > startAt)
+			{
+				offset = startAt - visualSum;
+				firstLogicalLine = i;
+				break;
+			}
+			visualSum += count;
+		}
+		offset *= _editorMetrics.LineHeight;
+
+		//worst case, no matter how it wraps we don't ever need to draw more than this amount
+		int lastLogicalLine = (int)(EditorArea.Height / _editorMetrics.LineHeight) + firstLogicalLine;
+		return (firstLogicalLine, lastLogicalLine, offset);
+	}
 	private void DrawText(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
-		int firstVisualLine =
-			Math.Max(
-				0,
-				(int)(_scrollYOffset / _editorMetrics.LineHeight));
-		int lastVisualLine =
-			(int)((_scrollYOffset + EditorArea.Height)
-				/ _editorMetrics.LineHeight) + 1;
+		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
+		int currentVisualLine = 0;
 
-		int startLineIndex = _lineCache.LineIndexAtVisualLine(
-			firstVisualLine, out int currentVisualLine);
-
-		for (int i = startLineIndex; i < _document.Lines.Count; i++)
+		//pre measure some lines above the viewport.
+		int logicalLineToBeginCount = firstLogicalLine - 10;
+		lastLogicalLine += 5;
+		for (int i = logicalLineToBeginCount; i <= lastLogicalLine; i++)
 		{
+			if (i >= _document.Lines.Count) return;
+			if (i < 0) continue;
 			var line = _document.Lines[i];
-			var lineLayout = _lineCache.GetOrCreate(line);
-			if (lineLayout is null)
-				continue;
-			foreach (var visualLine in lineLayout.VisualLines)
+			int oldCount = _lineCache.VisualLineIndexes[i];
+			var lineLayout = _lineCache.GetOrCreate(line, i);
+			if (lineLayout is null) return;
+			//correct scroll behind
+			if (i < firstLogicalLine)
 			{
-				if (currentVisualLine >= lastVisualLine)
-					return;
-				if (currentVisualLine >= firstVisualLine)
+				int newCount = lineLayout.VisualLines.Count;
+				if (newCount != oldCount)
 				{
-					var text = lineLayout.VisualText.AsSpan(
-						visualLine.VisualOffset,
-						visualLine.VisualLength);
-					var ft = new FormattedText(
-						text.ToString(),
-						CultureInfo.InvariantCulture,
-						FlowDirection.LeftToRight,
-						_editorFontFace,
-						_fontSize,
-						Brushes.White);
-					Point point = VisualToUI(
-						new VisualCoordinate(
-							0,
-							currentVisualLine));
-					point = point.WithY(point.Y - _scrollYOffset);
-					point = point.WithX(point.X - _scrollXOffset);
-					context.DrawText(ft, point);
+					if (i < firstLogicalLine)
+						_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
 				}
+				continue;
+			}
+			for (int j = 0; j < lineLayout.VisualLines.Count; j++)
+			{
+				var visualLine = lineLayout.VisualLines[j];
+				var text = lineLayout.VisualText.AsSpan(
+					visualLine.VisualOffset,
+					visualLine.VisualLength);
+				var ft = new FormattedText(
+					text.ToString(),
+					CultureInfo.InvariantCulture,
+					FlowDirection.LeftToRight,
+					_editorFontFace,
+					_fontSize,
+					Brushes.White);
+				Point point = VisualToUI(
+					new VisualCoordinate(
+						0,
+						currentVisualLine));
+				point = point.WithY(point.Y - pixelOffset);
+				point = point.WithX(point.X - _scrollXOffset);
+				context.DrawText(ft, point);
 				currentVisualLine++;
 			}
 		}
@@ -564,14 +686,30 @@ public class Editor : Control
 	{
 		using var clip = context.PushClip(EditorArea);
 		if (!_caretVisible) return;
-		var visualCoords = LogicalToVisual(_document.CaretPosition);
-		if (visualCoords is null) return;
-		var point = VisualToUI(visualCoords);
+
+		var coord = _document.CaretPosition;
+		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
+		if (coord.Line < firstLogicalLine || coord.Line > lastLogicalLine)
+			return;
+		int visualLine = 0;
+		for (int i = firstLogicalLine; i < coord.Line; i++)
+		{
+			var lineLayout = _lineCache.GetOrCreate(_document.Lines[i], i);
+			if (lineLayout is null) return;
+			visualLine += lineLayout.VisualLines.Count;
+		}
+
+		var caretLineLayout = _lineCache.GetOrCreate(_document.Lines[coord.Line], coord.Line);
+		if (caretLineLayout is null) return;
+
+		var localVisualCoord = caretLineLayout.GetVisualCoordinate(coord);
+		visualLine += localVisualCoord.Line;
+
+		var point = VisualToUI(new VisualCoordinate(localVisualCoord.Col, visualLine));
+		point = point.WithY(point.Y - pixelOffset);
 		point = point.WithX(point.X - _scrollXOffset);
-		point = point.WithY(point.Y - _scrollYOffset);
-		var caretRect = new Rect(
-			point,
-			new Size(_caretWidth, _editorMetrics.LineHeight));
+
+		var caretRect = new Rect(point, new Size(_caretWidth, _editorMetrics.LineHeight));
 		context.FillRectangle(Brushes.White, caretRect);
 	}
 

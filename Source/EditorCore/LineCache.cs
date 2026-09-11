@@ -12,7 +12,13 @@ public sealed class LineCache
 	private int _maxVisualColsPerLine;
 	private readonly int _cacheBlockSize = 10_000;
 	public int CacheBlockSize => _cacheBlockSize;
+	private bool _cacheBlocksSetup = false;
 	private List<CacheBlock> _cacheBlocks = [];
+
+	//will see to using a fenwick tree here
+	private List<int> _visualLinesIndexes = [];
+	public IReadOnlyList<int> VisualLineIndexes => _visualLinesIndexes;
+	private CancellationTokenSource _cacheBlocksCancellationTokenSource = new();
 
 	public LineCache(SekaniBuffer buffer, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
@@ -40,7 +46,17 @@ public sealed class LineCache
 			RecalculateWidth();
 		}
 		InvalidateLayout(line);
+		if (_cacheBlocksSetup)
+		{
+			if (e.kind == BufferChangeKind.LineChanged)
+			{
+				Console.WriteLine("line changed");
+				int blockIndex = e.Line / _cacheBlockSize;
+				// InvalidateBlock(blockIndex);
+			}
+		}
 	}
+
 
 	private void RecalculateWidth()
 	{
@@ -56,14 +72,39 @@ public sealed class LineCache
 		}
 	}
 
-	public LineLayout? GetOrCreate(Line line)
+	public LineLayout? GetOrCreate(Line line, int? index = null)
 	{
-		if (_layoutCache.TryGetValue(line, out var layout))
-			return layout;
+		if (!_layoutCache.TryGetValue(line, out var lineLayout))
+		{
+			lineLayout = new LineLayout(
+				line,
+				_tabSize,
+				_wordWrap,
+				_maxVisualColsPerLine);
 
-		var lineLayout = new LineLayout(line, _tabSize, _wordWrap, _maxVisualColsPerLine);
-		_layoutCache[line] = lineLayout;
+			_layoutCache[line] = lineLayout;
+		}
+		if (index is not null)
+		{
+			// Pad to fill up
+			while (_visualLinesIndexes.Count <= index)
+				_visualLinesIndexes.Add(1);
 
+			if (_buffer.Lines[index.Value] != line)
+			{
+				_visualLinesIndexes[index.Value] =
+					new LineLayout(
+						line,
+						_tabSize,
+						_wordWrap,
+						_maxVisualColsPerLine)
+					.VisualLines.Count;
+			}
+			else
+			{
+				_visualLinesIndexes[index.Value] = lineLayout.VisualLines.Count;
+			}
+		}
 		return lineLayout;
 	}
 	private void InvalidateLayout(Line line)
@@ -82,32 +123,56 @@ public sealed class LineCache
 		InvalidateAll();
 	}
 
-	//yes this is very slow, I Know. Actively build every cache block
-	public void BuildCacheBlocks()
+	public async Task BuildCacheBlocks()
 	{
+		_cacheBlocksCancellationTokenSource.Cancel();
+		_cacheBlocksCancellationTokenSource = new();
 		if (!_wordWrap)
-		{
 			return;
-		}
-		_cacheBlocks.Clear();
-		for (int i = 0; i < _buffer.Lines.Count; i++)
+		var token = _cacheBlocksCancellationTokenSource.Token;
+		try
 		{
-			int blockIndex = i / _cacheBlockSize;
+			var blocks = await Task.Run(() =>
+			{
+				var result = new List<CacheBlock>();
 
-			var lineLayout = new LineLayout(
-				_buffer.Lines[i],
-				_tabSize,
-				_wordWrap,
-				_maxVisualColsPerLine);
+				for (int i = 0; i < _buffer.Lines.Count; i++)
+				{
+					token.ThrowIfCancellationRequested();
 
-			if (blockIndex == _cacheBlocks.Count)
-				_cacheBlocks.Add(new CacheBlock());
+					int blockIndex = i / _cacheBlockSize;
 
-			_cacheBlocks[blockIndex].VisualLinesSum +=
-				lineLayout.VisualLines.Count;
+					if (blockIndex == result.Count)
+						result.Add(new CacheBlock());
+
+					var layout = new LineLayout(
+						_buffer.Lines[i],
+						_tabSize,
+						_wordWrap,
+						_maxVisualColsPerLine);
+
+					result[blockIndex].VisualLinesSum +=
+						layout.VisualLines.Count;
+				}
+
+				return result;
+			}, token);
+			_cacheBlocks = blocks;
+			_cacheBlocksSetup = true;
+		}
+		catch
+		{
+			//do nothing
 		}
 	}
 
+	public void BuildVisualLinesIndexes()
+	{
+		_visualLinesIndexes.Clear();
+		int n = _buffer.Lines.Count;
+		for (int i = 0; i < n; i++)
+			_visualLinesIndexes.Add(1);
+	}
 
 	public int TotalVisualLinesBeforeLine(Coordinate logicalCoords)
 	{
@@ -187,14 +252,7 @@ public sealed class LineCache
 		if (!_wordWrap)
 			return _buffer.Lines.Count;
 
-		int total = 0;
-
-		foreach (var block in _cacheBlocks)
-		{
-			total += block.VisualLinesSum;
-		}
-
-		return total;
+		return _visualLinesIndexes.Sum();
 	}
 }
 
@@ -202,5 +260,7 @@ public sealed class LineCache
 public class CacheBlock
 {
 	public int VisualLinesSum { get; set; }
+
+	public bool Dirty { get; set; } = true;
 
 }

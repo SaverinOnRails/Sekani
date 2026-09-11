@@ -35,7 +35,7 @@ public sealed class SekaniBuffer
 		if (insertedLines.Length == 1)
 		{
 			insertLine.InsertText(col, insertedLines[0]);
-			RaiseBufferChangedEvent(line);
+			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
 
 			return new Coordinate(
 				col + insertedLines[0].Length,
@@ -46,7 +46,7 @@ public sealed class SekaniBuffer
 		var after = insertLine.Text[col..];
 
 		insertLine.Text = before + insertedLines[0];
-		RaiseBufferChangedEvent(line);
+		RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
 
 		for (int i = 1; i < insertedLines.Length; i++)
 		{
@@ -56,7 +56,7 @@ public sealed class SekaniBuffer
 			};
 
 			_lines.Insert(line + i, newLine);
-			RaiseBufferChangedEvent(line + i);
+			RaiseBufferChangedEvent(line + i, BufferChangeKind.LineAdded);
 		}
 
 		var lastLine = _lines[line + insertedLines.Length - 1];
@@ -66,9 +66,9 @@ public sealed class SekaniBuffer
 			insertedLines[^1].Length,
 			line + insertedLines.Length - 1);
 	}
-	private void RaiseBufferChangedEvent(int line)
+	private void RaiseBufferChangedEvent(int line, BufferChangeKind kind)
 	{
-		BufferChangedEvent?.Invoke(this, new(line));
+		BufferChangedEvent?.Invoke(this, new(line, kind));
 	}
 
 	public void Backspace(int line, int col)
@@ -81,7 +81,7 @@ public sealed class SekaniBuffer
 		if (col > 0)
 		{
 			currentLine.Text = currentLine.Text.Remove(col - 1, 1);
-			RaiseBufferChangedEvent(line);
+			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
 			return;
 		}
 
@@ -93,10 +93,16 @@ public sealed class SekaniBuffer
 		previousLine.Text += currentLine.Text;
 		_lines.RemoveAt(line);
 
-		RaiseBufferChangedEvent(line - 1);
+		RaiseBufferChangedEvent(line - 1, BufferChangeKind.LineRemoved);
 	}
 	public event EventHandler<BufferChangeData>? BufferChangedEvent;
 }
 
-public record struct BufferChangeData(int Line);
+public enum BufferChangeKind
+{
+	LineChanged,
+	LineAdded,
+	LineRemoved,
+}
+public record struct BufferChangeData(int Line, BufferChangeKind kind);
 

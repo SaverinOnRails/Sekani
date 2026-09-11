@@ -20,7 +20,6 @@ public class LineLayout
 	private void DoLayout(Line line)
 	{
 		_logicalText = line.Text;
-
 		int visualCol = 0;
 		int logicalLineStart = 0;
 		int visualLineStart = 0;
