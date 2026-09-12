@@ -93,7 +93,7 @@ public sealed class SekaniBuffer
 		previousLine.Text += currentLine.Text;
 		_lines.RemoveAt(line);
 
-		RaiseBufferChangedEvent(line - 1, BufferChangeKind.LineRemoved);
+		RaiseBufferChangedEvent(line, BufferChangeKind.LineRemoved);
 	}
 	public event EventHandler<BufferChangeData>? BufferChangedEvent;
 }

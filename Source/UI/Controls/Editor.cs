@@ -393,7 +393,7 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brushes.Black, new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#092328"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -592,7 +592,6 @@ public class Editor : Control
 				out int visualSum);
 		double offset =
 				(startAt - visualSum) * _editorMetrics.LineHeight;
-
 		//worst case, no matter how it wraps we don't ever need to draw more than this amount so this isnt really the last visible logical line
 		int lastLogicalLine = (int)(EditorArea.Height / _editorMetrics.LineHeight) + firstLogicalLine;
 		return (firstLogicalLine, lastLogicalLine, offset);
@@ -611,7 +610,7 @@ public class Editor : Control
 			if (i >= _document.Lines.Count) return;
 			if (i < 0) continue;
 			var line = _document.Lines[i];
-			int oldCount = _lineCache.VisualLineIndexes[i];
+			int oldCount = _lineCache.VisualLineCountAt(i);
 			var lineLayout = _lineCache.GetOrCreate(line, i);
 			if (lineLayout is null) return;
 			//correct scroll behind
