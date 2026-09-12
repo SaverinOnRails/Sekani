@@ -1,7 +1,7 @@
 namespace Sekani.EditorCore.Utils;
 
 /*
- *   Treap (Randomized Binary Search Tree + Binary Heap tree). Implemented by Claude.
+ * Treap (Randomized Binary Search Tree + Binary Heap tree). Implemented by Claude Sonnet 5.
  */
 internal sealed class TreapNode
 {
@@ -192,6 +192,7 @@ internal sealed class VisualLineTree
     }
     public void Clear() => _root = null;
 
+    //TODO: we do this quite frequently, we could get this in constant time
     public int this[int index]
     {
         get
