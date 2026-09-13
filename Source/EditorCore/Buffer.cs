@@ -16,7 +16,7 @@ public sealed class SekaniBuffer
 		return _lines[lineIndex];
 	}
 
-	public Coordinate InsertText(int line, int col, string text)
+	public Coordinate InsertText(int col, int line, string text)
 	{
 		if (string.IsNullOrEmpty(text))
 			return new Coordinate(col, line);
@@ -71,7 +71,7 @@ public sealed class SekaniBuffer
 		BufferChangedEvent?.Invoke(this, new(line, kind));
 	}
 
-	public void Backspace(int line, int col)
+	public void Backspace(int col, int line)
 	{
 		if (line < 0 || line >= _lines.Count)
 			return;

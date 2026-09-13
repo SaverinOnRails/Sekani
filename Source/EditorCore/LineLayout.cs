@@ -71,7 +71,7 @@ public class LineLayout
 
 		VisualText = builder.ToString();
 	}
-	public VisualCoordinate GetVisualCoordinate(Coordinate coord)
+	public VisualCoordinate GetVisualCoordinate(Coordinate coord , bool forceTrailVisualLine = false)
 	{
 		var logicalCol = coord.Col;
 		var targetVisualLine =
@@ -97,7 +97,7 @@ public class LineLayout
 				? VisualTabWidth(visualCol, _tabSize)
 				: 1;
 		}
-		if (coord.TrailVisualLine && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
+		if ((coord.TrailVisualLine || forceTrailVisualLine) && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
 		{
 			return new(0, targetVlineIndex + 1);
 		}

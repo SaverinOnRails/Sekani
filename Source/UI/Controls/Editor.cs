@@ -1,8 +1,6 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Net.Http.Headers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -20,6 +18,8 @@ public class Editor : Control
 	private readonly float _fontSize = 15;
 	private LineCache _lineCache;
 	private const float _baseLineNumberWidth = 20;
+
+	//TODO: This can change during normal editing operations like adding a new line that increasing this count, which indirectly invalidates the max width of wrapped characters
 	private double LineNumberSectDisplayWidth =>
 		_baseLineNumberWidth +
 		Math.Max(0, _document.Lines.Count.ToString().Length - 1) * _editorMetrics.CharAdvance;
@@ -28,20 +28,28 @@ public class Editor : Control
 		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
 	private double _scrollYOffset = 0;
-	private readonly double _caretWidth = 2;
+	private bool _useThickCursor => Mode == Mode.Normal;
+	private double _caretWidth = 2;
+	private readonly double _defaultCaretWidth = 2;
 	private bool _pointerPressedOnHorizontalScrollbar = false;
 	private bool _pointerPressedOnVerticalScrollbar;
+	private bool _pointerPressedOnCoordinate = false;
 	private double _scrollbarPointerStartX = 0;
 	private double _scrollbarScrollStartX = 0;
 	private bool _caretVisible = true;
 	private double _scrollbarPointerStartY;
 	private double _scrollbarScrollStartY;
 	private bool _softWordWrap = true;
-
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
-
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
+
+	public static readonly StyledProperty<Mode> ModeProperty = AvaloniaProperty.Register<Editor, Mode>(nameof(Mode));
+	public Mode Mode
+	{
+		get => GetValue(ModeProperty);
+		set => SetValue(ModeProperty, value);
+	}
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private Rect LineNumbersSectRect =>
 		new(
@@ -71,6 +79,7 @@ public class Editor : Control
 	{
 		_caretBlinkTimer.Tick += (_, _) =>
 		{
+			if (_useThickCursor) return;
 			_caretVisible = !_caretVisible;
 			Redraw();
 		};
@@ -151,7 +160,7 @@ public class Editor : Control
 		var coord = _document.CaretPosition;
 		var layout = _lineCache.GetOrCreate(_document.Lines[coord.Line]);
 		if (layout is null) return false;
-		var visualCol = layout.GetVisualCoordinate(coord).Col;
+		var visualCol = layout.GetVisualCoordinate(coord, _useThickCursor).Col;
 		double caretX =
 			visualCol * _editorMetrics.CharAdvance;
 
@@ -218,19 +227,14 @@ public class Editor : Control
 	}
 	private void HandleKeyInput(KeyEventArgs e)
 	{
-
 		if (e.KeyModifiers != KeyModifiers.None)
 		{
 			return;
 		}
+
+		//these guys work in all modes
 		switch (e.Key)
 		{
-			case Key.Tab:
-				_document.TypeChars("\t");
-				break;
-			case Key.Return:
-				_document.TypeChars(Environment.NewLine);
-				break;
 			case Key.Up:
 				_document.CaretUp();
 				break;
@@ -243,13 +247,66 @@ public class Editor : Control
 			case Key.Down:
 				_document.CaretDown();
 				break;
-			case Key.Back:
-				_document.Backspace();
-				break;
-
+		}
+		if (Mode == Mode.Insert)
+		{
+			switch (e.Key)
+			{
+				case Key.Tab:
+					_document.TypeChars("\t");
+					break;
+				case Key.Return:
+					_document.TypeChars(Environment.NewLine);
+					break;
+				case Key.Back:
+					_document.Backspace(_document.CaretPosition);
+					break;
+				case Key.Escape:
+					EnterNormalMode();
+					break;
+			}
+		}
+		if (Mode == Mode.Normal)
+		{
+			switch (e.Key)
+			{
+				case Key.I:
+					EnterInsertMode();
+					break;
+				case Key.D:
+					_document.DeleteSelection();
+					break;
+				case Key.K:
+					_document.CaretUp();
+					break;
+				case Key.H:
+					_document.CaretLeft();
+					break;
+				case Key.L:
+					_document.CaretRight();
+					break;
+				case Key.J:
+					_document.CaretDown();
+					break;
+				case Key.O:
+					_document.AddNewLineUnderSelection();
+					EnterInsertMode();
+					break;
+			}
+			e.Handled = true;
 		}
 		HoldCaretAndRedraw();
 		EnsureCaretVisible();
+	}
+
+	private void EnterNormalMode()
+	{
+		Mode = Mode.Normal;
+	}
+
+	private void EnterInsertMode()
+	{
+		Mode = Mode.Insert;
 	}
 
 	protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -268,7 +325,6 @@ public class Editor : Control
 			{
 				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
 			}
-			// await _lineCache.BuildCacheBlocks();
 			_lineCache.BuildVisualLinesIndexes();
 			CorrectScrollBarOffsetOnResize();
 		}
@@ -316,7 +372,6 @@ public class Editor : Control
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 7;
-	private VisualCoordinate _caretPosition = new(0, 0);
 
 	//Bounds of the actual textarea
 	public Rect EditorArea =>
@@ -332,9 +387,63 @@ public class Editor : Control
 		DrawMainRectangle(context);
 		DrawText(context);
 		DrawLineNumbers(context);
+		DrawSelection(context);
 		DrawCaret(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
+	}
+
+	private void DrawSelection(DrawingContext context)
+	{
+		if (!_document.CaretPosition.HasRange()) return;
+		//TODO: this will only work if range end is greater than the caret position
+		using var clip = context.PushClip(EditorArea);
+		var firstLine = _document.CaretPosition.Line;
+		var lastLine = _document.CaretPosition.RangeEnd!.Line;
+		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(firstLine);
+		var visualLineSum = visualLinesBefore;
+		for (int i = firstLine; i <= lastLine; i++)
+		{
+			var lineLayout = _lineCache.GetOrCreate(_document.Lines[i]);
+			if (lineLayout is null) continue;
+			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
+			{
+				var startAtPixels = EditorArea.Left;
+				var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
+				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
+				if (i == firstLine)
+				{
+					var startVisualCoord = lineLayout.GetVisualCoordinate(_document.CaretPosition, _useThickCursor);
+					if (j < startVisualCoord.Line)
+					{
+						visualLineSum++;
+						continue;
+					}
+					;
+					if (j == startVisualCoord.Line)
+					{
+						startAtPixels = EditorArea.Left + startVisualCoord.Col * _editorMetrics.CharAdvance;
+					}
+				}
+				if (i == lastLine)
+				{
+					var endVisualCoord = lineLayout.GetVisualCoordinate(_document.CaretPosition.RangeEnd, _useThickCursor);
+					if (j > endVisualCoord.Line)
+					{
+						break;
+					}
+					if (j == endVisualCoord.Line)
+					{
+						endAtPixels = endVisualCoord.Col * _editorMetrics.CharAdvance + EditorArea.Left;
+					}
+				}
+				var point = new Point(startAtPixels, visualLineSum * _editorMetrics.LineHeight - _scrollYOffset);
+				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
+				context.FillRectangle(new SolidColorBrush(Colors.Blue, 0.5), new Rect(point, size));
+				visualLineSum ++;
+			}
+		}
+
 	}
 
 	private void DrawLineNumbers(DrawingContext context)
@@ -399,36 +508,34 @@ public class Editor : Control
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
 		Focus();
-		TryHittestScrollbars(e, out bool didHitTestScrollBars);
-		if (!didHitTestScrollBars)
-		{
-			SetCursorToMousePos(e);
-		}
 		base.OnPointerPressed(e);
+		TryHittestScrollbars(e, out bool didHitTestScrollBars);
+		if (didHitTestScrollBars) return;
+		SetCursorToMousePos(e);
 	}
-
-	private void SetCursorToMousePos(PointerPressedEventArgs e)
+	private Coordinate? MousePosToCursor(Point mousePoint)
 	{
+
 		if (_lineCache is null)
-			return;
-		var point = e.GetPosition(this);
+			return null;
 		int targetVisualLine = Math.Max(
 			0,
-			(int)((point.Y - EditorArea.Top + _scrollYOffset)
+			(int)((mousePoint.Y - EditorArea.Top + _scrollYOffset)
 				/ _editorMetrics.LineHeight));
 
 		int visualCol = Math.Max(
 			0,
-			(int)((point.X - EditorArea.Left + _scrollXOffset)
+			(int)((mousePoint.X - EditorArea.Left + _scrollXOffset)
 				/ _editorMetrics.CharAdvance));
 
 		// Find the logical line containing targetVisualLine.
 		int logicalLineIndex = _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum);
+		if (logicalLineIndex >= _document.Lines.Count) return null;
 		var layout = _lineCache.GetOrCreate(
 			_document.Lines[logicalLineIndex]);
 
 		if (layout is null)
-			return;
+			return null;
 
 		int localVisualLine =
 			targetVisualLine - visualLineSum;
@@ -439,13 +546,19 @@ public class Editor : Control
 
 		int logicalColumn =
 			layout.GetLogicalColumn(vpos);
-
+		return new Coordinate(logicalColumn, logicalLineIndex);
+	}
+	private void SetCursorToMousePos(PointerPressedEventArgs e)
+	{
+		var pos = MousePosToCursor(e.GetPosition(this));
+		if (pos is null) return;
 		_document.CaretPosition =
-			new Coordinate(logicalColumn, logicalLineIndex);
-
+			pos;
 		_caretVisible = true;
+		_pointerPressedOnCoordinate = true;
 		Redraw();
 	}
+
 	private void TryHittestScrollbars(PointerEventArgs e, out bool didHitTestScrollBars)
 	{
 		var point = e.GetPosition(this);
@@ -478,12 +591,25 @@ public class Editor : Control
 
 	protected override void OnPointerMoved(PointerEventArgs e)
 	{
-		TryMoveScrollbars(e);
+		base.OnPointerMoved(e);
+		TryMoveScrollbars(e, out bool didMoveScrollBars);
+		if (didMoveScrollBars) return;
+		TryDoDragSelection(e);
 	}
 
-	private void TryMoveScrollbars(PointerEventArgs e)
+	private void TryDoDragSelection(PointerEventArgs e)
+	{
+		if (!_pointerPressedOnCoordinate) return;
+		var pos = MousePosToCursor(e.GetPosition(this));
+		if (pos is null) return;
+		_document.CaretPosition.RangeEnd = pos;
+		Redraw();
+	}
+
+	private void TryMoveScrollbars(PointerEventArgs e, out bool didMoveScrollBars)
 	{
 		var point = e.GetPosition(this);
+		didMoveScrollBars = false;
 		if (_pointerPressedOnHorizontalScrollbar)
 		{
 			var pointerDelta = point.X - _scrollbarPointerStartX;
@@ -509,6 +635,7 @@ public class Editor : Control
 			}
 
 			Redraw();
+			didMoveScrollBars = true;
 			return;
 		}
 
@@ -535,7 +662,7 @@ public class Editor : Control
 					0,
 					maxScrollOffset);
 			}
-
+			didMoveScrollBars = true;
 			Redraw();
 		}
 	}
@@ -552,6 +679,7 @@ public class Editor : Control
 	{
 		_pointerPressedOnHorizontalScrollbar = false;
 		_pointerPressedOnVerticalScrollbar = false;
+		_pointerPressedOnCoordinate = false;
 		Cursor = new Cursor(StandardCursorType.Ibeam);
 	}
 
@@ -668,13 +796,15 @@ public class Editor : Control
 		var caretLineLayout = _lineCache.GetOrCreate(_document.Lines[coord.Line], coord.Line);
 		if (caretLineLayout is null) return;
 
-		var localVisualCoord = caretLineLayout.GetVisualCoordinate(coord);
+		//force trail visual line when drawing a thick cursor
+		var localVisualCoord = caretLineLayout.GetVisualCoordinate(coord, _useThickCursor);
 		visualLine += localVisualCoord.Line;
 
 		var point = VisualToUI(new VisualCoordinate(localVisualCoord.Col, visualLine));
 		point = point.WithY(point.Y - pixelOffset);
 		point = point.WithX(point.X - _scrollXOffset);
 
+		_caretWidth = Mode == Mode.Normal ? _editorMetrics.CharAdvance : _defaultCaretWidth;
 		var caretRect = new Rect(point, new Size(_caretWidth, _editorMetrics.LineHeight));
 		context.FillRectangle(Brushes.White, caretRect);
 	}
@@ -690,9 +820,18 @@ public class Editor : Control
 	{
 		base.OnTextInput(e);
 		if (e.Text is null) return;
+		if (Mode == Mode.Insert)
+		{
+			HandleInsertModeTextInput(e);
+		}
+		EnsureCaretVisible();
+	}
+
+	private void HandleInsertModeTextInput(TextInputEventArgs e)
+	{
+		if (e.Text is null) return;
 		_document.TypeChars(e.Text);
 		HoldCaretAndRedraw();
-		EnsureCaretVisible();
 	}
 	private Rect GetHorizontalScrollbarRect()
 	{
