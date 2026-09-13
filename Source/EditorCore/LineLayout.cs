@@ -106,9 +106,9 @@ public class LineLayout
 
 	public int GetLogicalColumn(VisualCoordinate coord)
 	{
-		if (coord.Line < 0 || coord.Line >= _visualLines.Count)
+		if (coord.VisualLine < 0 || coord.VisualLine >= _visualLines.Count)
 			return 0;
-		var visualLine = _visualLines[coord.Line];
+		var visualLine = _visualLines[coord.VisualLine];
 		int currentVisualCol = 0;
 		for (int i = visualLine.LogicalOffset;
 			 i < visualLine.LogicalOffset + visualLine.LogicalLength;
@@ -118,7 +118,7 @@ public class LineLayout
 				? VisualTabWidth(currentVisualCol, _tabSize)
 				: 1;
 
-			if (coord.Col < currentVisualCol + width)
+			if (coord.VisualCol < currentVisualCol + width)
 				return i;
 
 			currentVisualCol += width;

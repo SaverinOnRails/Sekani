@@ -47,7 +47,7 @@ public sealed class SekaniDocument
 		UpdatePreferredVisualColumn();
 	}
 
-	private void UpdatePreferredVisualColumn()
+	public void UpdatePreferredVisualColumn()
 	{
 		if (_lineCache is null)
 			return;
@@ -60,7 +60,7 @@ public sealed class SekaniDocument
 
 		var visual = layout.GetVisualCoordinate(CaretPosition);
 
-		_preferredVisualColumn = visual.Col;
+		_preferredVisualColumn = visual.VisualCol;
 	}
 
 	private void MoveCaretVertical(CaretVerticalDirection direction)
@@ -77,7 +77,7 @@ public sealed class SekaniDocument
 		if (layout.VisualLines.Count > 1)
 		{
 			var visualLineIndex =
-				layout.GetVisualCoordinate(CaretPosition).Line;
+				layout.GetVisualCoordinate(CaretPosition).VisualLine;
 			if (direction == CaretVerticalDirection.Down &&
 				visualLineIndex < layout.VisualLines.Count - 1)
 			{
