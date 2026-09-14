@@ -173,31 +173,57 @@ public sealed class SekaniDocument
 		UpdatePreferredVisualColumn();
 	}
 
-	//TODO: Actual Cursor Range
-	public void DeleteSelection()
+	private Coordinate RangeUpCursor(Coordinate coord)
 	{
-		//will eventually handle cursor ranges
-		//delete after the cursor
-		var coord = CaretPosition;
-		Coordinate pos;
 		if (coord.Col >= Lines[coord.Line].Text.Length)
 		{
-			pos = new(0, coord.Line + 1);
+			return new(0, coord.Line + 1);
 		}
 		else
 		{
-			pos = new(coord.Col + 1, coord.Line);
+			return new(coord.Col + 1, coord.Line);
 		}
-		Backspace(pos);
 	}
-	public void Backspace(Coordinate position)
+	public void DeleteSelection()
 	{
+		var coord = CaretPosition;
+		if (!coord.HasRange())
+		{
+			var pos = RangeUpCursor(coord);
+			DeleteCore(pos);
+		}
+		else
+		{
+			var start = coord.LesserRangeEnd()!;
+			var end = RangeUpCursor(coord.GreaterRangeEnd()!);
+			var position = end;
+			while (position != start)
+			{
+				var pos = DeleteCore(position);
+				if (pos is null) return;
+				position = pos;
+			}
+			CaretPosition = new(start);
+			Console.WriteLine(CaretPosition.HasRange());
+		}
+	}
 
+	public void BackSpace(Coordinate pos)
+	{
+		var newcoord = DeleteCore(pos);
+		if (newcoord is not null)
+		{
+
+			CaretPosition = newcoord;
+			UpdatePreferredVisualColumn();
+		}
+	}
+	private Coordinate? DeleteCore(Coordinate position)
+	{
 		if (position.Col > 0)
 		{
-			_buffer.Backspace(position.Col, position.Line);
-
-			CaretPosition = new Coordinate(
+			_buffer.Delete(position.Col, position.Line);
+			return new Coordinate(
 				position.Col - 1,
 				position.Line);
 		}
@@ -206,18 +232,21 @@ public sealed class SekaniDocument
 			var previousLine = _buffer.GetLine(position.Line - 1);
 
 			if (previousLine is null)
-				return;
+				return null;
 
 			var newCol = previousLine.Text.Length;
 
-			_buffer.Backspace(position.Col, position.Line);
+			_buffer.Delete(position.Col, position.Line);
 
-			CaretPosition = new Coordinate(
+			return new Coordinate(
 				newCol,
 				position.Line - 1);
 		}
+		else
+		{
+			return null;
+		}
 
-		UpdatePreferredVisualColumn();
 	}
 
 	public void CaretUp()
@@ -243,17 +272,16 @@ public sealed class SekaniDocument
 	}
 
 
-	//TODO: ACTUAL CURSOR RANGE
 	public void AddNewLineUnderSelection()
 	{
 		var pos = CaretPosition;
-		var line = Lines[pos.Line];
-
+		int lineIndex = pos.HasRange() ? pos.GreaterRangeEnd()!.Line : pos.Line;
+		var line = Lines[lineIndex];
 		_buffer.InsertText(
 			line.Text.Length,
-			pos.Line,
+			lineIndex,
 			Environment.NewLine);
-		CaretPosition = new(0, pos.Line + 1);
+		CaretPosition = new(0, lineIndex + 1);
 	}
 }
 

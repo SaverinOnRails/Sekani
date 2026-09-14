@@ -1,7 +1,6 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Reflection.Metadata;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -42,7 +41,7 @@ public class Editor : Control
 	private double _scrollbarPointerStartY;
 	private int _preferredDragScrollVisualColumn = 0;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = true;
+	private bool _softWordWrap = false;
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
@@ -68,12 +67,13 @@ public class Editor : Control
 		SetAvaloniaProperties();
 		SetEditorMetrics();
 		_document = new();
+		// var file = File.ReadAllText("/home/noble/jquery.min.js.js");
 		// var file = File.ReadAllText("/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs");
-		// var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
-		var file = File.ReadAllText("/home/noble/Documents/emacs/src/xdisp.c");
+		var file = File.ReadAllText("/home/noble/Projects/ktexteditor/src/document/katedocument.cpp");
+		// var file = File.ReadAllText("/home/noble/Documents/emacs/src/xdisp.c");
 		// var file = File.ReadAllText("/home/noble/longfile.text");
 		_lineCache = _document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
-		_document.TypeChars(file);
+		// _document.TypeChars(file);
 		_document.CaretPosition = new(0, 0);
 		_caretBlinkTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
 		TimeCaret();
@@ -263,11 +263,11 @@ public class Editor : Control
 					_document.TypeChars(Environment.NewLine);
 					break;
 				case Key.Back:
-					_document.Backspace(_document.CaretPosition);
+					_document.BackSpace(_document.CaretPosition);
 					break;
 				case Key.Escape:
 					EnterNormalMode();
-					break;
+					return;
 			}
 		}
 		if (Mode == Mode.Normal)
@@ -962,7 +962,7 @@ public class Editor : Control
 
 		_caretWidth = Mode == Mode.Normal ? _editorMetrics.CharAdvance : _defaultCaretWidth;
 		var caretRect = new Rect(point, new Size(_caretWidth, _editorMetrics.LineHeight));
-		context.FillRectangle(Brushes.White, caretRect);
+		context.FillRectangle(new SolidColorBrush(Colors.White, _useThickCursor ? 0.5 : 1), caretRect);
 	}
 
 	private Point VisualToUI(VisualCoordinate visualCoord)

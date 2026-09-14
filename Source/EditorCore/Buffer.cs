@@ -71,7 +71,7 @@ public sealed class SekaniBuffer
 		BufferChangedEvent?.Invoke(this, new(line, kind));
 	}
 
-	public void Backspace(int col, int line)
+	public void Delete(int col, int line)
 	{
 		if (line < 0 || line >= _lines.Count)
 			return;
