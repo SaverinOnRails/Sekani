@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Sekani.EditorCore;
 
 public sealed class SekaniBuffer
@@ -97,6 +99,16 @@ public sealed class SekaniBuffer
 		RaiseBufferChangedEvent(line - 1, BufferChangeKind.LineChanged);
 	}
 	public event EventHandler<BufferChangeData>? BufferChangedEvent;
+
+	public string ToText()
+	{
+		StringBuilder builder = new();
+		foreach (var line in _lines)
+		{
+			builder.Append(line.Text + Environment.NewLine);
+		}
+		return builder.ToString();
+	}
 }
 
 public enum BufferChangeKind

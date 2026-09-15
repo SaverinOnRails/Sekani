@@ -28,7 +28,7 @@
 
 
     <Grid RowDefinitions="*,Auto">
-        <controls:Editor Mode="{Binding Mode, Mode=TwoWay}" />
+        <controls:Editor Mode="{Binding Mode, Mode=TwoWay}" Document="{Binding Document}"/>
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />        
         <!--  Bottom Bar  -->
         <StackPanel Grid.Row="1" Height="30">

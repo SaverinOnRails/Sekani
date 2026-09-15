@@ -12,12 +12,13 @@ namespace SekaniUI.Controls;
 public class CommandDialog : ContentControl
 {
 	private TextBox _textBox;
-	public MainViewModel _mainViewModelInstance => MainViewModel.Instance;
+	private MainViewModel _mainViewModelInstance => MainViewModel.Instance;
 	public CommandDialog()
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
 		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
 		Background = Brushes.Transparent;
+		_textBox = new TextBox() { Height = 40, Width = 250 };
 		Focusable = true;
 		Build();
 	}
@@ -29,7 +30,6 @@ public class CommandDialog : ContentControl
 
 	public Control MainContainer()
 	{
-		_textBox = new TextBox() { Height = 40, Width = 250 };
 		return _textBox;
 	}
 
@@ -52,7 +52,7 @@ public class CommandDialog : ContentControl
 				ExitMode();
 				break;
 			case Key.Enter:
-				Console.WriteLine(_textBox.Text);
+				_mainViewModelInstance.HandleCommand(_textBox.Text);
 				ExitMode();
 				break;
 		}

@@ -21,6 +21,7 @@ public sealed class LineCache
 		_wordWrap = wordWrap;
 		_maxVisualColsPerLine = maxVisualColsPerLine;
 		_buffer.BufferChangedEvent += BufferChanged;
+		RecalculateWidth();
 	}
 
 	private void BufferChanged(object? sender, BufferChangeData e)

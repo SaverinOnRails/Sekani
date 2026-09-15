@@ -8,6 +8,18 @@ public sealed class SekaniDocument
 	private int _preferredVisualColumn = 0;
 	public IReadOnlyList<Line> Lines => _buffer.Lines;
 	private LineCache? _lineCache;
+	private string? _filePath = null;
+
+	public SekaniDocument()
+	{
+
+	}
+
+	public SekaniDocument(string filePath)
+	{
+		_filePath = filePath;
+		TypeChars(File.ReadAllText(filePath));
+	}
 
 	public void TypeChars(string text)
 	{
@@ -204,7 +216,6 @@ public sealed class SekaniDocument
 				position = pos;
 			}
 			CaretPosition = new(start);
-			Console.WriteLine(CaretPosition.HasRange());
 		}
 	}
 
@@ -244,8 +255,8 @@ public sealed class SekaniDocument
 		{
 			return null;
 		}
-
 	}
+
 
 	public void CaretUp()
 	{
@@ -280,6 +291,35 @@ public sealed class SekaniDocument
 			lineIndex,
 			Environment.NewLine);
 		CaretPosition = new(0, lineIndex + 1);
+	}
+
+	public void TrySave()
+	{
+		try
+		{
+			if (_filePath is null) TryCreateFileAndSave();
+			else
+			{
+				SaveCore();
+			}
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e.Message);
+			return;
+		}
+	}
+
+	private void TryCreateFileAndSave()
+	{
+		throw new NotImplementedException();
+	}
+
+	private void SaveCore()
+	{
+		if (_filePath is null) return;
+		var text = _buffer.ToText();
+		File.WriteAllText(_filePath, text);
 	}
 }
 
