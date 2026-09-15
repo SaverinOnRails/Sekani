@@ -22,7 +22,9 @@ public class Editor : Control
 	//TODO: This can change during normal editing operations like adding a new line that increasing this count, which indirectly invalidates the max width of wrapped characters
 	private double LineNumberSectDisplayWidth =>
 		_baseLineNumberWidth +
-		Math.Max(0, _document.Lines.Count.ToString().Length - 1) * _editorMetrics.CharAdvance;
+		Math.Max(0, Math.Max(_document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
+
+
 	private bool _drawLineNumbers = true;
 	private double LineNumberSectWidth =>
 		_drawLineNumbers ? LineNumberSectDisplayWidth : 0;
@@ -41,7 +43,7 @@ public class Editor : Control
 	private double _scrollbarPointerStartY;
 	private int _preferredDragScrollVisualColumn = 0;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = false;
+	private bool _softWordWrap = true;
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
@@ -231,11 +233,6 @@ public class Editor : Control
 	}
 	private void HandleKeyInput(KeyEventArgs e)
 	{
-		if (e.KeyModifiers != KeyModifiers.None)
-		{
-			return;
-		}
-
 		//these guys work in all modes
 		switch (e.Key)
 		{
@@ -267,6 +264,7 @@ public class Editor : Control
 					break;
 				case Key.Escape:
 					EnterNormalMode();
+					HoldCaretAndRedraw();
 					return;
 			}
 		}
@@ -296,11 +294,24 @@ public class Editor : Control
 					_document.AddNewLineUnderSelection();
 					EnterInsertMode();
 					break;
+				case Key.OemSemicolon:
+					{
+						if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+						{
+							EnterCommandMode();
+						}
+					}
+					break;
 			}
 			e.Handled = true;
 		}
 		HoldCaretAndRedraw();
 		EnsureCaretVisible();
+	}
+
+	private void EnterCommandMode()
+	{
+		Mode = Mode.Command;
 	}
 
 	private void EnterNormalMode()
@@ -331,6 +342,18 @@ public class Editor : Control
 			}
 			_lineCache.BuildVisualLinesIndexes();
 			CorrectScrollBarOffset();
+		}
+		//TODO: When we have multiple editor windows, focus should return to the right one
+		if (e.Property == ModeProperty)
+		{
+			var oldValue = (Mode)e.OldValue!;
+			var newValue = (Mode)e.NewValue!;
+			if (oldValue == Mode.Command && newValue == Mode.Normal)
+			{
+				Focus();
+				_caretVisible = true;
+				Redraw();
+			}
 		}
 		base.OnPropertyChanged(e);
 	}
@@ -459,7 +482,7 @@ public class Editor : Control
 
 		// gutter
 		context.DrawLine(
-			new Pen(new SolidColorBrush(Colors.White, 0.4)),
+			new Pen(new SolidColorBrush(Colors.White, 0.1)),
 			new Point(LineNumbersSectRect.Right, 0),
 			new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
@@ -935,7 +958,7 @@ public class Editor : Control
 	private void DrawCaret(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
-		if (!_caretVisible) return;
+		if (!_caretVisible || !IsFocused) return;
 
 		var coord = _document.CaretPosition;
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();

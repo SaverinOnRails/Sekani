@@ -233,9 +233,7 @@ public sealed class SekaniDocument
 
 			if (previousLine is null)
 				return null;
-
 			var newCol = previousLine.Text.Length;
-
 			_buffer.Delete(position.Col, position.Line);
 
 			return new Coordinate(
