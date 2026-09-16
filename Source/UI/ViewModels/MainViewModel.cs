@@ -18,7 +18,7 @@ public partial class MainViewModel : ViewModelBase
     private void CreateDocument()
     {
         // var file = "/home/noble/jquery.min.js.js";
-        // var file = "/home/noble/Projects/Sekani/Source/UI/Controls/Editor.cs";
+        // var file = "/home/noble/Documents/sekanitestfiles/longfile.text";
         var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
         Document = new(file);
         // Document = new();

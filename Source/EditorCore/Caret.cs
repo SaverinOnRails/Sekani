@@ -35,6 +35,12 @@ public class Coordinate
 		Line = line;
 	}
 
+	public void SetCoord(Coordinate c)
+	{
+		Col = c.Col;
+		Line = c.Line;
+	}
+
 	private Coordinate? GreaterRandeEndInner(out bool thisWasGreaterRangeEnd)
 	{
 		thisWasGreaterRangeEnd = false;

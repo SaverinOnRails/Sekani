@@ -189,13 +189,16 @@ public sealed class SekaniDocument
 	{
 		if (coord.Col >= Lines[coord.Line].Text.Length)
 		{
-			return new(0, coord.Line + 1);
+			var newLine = coord.Line + 1;
+			if (newLine >= Lines.Count) _buffer.InsertText(coord.Col, coord.Line, Environment.NewLine); //if going up range needs a new line to be created, create it
+			return new(0, newLine);
 		}
 		else
 		{
 			return new(coord.Col + 1, coord.Line);
 		}
 	}
+
 	public void DeleteSelection()
 	{
 		var coord = CaretPosition;
@@ -320,6 +323,58 @@ public sealed class SekaniDocument
 		if (_filePath is null) return;
 		var text = _buffer.ToText();
 		File.WriteAllText(_filePath, text);
+	}
+
+	public void PlaceCursorBeforeSelection()
+	{
+		if (!CaretPosition.HasRange()) return; //nothing to do
+		var lesser = CaretPosition.LesserRangeEnd()!;
+		Coordinate greater = new(CaretPosition.GreaterRangeEnd()!);
+		CaretPosition.SetCoord(lesser);
+		CaretPosition.RangeEnd = greater;
+	}
+
+	public void PlaceCursorAfterSelection()
+	{
+		if (!CaretPosition.HasRange())
+		{
+			CaretPosition.SetCoord(RangeUpCursor(CaretPosition));
+			return;
+		}
+		var lesser = new Coordinate(CaretPosition.LesserRangeEnd()!);
+		var greater = RangeUpCursor(CaretPosition.GreaterRangeEnd()!);
+		CaretPosition.SetCoord(greater);
+		CaretPosition.RangeEnd = lesser;
+	}
+
+	public void PlaceCursorAtLineStart()
+	{
+		var lineIndex = CaretPosition.Line;
+		var line = Lines[lineIndex];
+		var firstNonWhiteSpace = 0;
+		for (int i = 0; i < line.Text.Length; i++)
+		{
+			if (!char.IsWhiteSpace(line.Text[i])) break;
+			firstNonWhiteSpace++;
+		}
+		CaretPosition = new(firstNonWhiteSpace, lineIndex);
+	}
+	public void PlaceCursorAtLineEnd()
+	{
+		var lineIndex = CaretPosition.Line;
+		var line = Lines[lineIndex];
+		CaretPosition = new(line.Text.Length, lineIndex);
+	}
+
+	public void AddNewLineAboveSelection()
+	{
+		var pos = CaretPosition;
+		int lineIndex = pos.HasRange() ? pos.LesserRangeEnd()!.Line : pos.Line;
+		_buffer.InsertText(
+			0,
+			lineIndex,
+			Environment.NewLine);
+		CaretPosition = new(0, lineIndex);
 	}
 }
 

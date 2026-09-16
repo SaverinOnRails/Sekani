@@ -1,7 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
-using System.Reflection.Metadata;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -236,82 +234,64 @@ public class Editor : Control
 	}
 	private void HandleKeyInput(KeyEventArgs e)
 	{
-		//these guys work in all modes
+		bool handled = false;
+
+		// These work in all modes
 		switch (e.Key)
 		{
 			case Key.Up:
 				Document.CaretUp();
+				handled = true;
 				break;
+
 			case Key.Left:
 				Document.CaretLeft();
+				handled = true;
 				break;
+
 			case Key.Right:
 				Document.CaretRight();
+				handled = true;
 				break;
+
 			case Key.Down:
 				Document.CaretDown();
+				handled = true;
 				break;
 		}
+
 		if (Mode == Mode.Insert)
 		{
 			switch (e.Key)
 			{
 				case Key.Tab:
 					Document.TypeChars("\t");
+					handled = true;
 					break;
+
 				case Key.Return:
 					Document.TypeChars(Environment.NewLine);
+					handled = true;
 					break;
+
 				case Key.Back:
 					Document.BackSpace(Document.CaretPosition);
+					handled = true;
 					break;
+
 				case Key.Escape:
 					EnterNormalMode();
 					HoldCaretAndRedraw();
 					return;
 			}
 		}
-		if (Mode == Mode.Normal)
-		{
-			switch (e.Key)
-			{
-				case Key.I:
-					EnterInsertMode();
-					break;
-				case Key.D:
-					Document.DeleteSelection();
-					break;
-				case Key.K:
-					Document.CaretUp();
-					break;
-				case Key.H:
-					Document.CaretLeft();
-					break;
-				case Key.L:
-					Document.CaretRight();
-					break;
-				case Key.J:
-					Document.CaretDown();
-					break;
-				case Key.O:
-					Document.AddNewLineUnderSelection();
-					EnterInsertMode();
-					break;
-				case Key.OemSemicolon:
-					{
-						if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-						{
-							EnterCommandMode();
-						}
-					}
-					break;
-			}
-			e.Handled = true;
-		}
-		HoldCaretAndRedraw();
-		EnsureCaretVisible();
-	}
 
+		if (handled)
+		{
+			HoldCaretAndRedraw();
+			EnsureCaretVisible();
+		}
+	}
 	private void EnterCommandMode()
 	{
 		Mode = Mode.Command;
@@ -1006,11 +986,73 @@ public class Editor : Control
 	{
 		base.OnTextInput(e);
 		if (e.Text is null) return;
-		if (Mode == Mode.Insert)
+		if (Mode == Mode.Normal)
+		{
+			HandleNormalModeTextInput(e);
+		}
+		else if (Mode == Mode.Insert)
 		{
 			HandleInsertModeTextInput(e);
 		}
 	}
+
+	private void HandleNormalModeTextInput(TextInputEventArgs e)
+	{
+		if (e.Text is null) return;
+		switch (e.Text)
+		{
+			case "i":
+				Document.PlaceCursorBeforeSelection();
+				EnterInsertMode();
+				break;
+			case "I":
+				Document.PlaceCursorAtLineStart();
+				EnterInsertMode();
+				break;
+			case "a":
+				Document.PlaceCursorAfterSelection();
+				EnterInsertMode();
+				break;
+			case "A":
+				Document.PlaceCursorAtLineEnd();
+				EnterInsertMode();
+				break;
+			case "d":
+				Document.DeleteSelection();
+				break;
+			case "k":
+				Document.CaretUp();
+				break;
+			case "h":
+				Document.CaretLeft();
+				break;
+			case "l":
+				Document.CaretRight();
+				break;
+			case "j":
+				Document.CaretDown();
+				break;
+			case "o":
+				Document.AddNewLineUnderSelection();
+				EnterInsertMode();
+				break;
+			case "O":
+				Document.AddNewLineAboveSelection();
+				EnterInsertMode();
+				break;
+			case ":":
+				{
+					EnterCommandMode();
+				}
+				break;
+			default:
+				return;
+		}
+		e.Handled = true;
+		HoldCaretAndRedraw();
+		EnsureCaretVisible();
+	}
+
 
 	private void HandleInsertModeTextInput(TextInputEventArgs e)
 	{
