@@ -893,13 +893,13 @@ public class Editor : Control
 	private void DrawText(DrawingContext context)
 	{
 		using var clip = context.PushClip(EditorArea);
-		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
+		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
 		int currentVisualLine = 0;
 
 		//pre measure some lines above the viewport.
 		int logicalLineToBeginCount = firstLogicalLine - 10;
-		lastLogicalLine += 5;
-		for (int i = logicalLineToBeginCount; i <= lastLogicalLine; i++)
+		lastPossibleLogicalLine += 5;
+		for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
 		{
 			if (i >= Document.Lines.Count) return;
 			if (i < 0) continue;
@@ -935,10 +935,15 @@ public class Editor : Control
 					new VisualCoordinate(
 						0,
 						currentVisualLine));
-				point = point.WithY(point.Y - pixelOffset);
-				point = point.WithX(point.X - _scrollXOffset);
-				context.DrawText(ft, point);
+				var y = point.Y - pixelOffset;
+				var x = point.X - _scrollXOffset;
+				point = point.WithY(y);
+				point = point.WithX(x);
 				currentVisualLine++;
+				//true check whether we should draw this line
+				if (y + _editorMetrics.LineHeight < EditorArea.Top) continue; //is bottom in viewport?
+				if (y > EditorArea.Bottom) return;
+				context.DrawText(ft, point);
 			}
 		}
 	}

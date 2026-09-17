@@ -18,11 +18,11 @@ public partial class MainViewModel : ViewModelBase
 
     private void CreateDocument()
     {
-        // var file = "/home/noble/jquery.min.js.js";
+        var file = "/home/noble/jquery.min.js.js";
         // var file = "/home/noble/Documents/sekanitestfiles/longfile.text";
         // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        // Document = new(file);
-        Document = new();
+        Document = new(file);
+        // Document = new();
     }
 
     public void HandleCommand(string? command)
