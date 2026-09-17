@@ -9,6 +9,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private SekaniDocument _document;
+
     public MainViewModel()
     {
         Instance = this;
@@ -19,9 +20,9 @@ public partial class MainViewModel : ViewModelBase
     {
         // var file = "/home/noble/jquery.min.js.js";
         // var file = "/home/noble/Documents/sekanitestfiles/longfile.text";
-        var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        Document = new(file);
-        // Document = new();
+        // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
+        // Document = new(file);
+        Document = new();
     }
 
     public void HandleCommand(string? command)
