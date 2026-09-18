@@ -273,7 +273,7 @@ public class Editor : Control
 			Redraw();
 			return;
 		}
-		_scrollYOffset += distance * 0.35;
+		_scrollYOffset += distance * 0.2;
 		Redraw();
 		RequestSmoothScrollFrame();
 	}
@@ -596,6 +596,11 @@ public class Editor : Control
 			return;
 		using
 		var clip = context.PushClip(LineNumbersSectRect);
+		using var textOptions = context.PushTextOptions(new TextOptions
+		{
+			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned, 
+			TextHintingMode = TextHintingMode.None                     
+		});
 
 		// gutter
 		context.DrawLine(
@@ -1024,6 +1029,11 @@ public class Editor : Control
 	{
 		using
 		var clip = context.PushClip(EditorArea);
+		using var textOptions = context.PushTextOptions(new TextOptions
+		{
+			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned, 
+			TextHintingMode = TextHintingMode.None                     
+		});
 		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
 		int currentVisualLine = 0;
 

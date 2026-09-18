@@ -19,6 +19,7 @@ sealed class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
+            // .UseWayland()
             .WithInterFont()
             .LogToTrace();
 }
