@@ -208,19 +208,19 @@ public class Editor : Control
 	}
 	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
 	{
+		//reset the target
+		_targetScrollYOffset = _scrollYOffset;
+		var target = _targetScrollYOffset;
 		if (!IsCaretVisibleVertical(
 			out bool caretAboveViewport,
 			out double correctiveDistance) && ensureVertical)
 		{
 			if (caretAboveViewport)
-				_scrollYOffset -= correctiveDistance;
+				_targetScrollYOffset -= correctiveDistance;
 			else
-				_scrollYOffset += correctiveDistance;
+				_targetScrollYOffset += correctiveDistance;
 			//only do this when we are not drag selecting
-			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null)
-			{
-				StartDrawCaretFocusBubble();
-			}
+			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
 
 		if (!IsCaretVisibleHorizontal(
@@ -234,7 +234,42 @@ public class Editor : Control
 				_scrollXOffset += xCorrectiveDistance;
 			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
-		CorrectScrollBarOffset();
+		TryStartSmoothScroll();
+	}
+
+	private void TryStartSmoothScroll()
+	{
+		if (_scrollYOffset == _targetScrollYOffset)
+			return;
+		if (_smoothScrollTimer is not null)
+			return;
+		_smoothScrollTimer = new()
+		{
+			Interval = TimeSpan.FromMilliseconds(16)
+		};
+		_smoothScrollTimer.Tick += (_, _) => DoSmoothScroll();
+		_smoothScrollTimer.Start();
+	}
+
+	private void DoSmoothScroll()
+	{
+		var distance = _targetScrollYOffset - _scrollYOffset;
+		if (Math.Abs(distance) < 0.5)
+		{
+			_scrollYOffset = _targetScrollYOffset;
+			CorrectScrollBarOffset();
+			StopSmoothScroll();
+			Redraw();
+			return;
+		}
+		_scrollYOffset += distance * 0.1;
+		Redraw();
+	}
+
+	private void StopSmoothScroll()
+	{
+		_smoothScrollTimer?.Stop();
+		_smoothScrollTimer = null;
 	}
 
 	private void StartDrawCaretFocusBubble()
@@ -431,7 +466,7 @@ public class Editor : Control
 		  _editorMetrics.LineHeight;
 	}
 	private readonly float _editorHorizontalMargin = 10F;
-  private readonly float _scrollBarDimension = 7;
+	private readonly float _scrollBarDimension = 7;
 
 	//Bounds of the actual textarea
 	public Rect EditorArea =>
@@ -601,12 +636,13 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brushes.Black, new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#121212"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
 		Focus();
+		StopSmoothScroll();
 		base.OnPointerPressed(e);
 		TryHittestScrollbars(e, out bool didHitTestScrollBars);
 		if (didHitTestScrollBars) return;
@@ -935,7 +971,7 @@ public class Editor : Control
 	protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
 	{
 		base.OnPointerWheelChanged(e);
-
+		StopSmoothScroll();
 		if (!_canScrollY)
 			return;
 
@@ -1014,7 +1050,7 @@ public class Editor : Control
 				  FlowDirection.LeftToRight,
 				  _editorFontFace,
 				  _fontSize,
-				  Brushes.White);
+				  Brush.Parse("#F3E6D5"));
 				Point point = VisualToUI(
 				  new VisualCoordinate(
 					0,
