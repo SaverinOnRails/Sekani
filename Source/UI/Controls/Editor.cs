@@ -273,7 +273,7 @@ public class Editor : Control
 			Redraw();
 			return;
 		}
-		_scrollYOffset += distance * 0.2;
+		_scrollYOffset += distance * 0.35;
 		Redraw();
 		RequestSmoothScrollFrame();
 	}
@@ -1028,7 +1028,7 @@ public class Editor : Control
 		int currentVisualLine = 0;
 
 		//pre measure some lines above the viewport.
-		int logicalLineToBeginCount = firstLogicalLine - 10;
+		int logicalLineToBeginCount = firstLogicalLine - 2;
 		lastPossibleLogicalLine += 5;
 		for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
 		{
