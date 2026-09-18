@@ -30,7 +30,7 @@ public sealed class SekaniDocument
 
 		if (position.Line < 0 || position.Col < 0)
 			return;
-
+		Console.WriteLine($"typing chars at {position}");
 		CaretPosition = _buffer.InsertText(
 			position.Col,
 			position.Line,
