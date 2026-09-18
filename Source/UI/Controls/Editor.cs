@@ -64,6 +64,8 @@ public class Editor : Control
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
+	private int _firstVisibleLogicalLineForResizeRestore;
+
 	private Rect LineNumbersSectRect =>
 		new(
 			new Point(0, 0),
@@ -338,17 +340,20 @@ public class Editor : Control
 
 	private int MaxVisualColsPerLine => (int)(EditorArea.Width / _editorMetrics.CharAdvance);
 
-	protected override async void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
+	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
 		if (e.Property == BoundsProperty)
 		{
+			SaveScrollAnchor();
 			if (_softWordWrap)
 			{
 				_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
 			}
 			_lineCache.BuildVisualLinesIndexes();
+			RestoreScrollAnchor();
 			CorrectScrollBarOffset();
 		}
+
 		//TODO: When we have multiple editor windows, focus should return to the right one
 		if (e.Property == ModeProperty)
 		{
@@ -366,6 +371,19 @@ public class Editor : Control
 			SetLineCache();
 		}
 		base.OnPropertyChanged(e);
+	}
+
+	private void RestoreScrollAnchor()
+	{
+		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(_firstVisibleLogicalLineForResizeRestore);
+		_scrollYOffset = visualLinesBefore * _editorMetrics.LineHeight;
+	}
+
+	private void SaveScrollAnchor()
+	{
+		//Since visual lines will change, we need to retain the first visible logical line. 
+		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
+		_firstVisibleLogicalLineForResizeRestore = firstLogicalLine;
 	}
 
 	private void HoldCaretAndRedraw()
@@ -392,7 +410,7 @@ public class Editor : Control
 			Brushes.White);
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
-		var lineHeight = text.Height;
+		var lineHeight = text.Height * 1.25;
 		var tabSize = 6;
 		_editorMetrics = new(charAdvance, 17, tabSize);
 	}
