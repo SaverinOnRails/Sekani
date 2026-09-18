@@ -33,6 +33,9 @@ public class Editor : Control
 	private readonly double _defaultCaretWidth = 2;
 	private bool _pointerPressedOnHorizontalScrollbar = false;
 	private bool _pointerPressedOnVerticalScrollbar;
+	private bool _shouldDrawCaretFocusBubble = false;
+	private int _caretFocusBubbleRadius = 0;
+	private double _caretFocusBubbleProgress = 0;
 	private bool _pointerPressedOnCoordinate = false;
 	private double _autoScrollMargin = 5;
 	private double _scrollbarPointerStartX = 0;
@@ -60,6 +63,7 @@ public class Editor : Control
 	}
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
+	private DispatcherTimer? _caretFocusBubbleTimer;
 	private Rect LineNumbersSectRect =>
 		new(
 			new Point(0, 0),
@@ -205,6 +209,11 @@ public class Editor : Control
 				_scrollYOffset -= correctiveDistance;
 			else
 				_scrollYOffset += correctiveDistance;
+			//only do this when we are not dragging
+			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null)
+			{
+				StartDrawCaretFocusBubble();
+			}
 		}
 
 		if (!IsCaretVisibleHorizontal(
@@ -219,6 +228,20 @@ public class Editor : Control
 		}
 		CorrectScrollBarOffset();
 	}
+
+	private void StartDrawCaretFocusBubble()
+	{
+		_caretFocusBubbleTimer?.Stop();
+		_shouldDrawCaretFocusBubble = true;
+		_caretFocusBubbleProgress = 0;
+		_caretFocusBubbleTimer = new()
+		{
+			Interval = TimeSpan.FromMilliseconds(15),
+		};
+		_caretFocusBubbleTimer.Tick += (s, e) => Redraw();
+		_caretFocusBubbleTimer.Start();
+	}
+
 
 	private void CorrectScrollBarOffset()
 	{
@@ -403,10 +426,46 @@ public class Editor : Control
 		DrawLineNumbers(context);
 		DrawSelection(context);
 		DrawCaret(context);
+		DrawCaretFocusBubble(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
 	}
 
+	private void DrawCaretFocusBubble(DrawingContext context)
+	{
+		if (!_shouldDrawCaretFocusBubble)
+			return;
+		var caretRect = GetCaretRect();
+		if (caretRect is null)
+			return;
+		_caretFocusBubbleProgress += 0.05;
+
+		if (_caretFocusBubbleProgress >= 1)
+		{
+			_caretFocusBubbleTimer?.Stop();
+			_caretFocusBubbleTimer = null;
+			_shouldDrawCaretFocusBubble = false;
+			return;
+		}
+		var t = _caretFocusBubbleProgress;
+		// Ease out.
+		var eased = 1 - Math.Pow(1 - t, 3);
+
+		var radius = 6 + eased * 74;
+		var opacity = 1 - t;
+
+		var color = Color.FromArgb(
+			(byte)(255 * opacity),
+			0,
+			220,
+			255);
+		context.DrawEllipse(
+			Brushes.Transparent,
+			new Pen(new SolidColorBrush(color), 4),
+			caretRect.Value.Position,
+			radius,
+			radius);
+	}
 	private void DrawSelection(DrawingContext context)
 	{
 		if (!Document.CaretPosition.HasRange()) return;
@@ -517,7 +576,7 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#092328"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brushes.Black, new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -947,25 +1006,25 @@ public class Editor : Control
 			}
 		}
 	}
-	private void DrawCaret(DrawingContext context)
+
+	private Rect? GetCaretRect()
 	{
-		using var clip = context.PushClip(EditorArea);
-		if (!_caretVisible || !IsFocused) return;
+		if (!_caretVisible || !IsFocused) return null;
 
 		var coord = Document.CaretPosition;
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
 		if (coord.Line < firstLogicalLine || coord.Line > lastLogicalLine)
-			return;
+			return null;
 		int visualLine = 0;
 		for (int i = firstLogicalLine; i < coord.Line; i++)
 		{
 			var lineLayout = _lineCache.GetOrCreate(Document.Lines[i], i);
-			if (lineLayout is null) return;
+			if (lineLayout is null) return null;
 			visualLine += lineLayout.VisualLines.Count;
 		}
 
 		var caretLineLayout = _lineCache.GetOrCreate(Document.Lines[coord.Line], coord.Line);
-		if (caretLineLayout is null) return;
+		if (caretLineLayout is null) return null;
 
 		//force trail visual line when drawing a thick cursor
 		var localVisualCoord = caretLineLayout.GetVisualCoordinate(coord, _useThickCursor);
@@ -977,7 +1036,14 @@ public class Editor : Control
 
 		_caretWidth = Mode == Mode.Normal ? _editorMetrics.CharAdvance : _defaultCaretWidth;
 		var caretRect = new Rect(point, new Size(_caretWidth, _editorMetrics.LineHeight));
-		context.FillRectangle(new SolidColorBrush(Colors.White, _useThickCursor ? 0.5 : 1), caretRect);
+		return caretRect;
+	}
+	private void DrawCaret(DrawingContext context)
+	{
+		using var clip = context.PushClip(EditorArea);
+		var caretRect = GetCaretRect();
+		if (caretRect is null) return;
+		context.FillRectangle(new SolidColorBrush(Colors.White, _useThickCursor ? 0.5 : 1), caretRect.Value);
 	}
 
 	private Point VisualToUI(VisualCoordinate visualCoord)
