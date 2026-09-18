@@ -32,7 +32,7 @@ public sealed class SekaniBuffer
 			return new Coordinate(col, line);
 
 		var insertedLines = text.Split(
-			Environment.NewLine,
+			["\r\n", "\n", "\r"],
 			StringSplitOptions.None);
 		if (insertedLines.Length == 1)
 		{
