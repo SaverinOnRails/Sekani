@@ -65,7 +65,7 @@ public class Editor : Control
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
-	private DispatcherTimer? _smoothScrollTimer;
+	private bool _isSmoothScrolling;
 	private int _firstVisibleLogicalLineForResizeRestore;
 
 	private Rect LineNumbersSectRect =>
@@ -241,18 +241,29 @@ public class Editor : Control
 	{
 		if (_scrollYOffset == _targetScrollYOffset)
 			return;
-		if (_smoothScrollTimer is not null)
+		if (_isSmoothScrolling)
 			return;
-		_smoothScrollTimer = new()
+
+		_isSmoothScrolling = true;
+		RequestSmoothScrollFrame();
+	}
+
+	private void RequestSmoothScrollFrame()
+	{
+		var topLevel = TopLevel.GetTopLevel(this);
+		if (topLevel is null)
 		{
-			Interval = TimeSpan.FromMilliseconds(16)
-		};
-		_smoothScrollTimer.Tick += (_, _) => DoSmoothScroll();
-		_smoothScrollTimer.Start();
+			_isSmoothScrolling = false;
+			return;
+		}
+		topLevel.RequestAnimationFrame(_ => DoSmoothScroll());
 	}
 
 	private void DoSmoothScroll()
 	{
+		if (!_isSmoothScrolling)
+			return;
+
 		var distance = _targetScrollYOffset - _scrollYOffset;
 		if (Math.Abs(distance) < 0.5)
 		{
@@ -262,14 +273,14 @@ public class Editor : Control
 			Redraw();
 			return;
 		}
-		_scrollYOffset += distance * 0.1;
+		_scrollYOffset += distance * 0.2;
 		Redraw();
+		RequestSmoothScrollFrame();
 	}
 
 	private void StopSmoothScroll()
 	{
-		_smoothScrollTimer?.Stop();
-		_smoothScrollTimer = null;
+		_isSmoothScrolling = false;
 	}
 
 	private void StartDrawCaretFocusBubble()
