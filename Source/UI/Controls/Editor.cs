@@ -44,7 +44,7 @@ public class Editor : Control
 	private double _scrollbarPointerStartY;
 	private int _preferredDragScrollVisualColumn = 0;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = true;
+	private bool _softWordWrap = false;
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
@@ -64,6 +64,7 @@ public class Editor : Control
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
+	private DispatcherTimer? _smoothScrollTimer;
 	private int _firstVisibleLogicalLineForResizeRestore;
 
 	private Rect LineNumbersSectRect =>
@@ -211,7 +212,7 @@ public class Editor : Control
 				_scrollYOffset -= correctiveDistance;
 			else
 				_scrollYOffset += correctiveDistance;
-			//only do this when we are not dragging
+			//only do this when we are not drag selecting
 			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null)
 			{
 				StartDrawCaretFocusBubble();
@@ -227,6 +228,7 @@ public class Editor : Control
 				_scrollXOffset -= xCorrectiveDistance;
 			else
 				_scrollXOffset += xCorrectiveDistance;
+			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
 		CorrectScrollBarOffset();
 	}
@@ -456,7 +458,7 @@ public class Editor : Control
 		var caretRect = GetCaretRect();
 		if (caretRect is null)
 			return;
-		_caretFocusBubbleProgress += 0.05;
+		_caretFocusBubbleProgress += 0.045;
 
 		if (_caretFocusBubbleProgress >= 1)
 		{
