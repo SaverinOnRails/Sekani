@@ -463,7 +463,7 @@ public class Editor : Control
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = text.Height * 1.25;
 		var tabSize = 6;
-		_editorMetrics = new(charAdvance, 17, tabSize);
+		_editorMetrics = new(charAdvance, lineHeight, tabSize);
 	}
 
 	private double GetDocumentWidthInPixels()
