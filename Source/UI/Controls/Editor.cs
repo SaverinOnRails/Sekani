@@ -626,13 +626,19 @@ public class Editor : Control
 				continue;
 
 			var number = (i + 1).ToString();
+			var fontFace = new Typeface(
+				_editorFontFace.FontFamily,
+				_editorFontFace.Style,
+				i == Document.CaretPosition.Line
+					? FontWeight.Bold
+					: _editorFontFace.Weight);
 			var ft = new FormattedText(
 			  number,
 			  CultureInfo.InvariantCulture,
 			  FlowDirection.LeftToRight,
-			  _editorFontFace,
+			  fontFace,
 			  _fontSize,
-			  new SolidColorBrush(Colors.White, 0.4));
+			  new SolidColorBrush(Colors.White, i == Document.CaretPosition.Line ? 0.8 : 0.4));
 			var x = LineNumberSectWidth - ft.Width - 5;
 			var point = new Point(
 			  x,
@@ -1032,8 +1038,6 @@ public class Editor : Control
 	}
 	private void DrawText(DrawingContext context)
 	{
-		using
-		var clip = context.PushClip(EditorArea);
 		using var textOptions = context.PushTextOptions(new TextOptions
 		{
 			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned,
@@ -1045,52 +1049,67 @@ public class Editor : Control
 		//pre measure some lines above the viewport.
 		int logicalLineToBeginCount = firstLogicalLine - 1;
 		lastPossibleLogicalLine += 5;
-		for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
+		var caretPos = Document.CaretPosition;
+		var relativeCaretVisualLine = _lineCache.GetOrCreate(Document.Lines[caretPos.Line])!.GetVisualCoordinate(caretPos).VisualLine;
+		Rect? hintRectangle = null;
+		using (var clip = context.PushClip(EditorArea))
 		{
-			if (i >= Document.Lines.Count) return;
-			if (i < 0) continue;
-			var line = Document.Lines[i];
-			int oldCount = _lineCache.VisualLineCountAt(i);
-			var lineLayout = _lineCache.GetOrCreate(line, i);
-			if (lineLayout is null) return;
-			//correct scroll behind
-			if (i < firstLogicalLine)
+			for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
 			{
-				int newCount = lineLayout.VisualLines.Count;
-				if (newCount != oldCount)
+				if (i >= Document.Lines.Count) return;
+				if (i < 0) continue;
+				var line = Document.Lines[i];
+				int oldCount = _lineCache.VisualLineCountAt(i);
+				var lineLayout = _lineCache.GetOrCreate(line, i);
+				if (lineLayout is null) return;
+				//correct scroll behind
+				if (i < firstLogicalLine)
 				{
-					if (i < firstLogicalLine)
-						_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
+					int newCount = lineLayout.VisualLines.Count;
+					if (newCount != oldCount)
+					{
+						if (i < firstLogicalLine)
+							_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
+					}
+					continue;
 				}
-				continue;
+				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
+				{
+					var visualLine = lineLayout.VisualLines[j];
+					var text = lineLayout.VisualText.AsSpan(
+					  visualLine.VisualOffset,
+					  visualLine.VisualLength);
+					var ft = new FormattedText(
+					  text.ToString(),
+					  CultureInfo.InvariantCulture,
+					  FlowDirection.LeftToRight,
+					  _editorFontFace,
+					  _fontSize,
+					  Brush.Parse("#F3E6D5"));
+					Point point = VisualToUI(
+					  new VisualCoordinate(
+						0,
+						currentVisualLine));
+					var y = point.Y - pixelOffset;
+					var x = point.X - _scrollXOffset;
+					point = point.WithY(y);
+					point = point.WithX(x);
+					currentVisualLine++;
+					//true check whether we should draw this line
+					if (y + _editorMetrics.LineHeight < EditorArea.Top) continue; //is bottom in viewport?
+					if (y > EditorArea.Bottom) break;
+					context.DrawText(ft, point);
+					if (i == caretPos.Line && j == relativeCaretVisualLine)
+					{
+						hintRectangle = new Rect(new Point(0, y), new Size(Bounds.Width, _editorMetrics.LineHeight));
+					}
+				}
 			}
-			for (int j = 0; j < lineLayout.VisualLines.Count; j++)
-			{
-				var visualLine = lineLayout.VisualLines[j];
-				var text = lineLayout.VisualText.AsSpan(
-				  visualLine.VisualOffset,
-				  visualLine.VisualLength);
-				var ft = new FormattedText(
-				  text.ToString(),
-				  CultureInfo.InvariantCulture,
-				  FlowDirection.LeftToRight,
-				  _editorFontFace,
-				  _fontSize,
-				  Brush.Parse("#F3E6D5"));
-				Point point = VisualToUI(
-				  new VisualCoordinate(
-					0,
-					currentVisualLine));
-				var y = point.Y - pixelOffset;
-				var x = point.X - _scrollXOffset;
-				point = point.WithY(y);
-				point = point.WithX(x);
-				currentVisualLine++;
-				//true check whether we should draw this line
-				if (y + _editorMetrics.LineHeight < EditorArea.Top) continue; //is bottom in viewport?
-				if (y > EditorArea.Bottom) return;
-				context.DrawText(ft, point);
-			}
+		}
+		if (hintRectangle is not null)
+		{
+			//draw a hint rectangle
+			context.FillRectangle(new SolidColorBrush(Colors.Gray, 0.1), hintRectangle.Value);
 		}
 	}
 
