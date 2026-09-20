@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Reflection.Metadata;
+using System.Xml;
+
 namespace Sekani.EditorCore;
 
 public sealed class SekaniDocument
@@ -184,6 +188,8 @@ public sealed class SekaniDocument
 		UpdatePreferredVisualColumn();
 	}
 
+	//Returns the next possible location of the cursor.
+	// Guarantees the cursor can be here, not that a character exists here necessarily
 	private Coordinate RangeUpCursor(Coordinate coord)
 	{
 		if (coord.Col >= Lines[coord.Line].Text.Length)
@@ -375,10 +381,110 @@ public sealed class SekaniDocument
 			Environment.NewLine);
 		CaretPosition = new(0, lineIndex);
 	}
+	public void SelectToNextWord()
+	{
+		var pos = CaretPosition;
+		var nextWordStart = FindWordStart(pos, out Coordinate? anchorPos);
+		if (nextWordStart is not null && anchorPos is not null)
+		{
+			CaretPosition.RangeEnd = new(anchorPos);
+			CaretPosition.SetCoord(nextWordStart);
+		}
+	}
+
+	private Coordinate? FindWordStart(Coordinate pos, out Coordinate? anchorPos)
+	{
+		//are we at the end of the file?
+		anchorPos = null;
+		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
+		if (pos.HasRange())
+			pos = RangeUpCursor(pos);
+		anchorPos = pos;
+		var searchCol = pos.Col;
+		var searchLine = pos.Line;
+		var buf = IndexLineWithLineBreak(searchCol, searchLine);
+		var currentToken = CharTokenKind(buf);
+		var prevCol = searchCol;
+		while (true)
+		{
+			searchCol++;
+			if (searchCol > Lines[searchLine].Text.Length)
+			{
+				if (searchLine == Lines.Count - 1)
+				{
+					return new(searchCol - 1, searchLine);
+				}
+				searchCol = 0;
+				searchLine++;
+			}
+			var newToken = CharTokenKind(IndexLineWithLineBreak(searchCol, searchLine));
+			if (currentToken == SelectionTokenKind.Eol)
+			{
+				currentToken = newToken;
+				if (newToken != SelectionTokenKind.Eol)
+					anchorPos = new(searchCol, searchLine);
+			}
+			if (newToken == SelectionTokenKind.Whitespace)
+			{
+				currentToken = newToken;
+				prevCol = searchCol;
+				continue;
+			}
+			if (currentToken != newToken)
+			{
+				return new(prevCol, searchLine);
+			}
+			currentToken = newToken;
+			prevCol = searchCol;
+		}
+	}
+
+	//Since we pop out line breaks and helix motions needs them, this indexes a line and returns a line break where a line break can be
+	private char IndexLineWithLineBreak(int col, int line)
+	{
+		if (col == Lines[line].Text.Length) return '\n';
+		return Lines[line].Text[col];
+	}
+
+
+	private SelectionTokenKind CharTokenKind(char c)
+	{
+		if (c is '\n' or '\r' or '\u000B' or '\u000C' or '\u0085' or '\u2028' or '\u2029')
+			return SelectionTokenKind.Eol;
+		if (char.IsWhiteSpace(c))
+			return SelectionTokenKind.Whitespace;
+		if (char.IsLetterOrDigit(c) || c == '_')
+			return SelectionTokenKind.AlphaNumerical;
+
+		switch (char.GetUnicodeCategory(c))
+		{
+			case UnicodeCategory.ConnectorPunctuation:
+			case UnicodeCategory.DashPunctuation:
+			case UnicodeCategory.OpenPunctuation:
+			case UnicodeCategory.ClosePunctuation:
+			case UnicodeCategory.InitialQuotePunctuation:
+			case UnicodeCategory.FinalQuotePunctuation:
+			case UnicodeCategory.OtherPunctuation:
+			case UnicodeCategory.MathSymbol:
+			case UnicodeCategory.CurrencySymbol:
+			case UnicodeCategory.ModifierSymbol:
+				return SelectionTokenKind.Punctuation;
+			default:
+				return SelectionTokenKind.Unknown;
+		}
+	}
 }
 
 public enum CaretVerticalDirection
 {
 	Up,
 	Down
+}
+enum SelectionTokenKind
+{
+	AlphaNumerical,
+	Punctuation,
+	Whitespace,
+	Eol,
+	Unknown,
 }

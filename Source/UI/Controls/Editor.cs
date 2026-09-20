@@ -271,6 +271,11 @@ public class Editor : Control
 			CorrectScrollBarOffset();
 			StopSmoothScroll();
 			Redraw();
+			//the targetscrolloffset might not be the correct one anymore since lines could be being measured , so just restart smooth scroll until its correct. This is hacky and ugly, will fix later
+			if (!IsCaretVisibleVertical(out bool aboveViewport, out double correctiveDistance))
+			{
+				EnsureCaretVisible();
+			}
 			return;
 		}
 		_scrollYOffset += distance * 0.2;
@@ -598,8 +603,8 @@ public class Editor : Control
 		var clip = context.PushClip(LineNumbersSectRect);
 		using var textOptions = context.PushTextOptions(new TextOptions
 		{
-			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned, 
-			TextHintingMode = TextHintingMode.None                     
+			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned,
+			TextHintingMode = TextHintingMode.None
 		});
 
 		// gutter
@@ -1031,14 +1036,14 @@ public class Editor : Control
 		var clip = context.PushClip(EditorArea);
 		using var textOptions = context.PushTextOptions(new TextOptions
 		{
-			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned, 
-			TextHintingMode = TextHintingMode.None                     
+			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned,
+			TextHintingMode = TextHintingMode.None
 		});
 		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
 		int currentVisualLine = 0;
 
 		//pre measure some lines above the viewport.
-		int logicalLineToBeginCount = firstLogicalLine - 2;
+		int logicalLineToBeginCount = firstLogicalLine - 1;
 		lastPossibleLogicalLine += 5;
 		for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
 		{
@@ -1193,6 +1198,9 @@ public class Editor : Control
 			case "O":
 				Document.AddNewLineAboveSelection();
 				EnterInsertMode();
+				break;
+			case "w":
+				Document.SelectToNextWord();
 				break;
 			case ":":
 				{

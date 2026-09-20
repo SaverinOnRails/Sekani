@@ -103,9 +103,17 @@ public sealed class SekaniBuffer
 	public string ToText()
 	{
 		StringBuilder builder = new();
-		foreach (var line in _lines)
+		for (int i = 0; i < _lines.Count; i++)
 		{
-			builder.Append(line.Text + Environment.NewLine);
+			var line = _lines[i];
+			if (i == _lines.Count - 1)
+			{
+				builder.Append(line.Text);
+			}
+			else
+			{
+				builder.Append(line.Text + Environment.NewLine);
+			}
 		}
 		return builder.ToString();
 	}
