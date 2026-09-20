@@ -272,10 +272,10 @@ public class Editor : Control
 			StopSmoothScroll();
 			Redraw();
 			//the targetscrolloffset might not be the correct one anymore since lines could be being measured , so just restart smooth scroll until its correct. This is hacky and ugly, will fix later
-			if (!IsCaretVisibleVertical(out bool aboveViewport, out double correctiveDistance))
-			{
-				EnsureCaretVisible();
-			}
+			// if (!IsCaretVisibleVertical(out bool aboveViewport, out double correctiveDistance))
+			// {
+			// 	EnsureCaretVisible();
+			// }
 			return;
 		}
 		_scrollYOffset += distance * 0.2;
@@ -295,7 +295,7 @@ public class Editor : Control
 		_caretFocusBubbleProgress = 0;
 		_caretFocusBubbleTimer = new()
 		{
-			Interval = TimeSpan.FromMilliseconds(15),
+			Interval = TimeSpan.FromMilliseconds(16),
 		};
 		_caretFocusBubbleTimer.Tick += (s, e) => Redraw();
 		_caretFocusBubbleTimer.Start();
@@ -1060,9 +1060,26 @@ public class Editor : Control
 				if (i < 0) continue;
 				var line = Document.Lines[i];
 				int oldCount = _lineCache.VisualLineCountAt(i);
+
 				var lineLayout = _lineCache.GetOrCreate(line, i);
 				if (lineLayout is null) return;
-				//correct scroll behind
+
+				//correct smooth scroll
+				if (_isSmoothScrolling)
+				{
+					// this problem only happens when smooth scrolling down. This is evidence this code is dogshit
+					if (_targetScrollYOffset > _scrollYOffset)
+					{
+						int newCount = lineLayout.VisualLines.Count;
+						if (newCount != oldCount)
+						{
+							var oldOffset = _targetScrollYOffset;
+							_targetScrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
+						}
+					}
+				}
+
+				//correct smooth scroll behind
 				if (i < firstLogicalLine)
 				{
 					int newCount = lineLayout.VisualLines.Count;
@@ -1124,12 +1141,12 @@ public class Editor : Control
 		int visualLine = 0;
 		for (int i = firstLogicalLine; i < coord.Line; i++)
 		{
-			var lineLayout = _lineCache.GetOrCreate(Document.Lines[i], i);
+			var lineLayout = _lineCache.GetOrCreate(Document.Lines[i]);
 			if (lineLayout is null) return null;
 			visualLine += lineLayout.VisualLines.Count;
 		}
 
-		var caretLineLayout = _lineCache.GetOrCreate(Document.Lines[coord.Line], coord.Line);
+		var caretLineLayout = _lineCache.GetOrCreate(Document.Lines[coord.Line]);
 		if (caretLineLayout is null) return null;
 
 		//force trail visual line when drawing a thick cursor
