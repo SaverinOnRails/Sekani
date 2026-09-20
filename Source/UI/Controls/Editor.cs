@@ -1056,7 +1056,7 @@ public class Editor : Control
 		{
 			for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
 			{
-				if (i >= Document.Lines.Count) return;
+				if (i >= Document.Lines.Count) break;
 				if (i < 0) continue;
 				var line = Document.Lines[i];
 				int oldCount = _lineCache.VisualLineCountAt(i);
