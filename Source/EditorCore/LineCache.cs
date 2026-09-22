@@ -6,6 +6,7 @@ public sealed class LineCache
 {
 	private readonly SekaniBuffer _buffer;
 	private readonly Dictionary<Line, LineLayout> _layoutCache = [];
+	private readonly List<LineLayout?> _layoutCacheList = [];
 	public int Width { get; private set; }
 	private Line? _longestLine;
 	private readonly int _tabSize;
@@ -30,6 +31,7 @@ public sealed class LineCache
 		if (e.kind == BufferChangeKind.LineRemoved)
 		{
 			_visualLineTree.RemoveAt(e.Line);
+			_layoutCacheList.RemoveAt(e.Line);
 		}
 
 		var line = _buffer.GetLine(e.Line);
@@ -51,9 +53,10 @@ public sealed class LineCache
 			if (e.Line <= _visualLineTree.Count)
 			{
 				_visualLineTree.Insert(e.Line, 1);
+				_layoutCacheList.Insert(e.Line, null);
 			}
 		}
-		InvalidateLayout(line);
+		InvalidateLayout(e.Line);
 	}
 
 
@@ -70,7 +73,26 @@ public sealed class LineCache
 			}
 		}
 	}
+	public LineLayout? GetOrCreate(int index)
+	{
+		if (index > _buffer.Lines.Count) return null;
+		//pad to fill up
+		while (_layoutCacheList.Count <= index)
+			_layoutCacheList.Insert(_layoutCacheList.Count, null);
+		while (_visualLineTree.Count <= index)
+			_visualLineTree.Insert(_visualLineTree.Count, 1);
+		if (_layoutCacheList[index] != null) return _layoutCacheList[index];
+		var line = _buffer.Lines[index];
+		var lineLayout = new LineLayout(
+			line,
+			_tabSize,
+			_wordWrap,
+			_maxVisualColsPerLine);
+		_layoutCacheList[index] = lineLayout;
+		SetVisualLineCount(index, lineLayout.VisualLines.Count);
+		return lineLayout;
 
+	}
 	public LineLayout? GetOrCreate(Line line, int? index = null)
 	{
 		if (!_layoutCache.TryGetValue(line, out var lineLayout))
@@ -107,9 +129,13 @@ public sealed class LineCache
 		}
 		return lineLayout;
 	}
-	private void InvalidateLayout(Line line)
+	private void InvalidateLayout(int line)
 	{
-		_layoutCache.Remove(line);
+		// _layoutCache.Remove(line);
+		if (line < _layoutCacheList.Count)
+		{
+			_layoutCacheList[line] = null;
+		}
 	}
 
 	private void InvalidateAll()
