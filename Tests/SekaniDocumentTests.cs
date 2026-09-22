@@ -208,22 +208,28 @@ public sealed class SekaniDocumentTests
 	[TestMethod]
 	public void CursorRange_MoveToStartOfNextWordWorksCorrectly()
 	{
-		Dictionary<string, (Coordinate lesser, Coordinate greater)> testdata = new()
+		Dictionary<string, (Coordinate startat, Coordinate anchor, Coordinate greater)> testdata = new()
 		{
-			["Basic forward motion stops at the first space"] = (new(0, 0), new(5, 0)),
-			[" Starting from a boundary advances the anchor"] = (new(0, 0), new(9, 0))
+			["Basic forward motion stops at the first space"] = (new(0, 0), new(0, 0), new(5, 0)),
+			[" Starting from a boundary advances the anchor"] = (new(0, 0), new(1, 0), new(9, 0)),
+			["Long       whitespace gap is bridged by the head"] = (new(0, 0), new(0, 0), new(10, 0)),
+			["    Starting from whitespace moves to last space in sequence"] = (new(0, 0), new(0, 0), new(3, 0)),
+			["Starting from mid-word leaves anchor at start position and moves head"] = (new(3, 0), new(3, 0), new(8, 0)),
+			["Identifiers_with_underscores are considered a single word"] = (new(0, 0), new(0, 0), new(28, 0)),
+			["Jumping\n\n\n\n\n\n   from newlines to whitespace selects whitespace."] = (new(7, 0), new(0, 6), new(2, 6)),
+			[".._.._ punctuation is not joined by underscores into a single block"] = (new(0, 0), new(0, 0), new(1, 0)),
 		};
 		foreach (var (key, value) in testdata)
 		{
 			var doc = CreateDocument();
 			doc.TypeChars(key);
-			doc.CaretPosition = new(0, 0);
+			doc.CaretPosition = value.startat;
 			doc.SelectToNextWord();
 
 			var pos = doc.CaretPosition;
 			Assert.IsTrue(pos.HasRange());
-			Assert.AreEqual(value.greater, pos.GreaterRangeEnd()!);
-			Assert.AreEqual(value.lesser, pos.LesserRangeEnd()!);
+			Assert.AreEqual(value.greater, pos);
+			Assert.AreEqual(value.anchor, pos.LesserRangeEnd()!);
 		}
 	}
 
