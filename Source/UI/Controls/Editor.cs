@@ -1079,7 +1079,7 @@ public class Editor : Control
 					}
 				}
 
-				//correct smooth scroll behind
+				//correct scroll behind
 				if (i < firstLogicalLine)
 				{
 					int newCount = lineLayout.VisualLines.Count;

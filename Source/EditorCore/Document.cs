@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection.Metadata;
 using System.Xml;
+using Microsoft.VisualBasic;
 
 namespace Sekani.EditorCore;
 
@@ -397,53 +398,113 @@ public sealed class SekaniDocument
 		//are we at the end of the file?
 		anchorPos = null;
 		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
-		if (pos.HasRange())
-			pos = RangeUpCursor(pos);
-		anchorPos = pos;
-		var searchCol = pos.Col;
-		var searchLine = pos.Line;
-		var buf = IndexLineWithLineBreak(searchCol, searchLine);
-		var currentToken = CharTokenKind(buf);
-		var prevCol = searchCol;
+		anchorPos = StartAt(pos);
+		var currentCol = anchorPos.Col;
+		var currentLine = anchorPos.Line;
+		var initialToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+		int prevCol = currentCol;
 		while (true)
 		{
-			searchCol++;
-			if (searchCol > Lines[searchLine].Text.Length)
+			var next = Advance(ref currentCol, ref currentLine, out bool atEnd);
+			if (atEnd)
 			{
-				if (searchLine == Lines.Count - 1)
-				{
-					return new(searchCol - 1, searchLine);
-				}
-				searchCol = 0;
-				searchLine++;
+				return next;
 			}
-			var newToken = CharTokenKind(IndexLineWithLineBreak(searchCol, searchLine));
+			var newToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+			if (CanEnd(ref initialToken, newToken))
+			{
+				return new(prevCol, currentLine);
+			}
+			prevCol = currentCol;
+		}
+	}
+
+	//caller verifies bounds of this
+	private Coordinate StartAt(Coordinate pos)
+	{
+		var col = pos.Col;
+		var line = pos.Line;
+		var currentToken = CharTokenKind(IndexLineWithLineBreak(pos.Col, pos.Line));
+		{
 			if (currentToken == SelectionTokenKind.Eol)
 			{
-				currentToken = newToken;
-				if (newToken != SelectionTokenKind.Eol)
-					anchorPos = new(searchCol, searchLine);
+				while (currentToken == SelectionTokenKind.Eol)
+				{
+					var advance = Advance(ref col, ref line, out bool atEnd);
+					if (atEnd)
+					{
+						return advance;
+					}
+					currentToken = CharTokenKind(IndexLineWithLineBreak(col, line));
+				}
+				return new(col, line);
 			}
-			if (newToken == SelectionTokenKind.Whitespace)
-			{
-				currentToken = newToken;
-				prevCol = searchCol;
-				continue;
-			}
-			if (currentToken != newToken)
-			{
-				return new(prevCol, searchLine);
-			}
-			currentToken = newToken;
-			prevCol = searchCol;
 		}
+		var next = Advance(ref col, ref line, out bool _);
+		var nextToken = CharTokenKind(IndexLineWithLineBreak(col, line));
+		{
+			if (nextToken == SelectionTokenKind.Eol)
+			{
+				while (nextToken == SelectionTokenKind.Eol)
+				{
+					var advance = Advance(ref col, ref line, out bool atEnd);
+					if (atEnd)
+					{
+						return advance;
+					}
+					nextToken = CharTokenKind(IndexLineWithLineBreak(col, line));
+				}
+				return new(col, line);
+			}
+		}
+		if (currentToken == nextToken || nextToken == SelectionTokenKind.Whitespace) return pos;
+		return next;
+	}
+
+
+	//advances and skips empty lines
+	private Coordinate Advance(ref int col, ref int line, out bool atEnd)
+	{
+		atEnd = false;
+		col++;
+		if (col > Lines[line].Text.Length)
+		{
+			if (line == Lines.Count - 1)
+			{
+				atEnd = true;
+				return new(col - 1, line);
+			}
+			col = 0;
+			line++;
+		}
+		return new(col, line);
+	}
+	private bool CanEnd(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	{
+		if (newToken == SelectionTokenKind.Whitespace)
+		{
+			originalToken = newToken;
+			return false;
+		}
+		;
+		if (newToken != originalToken) return true;
+		return false;
 	}
 
 	//Since we pop out line breaks and helix motions needs them, this indexes a line and returns a line break where a line break can be
 	private char IndexLineWithLineBreak(int col, int line)
 	{
-		if (col == Lines[line].Text.Length) return '\n';
-		return Lines[line].Text[col];
+		try
+		{
+			if (col == Lines[line].Text.Length) return '\n';
+			return Lines[line].Text[col];
+		}
+		catch
+		{
+			Console.WriteLine(col);
+			Console.WriteLine(line);
+			throw;
+		}
 	}
 
 

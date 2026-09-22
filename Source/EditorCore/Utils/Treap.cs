@@ -132,7 +132,7 @@ internal sealed class VisualLineTree
 
             if (target < sumBefore + leftSum)
             {
-                // answer is inside the left subtree — descend, accumulators unchanged
+                // answer is inside the left subtree ? descend, accumulators unchanged
                 node = node.Left;
                 continue;
             }
@@ -145,7 +145,7 @@ internal sealed class VisualLineTree
                 return countBefore + leftCount;
             }
 
-            // answer is inside the right subtree — fold in everything up to and including this node
+            // answer is inside the right subtree ? fold in everything up to and including this node
             sumBefore = blockStart + node.Value;
             countBefore += leftCount + 1;
             node = node.Right;

@@ -192,7 +192,7 @@ public sealed class SekaniDocumentTests
 		Assert.AreEqual(new Coordinate(4, 1), document.CaretPosition.RangeEnd);
 
 		document.PlaceCursorAfterSelection();
-		 
+
 		//new line should be created
 		AssertCaret(document, 0, 2);
 		Assert.HasCount(3, document.Lines);
@@ -202,6 +202,29 @@ public sealed class SekaniDocumentTests
 		end.CaretPosition = new Coordinate(1, 0);
 		end.PlaceCursorAfterSelection();
 		AssertCaret(end, 0, 1);
+	}
+
+	//lifted from helix
+	[TestMethod]
+	public void CursorRange_MoveToStartOfNextWordWorksCorrectly()
+	{
+		Dictionary<string, (Coordinate lesser, Coordinate greater)> testdata = new()
+		{
+			["Basic forward motion stops at the first space"] = (new(0, 0), new(5, 0)),
+			[" Starting from a boundary advances the anchor"] = (new(0, 0), new(9, 0))
+		};
+		foreach (var (key, value) in testdata)
+		{
+			var doc = CreateDocument();
+			doc.TypeChars(key);
+			doc.CaretPosition = new(0, 0);
+			doc.SelectToNextWord();
+
+			var pos = doc.CaretPosition;
+			Assert.IsTrue(pos.HasRange());
+			Assert.AreEqual(value.greater, pos.GreaterRangeEnd()!);
+			Assert.AreEqual(value.lesser, pos.LesserRangeEnd()!);
+		}
 	}
 
 
