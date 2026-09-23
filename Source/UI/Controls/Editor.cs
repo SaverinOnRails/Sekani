@@ -131,7 +131,7 @@ public class Editor : Control
 		if (lineLayout is null)
 			return false;
 
-		int caretVisualLine = lineLayout.GetVisualCoordinate(coord).VisualLine;
+		int caretVisualLine = lineLayout.GetVisualCoordinate(coord, _useThickCursor).VisualLine;
 
 		// Number of visual lines belonging to logical lines before the caret's line.
 		int visualLinesBeforeCaret = _lineCache.VisualLinesPrefixSum(coord.Line);
@@ -214,9 +214,9 @@ public class Editor : Control
 			out double correctiveDistance) && ensureVertical)
 		{
 			if (caretAboveViewport)
-				_scrollYOffset-= correctiveDistance;
+				_scrollYOffset -= correctiveDistance;
 			else
-				_scrollYOffset+= correctiveDistance;
+				_scrollYOffset += correctiveDistance;
 			//only do this when we are not drag selecting
 			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
@@ -1065,12 +1065,12 @@ public class Editor : Control
 				//correct scroll behind
 				if (i < firstLogicalLine)
 				{
-					int newCount = lineLayout.VisualLines.Count;
-					if (newCount != oldCount)
-					{
-						if (i < firstLogicalLine)
-							_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
-					}
+					// int newCount = lineLayout.VisualLines.Count;
+					// if (newCount != oldCount)
+					// {
+					// 	if (i < firstLogicalLine)
+					// 		_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
+					// }
 					continue;
 				}
 

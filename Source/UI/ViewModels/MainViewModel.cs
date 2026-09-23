@@ -20,10 +20,10 @@ public partial class MainViewModel : ViewModelBase
     {
         // var file = "/home/noble/jquery.min.js.js";
         // var file = "/home/noble/Documents/sekanitestfiles/longfile.text";
-       var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
-        // Document = new(file);
-        Document = new();
+       // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
+        var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
+        Document = new(file);
+        // Document = new();
     }
 
     public void HandleCommand(string? command)

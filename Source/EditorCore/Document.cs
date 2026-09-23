@@ -106,7 +106,6 @@ public sealed class SekaniDocument
 				{
 					TrailVisualLine = _preferredVisualColumn == 0
 				};
-
 				return;
 			}
 
