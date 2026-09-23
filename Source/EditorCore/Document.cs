@@ -69,7 +69,7 @@ public sealed class SekaniDocument
 			return;
 
 		var line = Lines[CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(line);
+		var layout = _lineCache.GetOrCreate(CaretPosition.Line);
 
 		if (layout is null)
 			return;
@@ -85,7 +85,7 @@ public sealed class SekaniDocument
 			throw new InvalidOperationException();
 
 		var line = Lines[CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(line);
+		var layout = _lineCache.GetOrCreate(CaretPosition.Line);
 
 		if (layout is null)
 			return;
@@ -132,7 +132,7 @@ public sealed class SekaniDocument
 				return;
 
 			var targetLine = Lines[CaretPosition.Line - 1];
-			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
+			var targetLineLayout = _lineCache.GetOrCreate(CaretPosition.Line - 1);
 
 			if (targetLineLayout is null)
 				return;
@@ -154,7 +154,7 @@ public sealed class SekaniDocument
 				return;
 
 			var targetLine = Lines[CaretPosition.Line + 1];
-			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
+			var targetLineLayout = _lineCache.GetOrCreate(CaretPosition.Line + 1);
 
 			if (targetLineLayout is null)
 				return;

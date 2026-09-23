@@ -5,8 +5,7 @@ namespace Sekani.EditorCore;
 public sealed class LineCache
 {
 	private readonly SekaniBuffer _buffer;
-	private readonly Dictionary<Line, LineLayout> _layoutCache = [];
-	private readonly List<LineLayout?> _layoutCacheList = [];
+	private readonly List<LineLayout?> _layoutCache = [];
 	public int Width { get; private set; }
 	private Line? _longestLine;
 	private readonly int _tabSize;
@@ -31,7 +30,7 @@ public sealed class LineCache
 		if (e.kind == BufferChangeKind.LineRemoved)
 		{
 			_visualLineTree.RemoveAt(e.Line);
-			_layoutCacheList.RemoveAt(e.Line);
+			_layoutCache.RemoveAt(e.Line);
 		}
 
 		var line = _buffer.GetLine(e.Line);
@@ -53,7 +52,7 @@ public sealed class LineCache
 			if (e.Line <= _visualLineTree.Count)
 			{
 				_visualLineTree.Insert(e.Line, 1);
-				_layoutCacheList.Insert(e.Line, null);
+				_layoutCache.Insert(e.Line, null);
 			}
 		}
 		InvalidateLayout(e.Line);
@@ -73,73 +72,77 @@ public sealed class LineCache
 			}
 		}
 	}
-	public LineLayout? GetOrCreate(int index)
+	public LineLayout? GetOrCreate(int index, bool updateVisualLineCount = true)
 	{
 		if (index > _buffer.Lines.Count) return null;
 		//pad to fill up
-		while (_layoutCacheList.Count <= index)
-			_layoutCacheList.Insert(_layoutCacheList.Count, null);
+		while (_layoutCache.Count <= index)
+			_layoutCache.Insert(_layoutCache.Count, null);
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-		if (_layoutCacheList[index] != null) return _layoutCacheList[index];
+		if (_layoutCache[index] != null) return _layoutCache[index];
 		var line = _buffer.Lines[index];
 		var lineLayout = new LineLayout(
 			line,
 			_tabSize,
 			_wordWrap,
 			_maxVisualColsPerLine);
-		_layoutCacheList[index] = lineLayout;
-		SetVisualLineCount(index, lineLayout.VisualLines.Count);
+		_layoutCache[index] = lineLayout;
+		if (updateVisualLineCount)
+		{
+			SetVisualLineCount(index, lineLayout.VisualLines.Count);
+		}
 		return lineLayout;
 
 	}
-	public LineLayout? GetOrCreate(Line line, int? index = null)
-	{
-		if (!_layoutCache.TryGetValue(line, out var lineLayout))
-		{
-			lineLayout = new LineLayout(
-				line,
-				_tabSize,
-				_wordWrap,
-				_maxVisualColsPerLine);
+	// public LineLayout? GetOrCreate(Line line, int? index = null)
+	// {
+	// 	if (!_layoutCache.TryGetValue(line, out var lineLayout))
+	// 	{
+	// 		lineLayout = new LineLayout(
+	// 			line,
+	// 			_tabSize,
+	// 			_wordWrap,
+	// 			_maxVisualColsPerLine);
 
-			_layoutCache[line] = lineLayout;
-		}
-		if (index is not null)
-		{
-			// Pad to fill up
-			while (_visualLineTree.Count <= index)
-				_visualLineTree.Insert(_visualLineTree.Count, 1);
+	// 		_layoutCache[line] = lineLayout;
+	// 	}
+	// 	if (index is not null)
+	// 	{
+	// 		// Pad to fill up
+	// 		while (_visualLineTree.Count <= index)
+	// 			_visualLineTree.Insert(_visualLineTree.Count, 1);
 
-			if (_buffer.Lines[index.Value] != line)
-			{
-				SetVisualLineCount(index.Value,
-					new LineLayout(
-						line,
-						_tabSize,
-						_wordWrap,
-						_maxVisualColsPerLine)
-					.VisualLines.Count
-					);
-			}
-			else
-			{
-				SetVisualLineCount(index.Value, lineLayout.VisualLines.Count);
-			}
-		}
-		return lineLayout;
-	}
+	// 		if (_buffer.Lines[index.Value] != line)
+	// 		{
+	// 			SetVisualLineCount(index.Value,
+	// 				new LineLayout(
+	// 					line,
+	// 					_tabSize,
+	// 					_wordWrap,
+	// 					_maxVisualColsPerLine)
+	// 				.VisualLines.Count
+	// 				);
+	// 		}
+	// 		else
+	// 		{
+	// 			SetVisualLineCount(index.Value, lineLayout.VisualLines.Count);
+	// 		}
+	// 	}
+	// 	return lineLayout;
+	// }
 	private void InvalidateLayout(int line)
 	{
 		// _layoutCache.Remove(line);
-		if (line < _layoutCacheList.Count)
+		if (line < _layoutCache.Count)
 		{
-			_layoutCacheList[line] = null;
+			_layoutCache[line] = null;
 		}
 	}
 
 	private void InvalidateAll()
 	{
+		// _layoutCache.Clear();
 		_layoutCache.Clear();
 	}
 

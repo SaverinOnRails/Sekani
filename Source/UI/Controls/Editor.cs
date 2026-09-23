@@ -127,7 +127,7 @@ public class Editor : Control
 		var coord = Document.CaretPosition;
 
 		var line = Document.Lines[coord.Line];
-		var lineLayout = _lineCache.GetOrCreate(line);
+		var lineLayout = _lineCache.GetOrCreate(coord.Line);
 		if (lineLayout is null)
 			return false;
 
@@ -176,7 +176,7 @@ public class Editor : Control
 		correctiveDistance = 0;
 
 		var coord = Document.CaretPosition;
-		var layout = _lineCache.GetOrCreate(Document.Lines[coord.Line]);
+		var layout = _lineCache.GetOrCreate(coord.Line);
 		if (layout is null) return false;
 		var visualCol = layout.GetVisualCoordinate(coord, _useThickCursor).VisualCol;
 		double caretX =
@@ -209,16 +209,14 @@ public class Editor : Control
 	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
 	{
 		//reset the target
-		_targetScrollYOffset = _scrollYOffset;
-		var target = _targetScrollYOffset;
 		if (!IsCaretVisibleVertical(
 			out bool caretAboveViewport,
 			out double correctiveDistance) && ensureVertical)
 		{
 			if (caretAboveViewport)
-				_targetScrollYOffset -= correctiveDistance;
+				_scrollYOffset-= correctiveDistance;
 			else
-				_targetScrollYOffset += correctiveDistance;
+				_scrollYOffset+= correctiveDistance;
 			//only do this when we are not drag selecting
 			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
@@ -234,7 +232,8 @@ public class Editor : Control
 				_scrollXOffset += xCorrectiveDistance;
 			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
-		TryStartSmoothScroll();
+		CorrectScrollBarOffset();
+		// TryStartSmoothScroll();
 	}
 
 	private void TryStartSmoothScroll()
@@ -263,7 +262,6 @@ public class Editor : Control
 	{
 		if (!_isSmoothScrolling)
 			return;
-
 		var distance = _targetScrollYOffset - _scrollYOffset;
 		if (Math.Abs(distance) < 0.5)
 		{
@@ -482,7 +480,7 @@ public class Editor : Control
 		  _editorMetrics.LineHeight;
 	}
 	private readonly float _editorHorizontalMargin = 10F;
-	private readonly float _scrollBarDimension = 7;
+	private readonly float _scrollBarDimension = 15;
 
 	//Bounds of the actual textarea
 	public Rect EditorArea =>
@@ -553,7 +551,7 @@ public class Editor : Control
 		var visualLineSum = visualLinesBefore;
 		for (int i = firstLine; i <= lastLine; i++)
 		{
-			var lineLayout = _lineCache.GetOrCreate(Document.Lines[i]);
+			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null) continue;
 			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
 			{
@@ -621,7 +619,7 @@ public class Editor : Control
 		{
 			if (i >= Document.Lines.Count) return;
 			var line = Document.Lines[i];
-			var lineLayout = _lineCache.GetOrCreate(line);
+			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null)
 				continue;
 
@@ -694,7 +692,7 @@ public class Editor : Control
 		int logicalLineIndex = _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum);
 		if (logicalLineIndex >= Document.Lines.Count) return null;
 		var layout = _lineCache.GetOrCreate(
-		  Document.Lines[logicalLineIndex]);
+		  logicalLineIndex);
 
 		if (layout is null)
 			return null;
@@ -791,7 +789,7 @@ public class Editor : Control
 			{
 				//this is rough but just check if we can move the caret up vertically
 				var currentLine = Document.Lines[Document.CaretPosition.Line];
-				var layout = _lineCache.GetOrCreate(currentLine);
+				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
 				if (layout is null) return;
 
 				var posInLine = layout.GetVisualCoordinate(Document.CaretPosition);
@@ -819,7 +817,7 @@ public class Editor : Control
 				if (Document.CaretPosition.Line == 0) return;
 
 				var layoutOfPrevLine = _lineCache.GetOrCreate(
-				  Document.Lines[Document.CaretPosition.Line - 1]);
+				  Document.CaretPosition.Line - 1);
 
 				if (layoutOfPrevLine is null) return;
 
@@ -845,7 +843,7 @@ public class Editor : Control
 			if (point.Y > EditorArea.Bottom - _autoScrollMargin)
 			{
 				var currentLine = Document.Lines[Document.CaretPosition.Line];
-				var layout = _lineCache.GetOrCreate(currentLine);
+				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
 				if (layout is null) return;
 
 				var posInLine = layout.GetVisualCoordinate(Document.CaretPosition);
@@ -875,7 +873,7 @@ public class Editor : Control
 					return;
 
 				var layoutOfNextLine = _lineCache.GetOrCreate(
-				  Document.Lines[Document.CaretPosition.Line + 1]);
+				  Document.CaretPosition.Line + 1);
 
 				if (layoutOfNextLine is null) return;
 
@@ -911,7 +909,7 @@ public class Editor : Control
 
 		Document.CaretPosition.SetCoord(pos.Col, pos.Line);
 		var line = Document.Lines[Document.CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(line);
+		var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
 		if (layout is null) return;
 		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.CaretPosition).VisualCol;
 		Redraw();
@@ -1046,11 +1044,11 @@ public class Editor : Control
 		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
 		int currentVisualLine = 0;
 
-		//pre measure some lines above the viewport.
-		int logicalLineToBeginCount = firstLogicalLine - 1;
+		//pre measure some lines above the viewport when we are not smooth scrolling
+		int logicalLineToBeginCount = firstLogicalLine - 5;
 		lastPossibleLogicalLine += 5;
 		var caretPos = Document.CaretPosition;
-		var relativeCaretVisualLine = _lineCache.GetOrCreate(Document.Lines[caretPos.Line])!.GetVisualCoordinate(caretPos).VisualLine;
+		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)!.GetVisualCoordinate(caretPos).VisualLine;
 		Rect? hintRectangle = null;
 		using (var clip = context.PushClip(EditorArea))
 		{
@@ -1061,23 +1059,8 @@ public class Editor : Control
 				var line = Document.Lines[i];
 				int oldCount = _lineCache.VisualLineCountAt(i);
 
-				var lineLayout = _lineCache.GetOrCreate(line, i);
+				var lineLayout = _lineCache.GetOrCreate(i);
 				if (lineLayout is null) return;
-
-				//correct smooth scroll
-				if (_isSmoothScrolling)
-				{
-					// this problem only happens when smooth scrolling down. This is evidence this code is dogshit
-					if (_targetScrollYOffset > _scrollYOffset)
-					{
-						int newCount = lineLayout.VisualLines.Count;
-						if (newCount != oldCount)
-						{
-							var oldOffset = _targetScrollYOffset;
-							_targetScrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
-						}
-					}
-				}
 
 				//correct scroll behind
 				if (i < firstLogicalLine)
@@ -1090,6 +1073,7 @@ public class Editor : Control
 					}
 					continue;
 				}
+
 				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
 				{
 					var visualLine = lineLayout.VisualLines[j];
@@ -1141,12 +1125,12 @@ public class Editor : Control
 		int visualLine = 0;
 		for (int i = firstLogicalLine; i < coord.Line; i++)
 		{
-			var lineLayout = _lineCache.GetOrCreate(Document.Lines[i]);
+			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null) return null;
 			visualLine += lineLayout.VisualLines.Count;
 		}
 
-		var caretLineLayout = _lineCache.GetOrCreate(Document.Lines[coord.Line]);
+		var caretLineLayout = _lineCache.GetOrCreate(coord.Line);
 		if (caretLineLayout is null) return null;
 
 		//force trail visual line when drawing a thick cursor
