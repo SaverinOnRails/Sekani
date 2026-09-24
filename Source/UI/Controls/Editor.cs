@@ -23,7 +23,7 @@ public class Editor : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = true;
+	private bool _drawLineNumbers = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
@@ -35,6 +35,7 @@ public class Editor : Control
 	private bool _pointerPressedOnHorizontalScrollbar = false;
 	private bool _pointerPressedOnVerticalScrollbar;
 	private bool _shouldDrawCaretFocusBubble = false;
+	private readonly IBrush _mainTextBrush = Brush.Parse("#F3E6D5");
 	private int _caretFocusBubbleRadius = 0;
 	private double _caretFocusBubbleProgress = 0;
 	private bool _pointerPressedOnCoordinate = false;
@@ -66,6 +67,7 @@ public class Editor : Control
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
 	private bool _isSmoothScrolling;
+	private TimeSpan _lastSmoothScrollFrameTime;
 	private int _firstVisibleLogicalLineForResizeRestore;
 
 	private Rect LineNumbersSectRect =>
@@ -118,6 +120,7 @@ public class Editor : Control
 	}
 
 	private bool IsCaretVisibleVertical(
+	  double offset,
 	  out bool caretAboveViewport,
 	  out double correctiveDistance)
 	{
@@ -146,8 +149,8 @@ public class Editor : Control
 		double caretBottom =
 		  caretY + _editorMetrics.LineHeight;
 
-		double viewportTop = _scrollYOffset;
-		double viewportBottom = _scrollYOffset + EditorArea.Height;
+		double viewportTop = offset;
+		double viewportBottom = offset + EditorArea.Height;
 
 		// Caret is completely above the viewport.
 		if (caretY < viewportTop)
@@ -208,15 +211,20 @@ public class Editor : Control
 	}
 	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
 	{
-		//reset the target
+		if (!_isSmoothScrolling)
+		{
+			_targetScrollYOffset = _scrollYOffset;
+		}
 		if (!IsCaretVisibleVertical(
+			_targetScrollYOffset,
 			out bool caretAboveViewport,
 			out double correctiveDistance) && ensureVertical)
 		{
 			if (caretAboveViewport)
-				_scrollYOffset -= correctiveDistance;
+				_targetScrollYOffset -= correctiveDistance;
 			else
-				_scrollYOffset += correctiveDistance;
+				_targetScrollYOffset += correctiveDistance;
+
 			//only do this when we are not drag selecting
 			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
@@ -232,8 +240,8 @@ public class Editor : Control
 				_scrollXOffset += xCorrectiveDistance;
 			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
-		CorrectScrollBarOffset();
-		// TryStartSmoothScroll();
+		// CorrectScrollBarOffset();
+		TryStartSmoothScroll();
 	}
 
 	private void TryStartSmoothScroll()
@@ -244,6 +252,7 @@ public class Editor : Control
 			return;
 
 		_isSmoothScrolling = true;
+		_lastSmoothScrollFrameTime = TimeSpan.Zero;
 		RequestSmoothScrollFrame();
 	}
 
@@ -255,28 +264,30 @@ public class Editor : Control
 			_isSmoothScrolling = false;
 			return;
 		}
-		topLevel.RequestAnimationFrame(_ => DoSmoothScroll());
+		topLevel.RequestAnimationFrame((t) => DoSmoothScroll(t));
 	}
 
-	private void DoSmoothScroll()
+	private void DoSmoothScroll(TimeSpan frameTime)
 	{
 		if (!_isSmoothScrolling)
 			return;
+
 		var distance = _targetScrollYOffset - _scrollYOffset;
+		double dt = (frameTime - _lastSmoothScrollFrameTime).TotalSeconds;
+		_lastSmoothScrollFrameTime = frameTime;
+		dt = Math.Min(dt, 0.1);
+
 		if (Math.Abs(distance) < 0.5)
 		{
 			_scrollYOffset = _targetScrollYOffset;
 			CorrectScrollBarOffset();
 			StopSmoothScroll();
 			Redraw();
-			//the targetscrolloffset might not be the correct one anymore since lines could be being measured , so just restart smooth scroll until its correct. This is hacky and ugly, will fix later
-			// if (!IsCaretVisibleVertical(out bool aboveViewport, out double correctiveDistance))
-			// {
-			// 	EnsureCaretVisible();
-			// }
 			return;
 		}
-		_scrollYOffset += distance * 0.2;
+		const double smoothing = 15.0;
+		double t = 1.0 - Math.Exp(-smoothing * dt);
+		_scrollYOffset += distance * t;
 		Redraw();
 		RequestSmoothScrollFrame();
 	}
@@ -1004,7 +1015,7 @@ public class Editor : Control
 		  0,
 		  GetDocumentHeightInPixels() - EditorArea.Height);
 
-		var scrollAmount = 60.0;
+		var scrollAmount = 20.0;
 
 		_scrollYOffset = Math.Clamp(
 		  _scrollYOffset - (e.Delta.Y * scrollAmount),
@@ -1042,10 +1053,12 @@ public class Editor : Control
 			TextHintingMode = TextHintingMode.None
 		});
 		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
+		// Console.WriteLine(firstLogicalLine);
+		// Console.WriteLine(pixelOffset);
 		int currentVisualLine = 0;
 
-		//pre measure some lines above the viewport when we are not smooth scrolling
-		int logicalLineToBeginCount = firstLogicalLine - 5;
+		//pre measure some lines above the viewport.
+		int logicalLineToBeginCount = firstLogicalLine;
 		lastPossibleLogicalLine += 5;
 		var caretPos = Document.CaretPosition;
 		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)!.GetVisualCoordinate(caretPos).VisualLine;
@@ -1062,18 +1075,6 @@ public class Editor : Control
 				var lineLayout = _lineCache.GetOrCreate(i);
 				if (lineLayout is null) return;
 
-				//correct scroll behind
-				if (i < firstLogicalLine)
-				{
-					// int newCount = lineLayout.VisualLines.Count;
-					// if (newCount != oldCount)
-					// {
-					// 	if (i < firstLogicalLine)
-					// 		_scrollYOffset += (newCount - oldCount) * _editorMetrics.LineHeight;
-					// }
-					continue;
-				}
-
 				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
 				{
 					var visualLine = lineLayout.VisualLines[j];
@@ -1086,7 +1087,7 @@ public class Editor : Control
 					  FlowDirection.LeftToRight,
 					  _editorFontFace,
 					  _fontSize,
-					  Brush.Parse("#F3E6D5"));
+					  _mainTextBrush);
 					Point point = VisualToUI(
 					  new VisualCoordinate(
 						0,
