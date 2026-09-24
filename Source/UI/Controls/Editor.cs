@@ -23,7 +23,7 @@ public class Editor : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
@@ -89,9 +89,27 @@ public class Editor : Control
 		TimeCaret();
 	}
 
+	//Correct scroll behind when measured size changes
+	private void LineCacheVisualLineTreeUpdated(
+		 object? _,
+		 VisualLineTreeUpdatedParams e)
+	{
+		var (firstLogicalLine, _, _) = ComputeVisibleText();
+		if (e.lineIndex > firstLogicalLine)
+			return;
+
+		var deltaPixels = e.delta * _editorMetrics.LineHeight;
+
+		_scrollYOffset += deltaPixels;
+
+		_targetScrollYOffset += deltaPixels;
+		Console.WriteLine("updating offset");
+	}
+
 	private void SetLineCache()
 	{
 		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
+		_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
 		Document.CaretPosition = new(0, 0);
 	}
 
@@ -253,6 +271,13 @@ public class Editor : Control
 
 		_isSmoothScrolling = true;
 		_lastSmoothScrollFrameTime = TimeSpan.Zero;
+		var diff = Math.Abs(_targetScrollYOffset - _scrollYOffset);
+		if (diff >= EditorArea.Height / 2)
+		{
+			_scrollYOffset = _targetScrollYOffset;
+			StopSmoothScroll();
+			return;
+		}
 		RequestSmoothScrollFrame();
 	}
 
@@ -1070,9 +1095,8 @@ public class Editor : Control
 				if (i >= Document.Lines.Count) break;
 				if (i < 0) continue;
 				var line = Document.Lines[i];
-				int oldCount = _lineCache.VisualLineCountAt(i);
-
 				var lineLayout = _lineCache.GetOrCreate(i);
+
 				if (lineLayout is null) return;
 
 				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
