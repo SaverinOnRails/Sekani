@@ -381,7 +381,7 @@ public sealed class SekaniDocument
 			Environment.NewLine);
 		CaretPosition = new(0, lineIndex);
 	}
-	public void SelectToNextWord()
+	public void SelectToNextWordStart()
 	{
 		var pos = CaretPosition;
 		var nextWordStart = FindWordStart(pos, out Coordinate? anchorPos);
@@ -392,12 +392,23 @@ public sealed class SekaniDocument
 		}
 	}
 
-	private Coordinate? FindWordStart(Coordinate pos, out Coordinate? anchorPos)
+	public void SelectToNextWordEnd()
+	{
+		var pos = CaretPosition;
+		var nextWordEnd = FindWordEnd(pos, out Coordinate? anchorPos);
+		if (nextWordEnd is not null && anchorPos is not null)
+		{
+			CaretPosition.RangeEnd = new(anchorPos);
+			CaretPosition.SetCoord(nextWordEnd);
+		}
+	}
+
+	private Coordinate? FindWordEnd(Coordinate pos, out Coordinate? anchorPos)
 	{
 		//are we at the end of the file?
 		anchorPos = null;
 		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
-		anchorPos = StartAt(pos);
+		anchorPos = FindAnchorPos(pos, MotionKind.NextWordEnd);
 		var currentCol = anchorPos.Col;
 		var currentLine = anchorPos.Line;
 		var initialToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
@@ -410,7 +421,34 @@ public sealed class SekaniDocument
 				return next;
 			}
 			var newToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
-			if (CanEnd(ref initialToken, newToken))
+			if (CanEndWordEndScan(ref initialToken, newToken))
+			{
+				return new(prevCol, currentLine);
+			}
+			prevCol = currentCol;
+		}
+	}
+
+
+	private Coordinate? FindWordStart(Coordinate pos, out Coordinate? anchorPos)
+	{
+		//are we at the end of the file?
+		anchorPos = null;
+		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
+		anchorPos = FindAnchorPos(pos, MotionKind.NextWordStart);
+		var currentCol = anchorPos.Col;
+		var currentLine = anchorPos.Line;
+		var initialToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+		int prevCol = currentCol;
+		while (true)
+		{
+			var next = Advance(ref currentCol, ref currentLine, out bool atEnd);
+			if (atEnd)
+			{
+				return next;
+			}
+			var newToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+			if (CanEndWordStartScan(ref initialToken, newToken))
 			{
 				return new(prevCol, currentLine);
 			}
@@ -419,7 +457,7 @@ public sealed class SekaniDocument
 	}
 
 	//caller verifies bounds of this
-	private Coordinate StartAt(Coordinate pos)
+	private Coordinate FindAnchorPos(Coordinate pos, MotionKind motionKind)
 	{
 		var col = pos.Col;
 		var line = pos.Line;
@@ -456,7 +494,14 @@ public sealed class SekaniDocument
 				return new(col, line);
 			}
 		}
-		if (currentToken == nextToken || nextToken == SelectionTokenKind.Whitespace) return pos;
+		if (motionKind == MotionKind.NextWordStart)
+		{
+			if (currentToken == nextToken || nextToken == SelectionTokenKind.Whitespace) return pos;
+		}
+		if (motionKind == MotionKind.NextWordEnd)
+		{
+			if (currentToken == SelectionTokenKind.Whitespace || currentToken == nextToken) return pos;
+		}
 		return next;
 	}
 
@@ -478,9 +523,25 @@ public sealed class SekaniDocument
 		}
 		return new(col, line);
 	}
-	private bool CanEnd(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	private bool CanEndWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
 	{
 		if (newToken == SelectionTokenKind.Whitespace)
+		{
+			originalToken = newToken;
+			return false;
+		}
+		;
+		if (newToken != originalToken) return true;
+		return false;
+	}
+
+	private bool CanEndWordEndScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	{
+		if (newToken == SelectionTokenKind.Whitespace && originalToken != SelectionTokenKind.Whitespace)
+		{
+			return true;
+		}
+		if (originalToken == SelectionTokenKind.Whitespace && originalToken != newToken)
 		{
 			originalToken = newToken;
 			return false;
@@ -547,4 +608,9 @@ enum SelectionTokenKind
 	Whitespace,
 	Eol,
 	Unknown,
+}
+enum MotionKind
+{
+	NextWordStart,
+	NextWordEnd,
 }

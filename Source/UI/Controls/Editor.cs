@@ -36,6 +36,8 @@ public class Editor : Control
 	private bool _pointerPressedOnVerticalScrollbar;
 	private bool _shouldDrawCaretFocusBubble = false;
 	private readonly IBrush _mainTextBrush = Brush.Parse("#F3E6D5");
+	private readonly IBrush _lineNumberBrush = new SolidColorBrush(Colors.White, 0.4);
+	private readonly IBrush _focusedLineNumberBrush = new SolidColorBrush(Colors.White, 0.8);
 	private int _caretFocusBubbleRadius = 0;
 	private double _caretFocusBubbleProgress = 0;
 	private bool _pointerPressedOnCoordinate = false;
@@ -155,12 +157,10 @@ public class Editor : Control
 
 		// Number of visual lines belonging to logical lines before the caret's line.
 		int visualLinesBeforeCaret = _lineCache.VisualLinesPrefixSum(coord.Line);
-		Console.WriteLine(visualLinesBeforeCaret);
 
 		// Absolute visual-line position of the caret.
 		int absoluteCaretVisualLine =
 		  visualLinesBeforeCaret + caretVisualLine;
-		Console.WriteLine(absoluteCaretVisualLine);
 
 		double caretY =
 		  absoluteCaretVisualLine * _editorMetrics.LineHeight;
@@ -624,7 +624,7 @@ public class Editor : Control
 				}
 				var point = new Point(startAtPixels - _scrollXOffset, visualLineSum * _editorMetrics.LineHeight - _scrollYOffset);
 				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
-				context.FillRectangle(new SolidColorBrush(Colors.Blue, 0.5), new Rect(point, size));
+				context.FillRectangle(new SolidColorBrush(Color.Parse("#578EF5"), 0.5), new Rect(point, size));
 				visualLineSum++;
 			}
 		}
@@ -674,7 +674,8 @@ public class Editor : Control
 			  FlowDirection.LeftToRight,
 			  fontFace,
 			  _fontSize,
-			  new SolidColorBrush(Colors.White, i == Document.CaretPosition.Line ? 0.8 : 0.4));
+			  i == Document.CaretPosition.Line ? _focusedLineNumberBrush : _lineNumberBrush
+			);
 			var x = LineNumberSectWidth - ft.Width - 5;
 			var point = new Point(
 			  x,
@@ -1080,8 +1081,6 @@ public class Editor : Control
 			TextHintingMode = TextHintingMode.None
 		});
 		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
-		// Console.WriteLine(firstLogicalLine);
-		// Console.WriteLine(pixelOffset);
 		int currentVisualLine = 0;
 
 		//pre measure some lines above the viewport.
@@ -1247,7 +1246,10 @@ public class Editor : Control
 				EnterInsertMode();
 				break;
 			case "w":
-				Document.SelectToNextWord();
+				Document.SelectToNextWordStart();
+				break;
+			case "e":
+				Document.SelectToNextWordEnd();
 				break;
 			case ":":
 				{

@@ -11,6 +11,7 @@ public sealed class LineCache
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
 	private int _maxVisualColsPerLine;
+	public event EventHandler<VisualLineTreeUpdatedParams> VisualLineTreeUpdated;
 
 	private VisualLineTree _visualLineTree = new();
 
@@ -90,7 +91,14 @@ public sealed class LineCache
 		_layoutCache[index] = lineLayout;
 		if (updateVisualLineCount)
 		{
-			SetVisualLineCount(index, lineLayout.VisualLines.Count);
+			var oldCount = VisualLineCountAt(index);
+			var newCount = lineLayout.VisualLines.Count;
+			var delta = newCount - oldCount;
+			if (delta != 0)
+				VisualLineTreeUpdated?.Invoke(
+					this,
+					new(index, delta));
+			SetVisualLineCount(index, newCount);
 		}
 		return lineLayout;
 
@@ -190,3 +198,4 @@ public sealed class LineCache
 }
 
 
+public readonly record struct VisualLineTreeUpdatedParams(int lineIndex, int delta);

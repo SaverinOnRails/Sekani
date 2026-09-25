@@ -224,7 +224,7 @@ public sealed class SekaniDocumentTests
 			var doc = CreateDocument();
 			doc.TypeChars(key);
 			doc.CaretPosition = value.startat;
-			doc.SelectToNextWord();
+			doc.SelectToNextWordStart();
 
 			var pos = doc.CaretPosition;
 			Assert.IsTrue(pos.HasRange());
