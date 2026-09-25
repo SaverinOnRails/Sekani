@@ -103,7 +103,6 @@ public class Editor : Control
 		_scrollYOffset += deltaPixels;
 
 		_targetScrollYOffset += deltaPixels;
-		Console.WriteLine("updating offset");
 	}
 
 	private void SetLineCache()
@@ -156,10 +155,12 @@ public class Editor : Control
 
 		// Number of visual lines belonging to logical lines before the caret's line.
 		int visualLinesBeforeCaret = _lineCache.VisualLinesPrefixSum(coord.Line);
+		Console.WriteLine(visualLinesBeforeCaret);
 
 		// Absolute visual-line position of the caret.
 		int absoluteCaretVisualLine =
 		  visualLinesBeforeCaret + caretVisualLine;
+		Console.WriteLine(absoluteCaretVisualLine);
 
 		double caretY =
 		  absoluteCaretVisualLine * _editorMetrics.LineHeight;
@@ -186,7 +187,6 @@ public class Editor : Control
 			return false;
 		}
 
-		// Entire visual line containing the caret is visible.
 		return true;
 	}
 	private bool IsCaretVisibleHorizontal(
@@ -275,7 +275,9 @@ public class Editor : Control
 		if (diff >= EditorArea.Height / 2)
 		{
 			_scrollYOffset = _targetScrollYOffset;
+			CorrectScrollBarOffset();
 			StopSmoothScroll();
+			Redraw();
 			return;
 		}
 		RequestSmoothScrollFrame();
