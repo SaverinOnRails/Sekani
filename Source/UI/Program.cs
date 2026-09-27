@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Wayland;
 using System;
 
 namespace SekaniUI;

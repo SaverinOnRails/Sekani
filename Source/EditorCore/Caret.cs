@@ -5,14 +5,14 @@ public class Coordinate
 	public int Col { get; private set; }
 	public int Line { get; private set; }
 	public bool TrailVisualLine { get; set; } = false;
-	public Coordinate? RangeEnd = null;
+	public Coordinate? Anchor = null;
 
 	public override string ToString()
 	{
 		return $"({Col},{Line}). TrailVisualLine: {TrailVisualLine}";
 	}
 
-	public bool HasRange() => RangeEnd != null;
+	public bool HasRange() => Anchor != null;
 	public Coordinate? GreaterRangeEnd()
 	{
 		return GreaterRandeEndInner(out bool thisWasGreaterRangeEnd);
@@ -44,24 +44,24 @@ public class Coordinate
 	private Coordinate? GreaterRandeEndInner(out bool thisWasGreaterRangeEnd)
 	{
 		thisWasGreaterRangeEnd = false;
-		if (RangeEnd is null) return null;
-		if (Line > RangeEnd.Line)
+		if (Anchor is null) return null;
+		if (Line > Anchor.Line)
 		{
 			thisWasGreaterRangeEnd = true;
 			return this;
 		}
-		if (Line == RangeEnd.Line && Col > RangeEnd.Col)
+		if (Line == Anchor.Line && Col > Anchor.Col)
 		{
 			thisWasGreaterRangeEnd = true;
 			return this;
 		}
-		return RangeEnd;
+		return Anchor;
 	}
 
 	public Coordinate? LesserRangeEnd()
 	{
 		var greaterRangeEnd = GreaterRandeEndInner(out bool thisWasGreaterRangeEnd);
-		if (thisWasGreaterRangeEnd) return RangeEnd;
+		if (thisWasGreaterRangeEnd) return Anchor;
 		return this;
 	}
 

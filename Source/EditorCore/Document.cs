@@ -336,7 +336,7 @@ public sealed class SekaniDocument
 		var lesser = CaretPosition.LesserRangeEnd()!;
 		Coordinate greater = new(CaretPosition.GreaterRangeEnd()!);
 		CaretPosition.SetCoord(lesser);
-		CaretPosition.RangeEnd = greater;
+		CaretPosition.Anchor = greater;
 	}
 
 	public void PlaceCursorAfterSelection()
@@ -349,7 +349,7 @@ public sealed class SekaniDocument
 		var lesser = new Coordinate(CaretPosition.LesserRangeEnd()!);
 		var greater = RangeUpCursor(CaretPosition.GreaterRangeEnd()!);
 		CaretPosition.SetCoord(greater);
-		CaretPosition.RangeEnd = lesser;
+		CaretPosition.Anchor = lesser;
 	}
 
 	public void PlaceCursorAtLineStart()
@@ -387,7 +387,7 @@ public sealed class SekaniDocument
 		var nextWordStart = FindWordStart(pos, out Coordinate? anchorPos);
 		if (nextWordStart is not null && anchorPos is not null)
 		{
-			CaretPosition.RangeEnd = new(anchorPos);
+			CaretPosition.Anchor = new(anchorPos);
 			CaretPosition.SetCoord(nextWordStart);
 		}
 	}
@@ -398,7 +398,7 @@ public sealed class SekaniDocument
 		var nextWordEnd = FindWordEnd(pos, out Coordinate? anchorPos);
 		if (nextWordEnd is not null && anchorPos is not null)
 		{
-			CaretPosition.RangeEnd = new(anchorPos);
+			CaretPosition.Anchor = new(anchorPos);
 			CaretPosition.SetCoord(nextWordEnd);
 		}
 	}
@@ -506,7 +506,6 @@ public sealed class SekaniDocument
 	}
 
 
-	//advances and skips empty lines
 	private Coordinate Advance(ref int col, ref int line, out bool atEnd)
 	{
 		atEnd = false;

@@ -24,6 +24,7 @@ public class Editor : Control
 	  Math.Max(0, Math.Max(Document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
 	private bool _drawLineNumbers = true;
+	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
@@ -492,7 +493,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code");
+		_editorFontFace = new Typeface("Cascadia Code", FontStyle.Italic);
 		var text = new FormattedText(
 		  "#",
 		  CultureInfo.InvariantCulture,
@@ -531,9 +532,10 @@ public class Editor : Control
 	public override void Render(DrawingContext context)
 	{
 		base.Render(context);
+		var visibleTextBounds = ComputeVisibleText();
 		DrawMainRectangle(context);
-		DrawText(context);
-		DrawLineNumbers(context);
+		DrawText(context, visibleTextBounds);
+		DrawLineNumbers(context, visibleTextBounds);
 		DrawSelection(context);
 		DrawCaret(context);
 		DrawCaretFocusBubble(context);
@@ -631,7 +633,7 @@ public class Editor : Control
 
 	}
 
-	private void DrawLineNumbers(DrawingContext context)
+	private void DrawLineNumbers(DrawingContext context, VisibleTextBounds visibleTextBounds)
 	{
 		if (!_drawLineNumbers || LineNumberSectWidth == 0)
 			return;
@@ -649,11 +651,10 @@ public class Editor : Control
 		  new Point(LineNumbersSectRect.Right, 0),
 		  new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
-		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
-
 		int visualLine = 0;
+		var lastLogicalLine = visibleTextBounds.lastPossibleLogicalLine + 5;
 		lastLogicalLine += 5;
-		for (int i = firstLogicalLine; i < lastLogicalLine; i++)
+		for (int i = visibleTextBounds.firstLogicalLine; i < lastLogicalLine; i++)
 		{
 			if (i >= Document.Lines.Count) return;
 			var line = Document.Lines[i];
@@ -661,15 +662,19 @@ public class Editor : Control
 			if (lineLayout is null)
 				continue;
 
-			var number = (i + 1).ToString();
+			var caretLine = Document.CaretPosition.Line;
+
+			var number = _useRelativeLineNumber
+				? (i == caretLine ? i + 1 : Math.Abs(i - caretLine))
+				: i + 1;
 			var fontFace = new Typeface(
-				_editorFontFace.FontFamily,
-				_editorFontFace.Style,
-				i == Document.CaretPosition.Line
-					? FontWeight.Bold
-					: _editorFontFace.Weight);
+					_editorFontFace.FontFamily,
+					_editorFontFace.Style,
+					i == Document.CaretPosition.Line
+						? FontWeight.Bold
+						: _editorFontFace.Weight);
 			var ft = new FormattedText(
-			  number,
+			  number.ToString(),
 			  CultureInfo.InvariantCulture,
 			  FlowDirection.LeftToRight,
 			  fontFace,
@@ -679,7 +684,7 @@ public class Editor : Control
 			var x = LineNumberSectWidth - ft.Width - 5;
 			var point = new Point(
 			  x,
-			  visualLine * _editorMetrics.LineHeight - pixelOffset);
+			  visualLine * _editorMetrics.LineHeight - visibleTextBounds.pixelOffset);
 			context.DrawText(ft, point);
 			visualLine += lineLayout.VisualLines.Count;
 		}
@@ -941,9 +946,9 @@ public class Editor : Control
 		EnsureCaretVisible(ensureHorizontal: true, ensureVertical: false);
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
-		if (Document.CaretPosition.RangeEnd is null)
+		if (Document.CaretPosition.Anchor is null)
 		{
-			Document.CaretPosition.RangeEnd = new(Document.CaretPosition.Col, Document.CaretPosition.Line);
+			Document.CaretPosition.Anchor = new(Document.CaretPosition.Col, Document.CaretPosition.Line);
 		}
 
 		Document.CaretPosition.SetCoord(pos.Col, pos.Line);
@@ -1055,7 +1060,7 @@ public class Editor : Control
 		e.Handled = true;
 	}
 
-	private (int firstLogicalLine, int lastLogicalLine, double pixelOffset) ComputeVisibleText()
+	private VisibleTextBounds ComputeVisibleText()
 	{
 		double startAt = Math.Max(
 		  0,
@@ -1071,27 +1076,26 @@ public class Editor : Control
 		  (startAt - visualSum) * _editorMetrics.LineHeight;
 		//worst case, no matter how it wraps we don't ever need to draw more than this amount so this isnt really the last visible logical line
 		int lastLogicalLine = (int)(EditorArea.Height / _editorMetrics.LineHeight) + firstLogicalLine;
-		return (firstLogicalLine, lastLogicalLine, offset);
+		return new(firstLogicalLine, lastLogicalLine, offset);
 	}
-	private void DrawText(DrawingContext context)
+	private void DrawText(DrawingContext context, VisibleTextBounds visibleTextBounds)
 	{
 		using var textOptions = context.PushTextOptions(new TextOptions
 		{
 			BaselinePixelAlignment = BaselinePixelAlignment.Unaligned,
 			TextHintingMode = TextHintingMode.None
 		});
-		(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset) = ComputeVisibleText();
-		int currentVisualLine = 0;
 
+		int currentVisualLine = 0;
 		//pre measure some lines above the viewport.
-		int logicalLineToBeginCount = firstLogicalLine;
-		lastPossibleLogicalLine += 5;
+		int logicalLineToBeginCount = visibleTextBounds.firstLogicalLine;
+		var lastLogicalLine = visibleTextBounds.lastPossibleLogicalLine + 5;
 		var caretPos = Document.CaretPosition;
 		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)!.GetVisualCoordinate(caretPos).VisualLine;
 		Rect? hintRectangle = null;
 		using (var clip = context.PushClip(EditorArea))
 		{
-			for (int i = logicalLineToBeginCount; i <= lastPossibleLogicalLine; i++)
+			for (int i = logicalLineToBeginCount; i <= visibleTextBounds.lastPossibleLogicalLine; i++)
 			{
 				if (i >= Document.Lines.Count) break;
 				if (i < 0) continue;
@@ -1117,7 +1121,7 @@ public class Editor : Control
 					  new VisualCoordinate(
 						0,
 						currentVisualLine));
-					var y = point.Y - pixelOffset;
+					var y = point.Y - visibleTextBounds.pixelOffset;
 					var x = point.X - _scrollXOffset;
 					point = point.WithY(y);
 					point = point.WithX(x);
@@ -1326,3 +1330,5 @@ public readonly record struct EditorMetrics(
   double CharAdvance,
   double LineHeight,
   int TabSize);
+
+public readonly record struct VisibleTextBounds(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset);
