@@ -1255,6 +1255,9 @@ public class Editor : Control
 			case "e":
 				Document.SelectToNextWordEnd();
 				break;
+			case "p":
+				Document.PrintPieceTable();
+				break;
 			case ":":
 				{
 					EnterCommandMode();

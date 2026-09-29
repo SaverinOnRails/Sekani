@@ -15,14 +15,19 @@ public sealed class SekaniDocument
 	private LineCache? _lineCache;
 	private string? _filePath = null;
 
+
+	//piece table stuff;
+	private PieceTable _pieceTable;
+
 	public SekaniDocument()
 	{
-
+		_pieceTable = new("");
 	}
 
 	public SekaniDocument(string filePath)
 	{
 		_filePath = filePath;
+		_pieceTable = new(File.ReadAllText(filePath));
 		TypeChars(File.ReadAllText(filePath));
 	}
 
@@ -35,6 +40,7 @@ public sealed class SekaniDocument
 
 		if (position.Line < 0 || position.Col < 0)
 			return;
+		_pieceTable.Insert(text, CaretPosition);
 		CaretPosition = _buffer.InsertText(
 			position.Col,
 			position.Line,
@@ -230,6 +236,15 @@ public sealed class SekaniDocument
 	public void BackSpace(Coordinate pos)
 	{
 		var newcoord = DeleteCore(pos);
+		//piece table test
+		{
+			var end = pos;
+			var endOffset = _pieceTable.GetOffsetFromLogicalCoordinates(pos);
+			if(endOffset == 0) return;
+			var startOffset = endOffset - 1;
+			var start = _pieceTable.GetCoordinateFromOffset(startOffset);
+			_pieceTable.Delete(start,end);
+		}
 		if (newcoord is not null)
 		{
 
@@ -592,6 +607,10 @@ public sealed class SekaniDocument
 			default:
 				return SelectionTokenKind.Unknown;
 		}
+	}
+	public void PrintPieceTable()
+	{
+		_pieceTable.Print();
 	}
 }
 
