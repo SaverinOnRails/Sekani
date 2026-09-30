@@ -1,7 +1,5 @@
 using System.Text;
-
 namespace Sekani.EditorCore;
-
 public class PieceNode
 {
 	public PieceBuffer pieceBuffer { get; }

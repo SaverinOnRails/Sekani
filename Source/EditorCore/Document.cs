@@ -240,10 +240,10 @@ public sealed class SekaniDocument
 		{
 			var end = pos;
 			var endOffset = _pieceTable.GetOffsetFromLogicalCoordinates(pos);
-			if(endOffset == 0) return;
+			if (endOffset == 0) return;
 			var startOffset = endOffset - 1;
 			var start = _pieceTable.GetCoordinateFromOffset(startOffset);
-			_pieceTable.Delete(start,end);
+			_pieceTable.Delete(start, end);
 		}
 		if (newcoord is not null)
 		{
