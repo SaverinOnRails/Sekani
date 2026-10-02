@@ -15,7 +15,6 @@ public sealed class SekaniDocument
 	private LineCache? _lineCache;
 	private string? _filePath = null;
 
-
 	//piece table stuff;
 	private PieceTable _pieceTable;
 
@@ -28,10 +27,10 @@ public sealed class SekaniDocument
 	{
 		_filePath = filePath;
 		_pieceTable = new(File.ReadAllText(filePath));
-		TypeChars(File.ReadAllText(filePath));
+		TypeChars(File.ReadAllText(filePath), false);
 	}
 
-	public void TypeChars(string text)
+	public void TypeChars(string text, bool invokePieceTable = true)
 	{
 		if (string.IsNullOrEmpty(text))
 			return;
@@ -40,7 +39,10 @@ public sealed class SekaniDocument
 
 		if (position.Line < 0 || position.Col < 0)
 			return;
-		_pieceTable.Insert(text, CaretPosition);
+		if (invokePieceTable)
+		{
+			_pieceTable.Insert(text, 1);
+		}
 		CaretPosition = _buffer.InsertText(
 			position.Col,
 			position.Line,
@@ -238,12 +240,12 @@ public sealed class SekaniDocument
 		var newcoord = DeleteCore(pos);
 		//piece table test
 		{
-			var end = pos;
-			var endOffset = _pieceTable.GetOffsetFromLogicalCoordinates(pos);
-			if (endOffset == 0) return;
-			var startOffset = endOffset - 1;
-			var start = _pieceTable.GetCoordinateFromOffset(startOffset);
-			_pieceTable.Delete(start, end);
+			// var end = pos;
+			// var endOffset = _pieceTable.GetOffsetFromLogicalCoordinates(pos);
+			// if (endOffset == 0) return;
+			// var startOffset = endOffset - 1;
+			// var start = _pieceTable.GetCoordinateFromOffset(startOffset);
+			// _pieceTable.Delete(start, end);
 		}
 		if (newcoord is not null)
 		{

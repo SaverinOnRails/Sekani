@@ -1,10 +1,29 @@
 using System.Text;
+
 namespace Sekani.EditorCore;
-public class PieceNode
+
+public enum RBColor : byte
+{
+	Red,
+	Black,
+}
+internal record struct PiecePosition(PieceNode Piece, int AbsoluteOffset, int LocalOffset);
+
+internal class PieceNode
 {
 	public PieceBuffer pieceBuffer { get; }
-	public int Start { get; }
-	public int End { get; }
+	public int Start { get; internal set; }
+	public int End { get; internal set; }
+
+	public PieceNode? Parent { get; internal set; }
+	public PieceNode? Right { get; internal set; }
+	public PieceNode? Left { get; internal set; }
+
+	public int LeftSubtreeBufferLength { get; internal set; } = 0;
+	public int LeftSubtreeLineFeedCount { get; internal set; } = 0;
+
+	public int LineFeedCount { get; internal set; }
+	public RBColor Color { get; internal set; } = RBColor.Red;
 
 	public PieceNode(PieceBuffer pieceBufferType, int start, int end)
 	{
@@ -14,6 +33,39 @@ public class PieceNode
 	}
 
 	public int Length => End - Start;
+
+
+	public static int TotalBufferLength(PieceNode? node)
+	{
+		if (node is null) return 0;
+		return node.LeftSubtreeBufferLength + node.Length + TotalBufferLength(node.Right);
+	}
+
+	public static int TotalLineFeedCount(PieceNode? node)
+	{
+		if (node is null) return 0;
+		return node.LeftSubtreeLineFeedCount + node.LineFeedCount + TotalLineFeedCount(node.Right);
+	}
+
+	public static PieceNode? RightMost(PieceNode? node)
+	{
+		if (node is null) return null;
+		while (node.Right is not null)
+		{
+			node = node.Right;
+		}
+		return node;
+	}
+
+	public static PieceNode? LeftMost(PieceNode? node)
+	{
+		if (node is null) return null;
+		while (node.Left is not null)
+		{
+			node = node.Left;
+		}
+		return node;
+	}
 }
 
 public enum PieceBuffer
@@ -22,204 +74,436 @@ public enum PieceBuffer
 	Original
 }
 
-public class PieceTable
+internal class PieceTable
 {
-	private List<PieceNode> _pieces = [];
-	private readonly IReadOnlyList<char> originalBuffer;
+	private readonly IReadOnlyList<char> _originalBuffer;
+	private IReadOnlyList<int> _originalBufferLineBreaks;
+	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
+	private readonly List<int> _addBufferLineBreaks = [];
 
 	public PieceTable(string original)
 	{
-		originalBuffer = [.. original];
-		if (original.Length > 0)
-			_pieces = [new(PieceBuffer.Original, 0, original.Length)];
+		_originalBuffer = [.. original];
+		var root = new PieceNode(PieceBuffer.Original, 0, original.Length)
+		{
+			Color = RBColor.Black
+		};
+		var originalLineBreaks = GetLineBreaks(original, 0);
+		_originalBufferLineBreaks = originalLineBreaks;
+		root.LineFeedCount = originalLineBreaks.Count;
+		_root = root;
 	}
 
-	public void Insert(string text, Coordinate pos)
+	private List<int> GetLineBreaks(string text, int offset)
 	{
-		var offset = GetOffsetFromLogicalCoordinates(pos);
-		var (pieceIndex, localOffset) = GetPieceIndexFromOffset(offset);
-		var addStart = _addBuffer.Count;
-		_addBuffer.AddRange(text);
-		var middle = new PieceNode(PieceBuffer.Add, addStart, addStart + text.Length);
-		if (pieceIndex == _pieces.Count)
+		List<int> lineBreakOffsets = [];
+		for (int i = 0; i < text.Length; i++)
 		{
-			_pieces.Add(middle);
-			return;
-		}
-		(PieceNode? first, PieceNode? last) = Split(_pieces[pieceIndex], localOffset);
-		_pieces.RemoveAt(pieceIndex);
-		if (first is not null)
-		{
-			_pieces.Insert(pieceIndex, first);
-			pieceIndex++;
-		}
-		_pieces.Insert(pieceIndex, middle);
-		pieceIndex++;
-		if (last is not null)
-		{
-			_pieces.Insert(pieceIndex, last);
-		}
-	}
-
-	public void Print()
-	{
-		StringBuilder builder = new();
-		for (int i = 0; i < _pieces.Count; i++)
-		{
-			var piece = _pieces[i];
-			var buffer = GetPieceBuffer(piece);
-			for (int j = piece.Start; j < piece.End; j++)
+			if (text[i] == '\n')
 			{
-				builder.Append(buffer[j]);
+				lineBreakOffsets.Add(i + offset);
 			}
 		}
-		Console.WriteLine(builder.ToString());
+		return lineBreakOffsets;
 	}
 
-	public void Delete(Coordinate start, Coordinate end)
+	public void Insert(string text, int offset)
 	{
-		var startOffset = GetOffsetFromLogicalCoordinates(start);
-		var endOffset = GetOffsetFromLogicalCoordinates(end);
-
-		var (startPieceIndex, startLocalOffset) =
-			GetPieceIndexFromOffset(startOffset);
-
-		var (endPieceIndex, endLocalOffset) =
-			GetPieceIndexFromOffset(endOffset);
-
-		var (firstNode, _) =
-			Split(_pieces[startPieceIndex], startLocalOffset);
-
-		var (_, lastNode) =
-			Split(_pieces[endPieceIndex], endLocalOffset);
-
-		if (startPieceIndex == endPieceIndex)
+		var targetNodePosition = GetPieceByOffset(offset);
+		var nodeAbsoluteOffset = targetNodePosition.AbsoluteOffset;
+		var piece = targetNodePosition.Piece;
+		//if inserting into the end of piece at the end of the add buffer, extend the the piece instead of creating one
+		if (piece.pieceBuffer == PieceBuffer.Add && piece.End == _addBuffer.Count && targetNodePosition.LocalOffset == piece.Length)
 		{
-			_pieces.RemoveAt(startPieceIndex);
+			ExtendLastAddBufferPiece(piece, text);
+		}
+		//if inserting at the begining of the piece, 
+		else if (targetNodePosition.LocalOffset == 0)
+		{
+			// Console.WriteLine("inserting into left");
+			InsertLeft(piece, text);
+		}
+		//if inserting at the end of the piece
+		else if (targetNodePosition.LocalOffset == piece.Length)
+		{
+			// Console.WriteLine("inserting into right");
+			InsertRight(piece, text);
+		}
+		//inserting into the middle of the piece
+		else
+		{
+			// Console.WriteLine("inserting into middle");
+			InsertMiddle(piece, text, targetNodePosition.LocalOffset);
+		}
+	}
+
+	private void InsertMiddle(PieceNode piece, string text, int localOffset)
+	{
+		//offset is guaranteed to be somewhere inside the piece and not the edges
+		//firstpiece
+		var firstPiece = new PieceNode(piece.pieceBuffer, piece.Start, piece.Start + localOffset);
+		firstPiece.LineFeedCount = CountLineBreakInPieceSlice(firstPiece);
+		
+		//middle piece
+		var bufferInsertOffset = _addBuffer.Count;
+		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+		//push to addbuffer line breaks
+		_addBufferLineBreaks.AddRange(linebreaks);
+		//push text to buffer
+		_addBuffer.AddRange(text);
+
+		var middlePiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
+		middlePiece.LineFeedCount = linebreaks.Count;
+
+		//last piece
+		var lastPiece = new PieceNode(piece.pieceBuffer, piece.Start + localOffset, piece.End);
+		lastPiece.LineFeedCount = CountLineBreakInPieceSlice(lastPiece);
+
+		// Shorten piece to match firstPiece
+		var oldLfCount = piece.LineFeedCount;
+		var oldLength = piece.Length;
+		piece.End = firstPiece.End;
+		piece.LineFeedCount = firstPiece.LineFeedCount;
+		var lfDelta = piece.LineFeedCount - oldLfCount;
+		var bufferLengthDelta = piece.Length - oldLength;
+		UpdatePieceMetadataWithDelta(piece, bufferLengthDelta, lfDelta);
+
+		InsertAsSuccessor(piece, middlePiece);
+
+		InsertAsSuccessor(middlePiece, lastPiece);
+	}
+
+	private void InsertAsSuccessor(PieceNode target, PieceNode newNode)
+	{
+		if (target.Right is null)
+		{
+			target.Right = newNode;
+			newNode.Parent = target;
 		}
 		else
 		{
-			_pieces.RemoveRange(
-				startPieceIndex,
-				endPieceIndex - startPieceIndex + 1);
+			var leftMost = PieceNode.LeftMost(target.Right);
+			var successor = leftMost ?? target.Right;
+			successor.Left = newNode;
+			newNode.Parent = successor;
 		}
-		var index = startPieceIndex;
-
-		if (firstNode is not null)
-			_pieces.Insert(index++, firstNode);
-
-		if (lastNode is not null)
-			_pieces.Insert(index, lastNode);
+		FixAfterInsertion(newNode);
 	}
-	public Coordinate GetCoordinateFromOffset(int offset)
+	public void Print()
 	{
-		var line = 0;
-		var col = 0;
-		int utf16offset = 0;
-		foreach (var piece in _pieces)
+		StringBuilder builder = new();
+		ForEach((PieceNode node) =>
 		{
-			var buffer = GetPieceBuffer(piece);
-			for (int i = piece.Start; i < piece.End; i++)
+			var buffer = GetPieceBuffer(node);
+			for (int i = node.Start; i < node.End; i++)
 			{
-				if (utf16offset == offset)
+				builder.Append(buffer[i]);
+			}
+		});
+		Console.WriteLine(builder.ToString());
+	}
+	private void ForEach(Action<PieceNode> fn)
+	{
+		InOrder(_root, fn);
+	}
+
+	private void InOrder(PieceNode? node, Action<PieceNode> fn)
+	{
+		if (node is null) return;
+		InOrder(node.Left, fn);
+		fn(node);
+		InOrder(node.Right, fn);
+	}
+
+	private int CountLineBreakInPieceSlice(PieceNode piece)
+	{
+		var bufferLineBreaks = GetPieceBufferLineBreaksCache(piece);
+		var list = bufferLineBreaks;
+		var start = piece.Start;
+		var end = piece.End;
+		//thanks gemini
+		int low = 0, high = list.Count;
+		while (low < high)
+		{
+			int mid = low + ((high - low) >> 1);
+			if (list[mid] < start) low = mid + 1;
+			else high = mid;
+		}
+		int lower = low;
+
+		low = 0;
+		high = list.Count;
+		while (low < high)
+		{
+			int mid = low + ((high - low) >> 1);
+			if (list[mid] < end) low = mid + 1;
+			else high = mid;
+		}
+
+		return low - lower;
+	}
+
+
+	private void InsertRight(PieceNode piece, string text)
+	{
+		var bufferInsertOffset = _addBuffer.Count;
+		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+
+		//push to addbuffer line breaks
+		_addBufferLineBreaks.AddRange(linebreaks);
+		_addBuffer.AddRange(text);
+		var newPiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
+		newPiece.LineFeedCount = linebreaks.Count;
+
+		//insert after piece
+		InsertAsSuccessor(piece, newPiece);
+		FixAfterInsertion(newPiece);
+	}
+
+	private void InsertLeft(PieceNode piece, string text)
+	{
+		var bufferInsertOffset = _addBuffer.Count;
+		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+		//push to addbuffer line breaks
+		_addBufferLineBreaks.AddRange(linebreaks);
+
+		//push text to buffer
+		_addBuffer.AddRange(text);
+		var newPiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
+		newPiece.LineFeedCount = linebreaks.Count;
+
+		//insert before piece
+		if (piece.Left is null)
+		{
+			piece.Left = newPiece;
+			newPiece.Parent = piece;
+		}
+		else
+		{
+			var rightMost = PieceNode.RightMost(piece.Left);
+			var predecessor = rightMost ?? piece.Left;
+			predecessor.Right = newPiece;
+			newPiece.Parent = predecessor;
+		}
+		FixAfterInsertion(newPiece);
+	}
+
+	private void FixAfterInsertion(PieceNode node)
+	{
+		UpdatePieceMetadata(node);
+
+		while (node != _root && node.Parent!.Color == RBColor.Red)
+		{
+			if (node.Parent == node.Parent.Parent!.Left)
+			{
+				var parentSibling = node.Parent.Parent.Right;
+
+				if (parentSibling?.Color == RBColor.Red)
 				{
-					return new(col, line);
-				}
-				char c = buffer[i];
-				if (c == '\n')
-				{
-					line++;
-					col = 0;
+					node.Parent.Color = RBColor.Black;
+					parentSibling.Color = RBColor.Black;
+					node.Parent.Parent.Color = RBColor.Red;
+					node = node.Parent.Parent;
 				}
 				else
 				{
-					col++;
+					if (node == node.Parent.Right)
+					{
+						node = node.Parent;
+						LeftRotate(node);
+					}
+
+					node.Parent!.Color = RBColor.Black;
+					node.Parent.Parent!.Color = RBColor.Red;
+					RightRotate(node.Parent.Parent);
 				}
-				utf16offset++;
 			}
-		}
-		if (utf16offset == offset) return new(col, line);
-		return new(0, 0);
-	}
-
-	private (PieceNode? first, PieceNode? last) Split(
-		PieceNode node,
-		int offset)
-	{
-		PieceNode? first = null;
-		PieceNode? last = null;
-
-		if (offset > 0)
-		{
-			first = new PieceNode(
-				node.pieceBuffer,
-				node.Start,
-				node.Start + offset);
-		}
-
-		if (offset < node.Length)
-		{
-			last = new PieceNode(
-				node.pieceBuffer,
-				node.Start + offset,
-				node.End);
-		}
-
-		return (first, last);
-	}
-	//naive buffer walkthrough, get utf-16 offset
-	public int GetOffsetFromLogicalCoordinates(Coordinate pos)
-	{
-		int utf16offset = 0;
-		int line = 0;
-		int col = 0;
-		foreach (var piece in _pieces)
-		{
-			var buffer = GetPieceBuffer(piece);
-			for (int j = piece.Start; j < piece.End; j++)
+			else
 			{
-				if (col == pos.Col && line == pos.Line)
+				var parentSibling = node.Parent.Parent!.Left;
+
+				if (parentSibling?.Color == RBColor.Red)
 				{
-					return utf16offset;
-				}
-				char c = buffer[j];
-				if (c == '\n')
-				{
-					line++;
-					col = 0;
+					node.Parent.Color = RBColor.Black;
+					parentSibling.Color = RBColor.Black;
+					node.Parent.Parent.Color = RBColor.Red;
+					node = node.Parent.Parent;
 				}
 				else
 				{
-					col++;
+					if (node == node.Parent.Left)
+					{
+						node = node.Parent;
+						RightRotate(node);
+					}
+
+					node.Parent!.Color = RBColor.Black;
+					node.Parent.Parent!.Color = RBColor.Red;
+					LeftRotate(node.Parent.Parent);
 				}
-				utf16offset++;
 			}
 		}
-		if (line == pos.Line && col == pos.Col)
-			return utf16offset;
-		return 0;
+
+		_root.Color = RBColor.Black;
 	}
 
-	private (int pieceIndex, int localOffset) GetPieceIndexFromOffset(int offset)
+	private void LeftRotate(PieceNode node)
 	{
-		var sum = 0;
-		for (int i = 0; i < _pieces.Count; i++)
+		var rightNode = node.Right;
+
+		node.Right = rightNode!.Left;
+
+		if (rightNode.Left != null)
 		{
-			var piece = _pieces[i];
-			var length = piece.End - piece.Start;
-			if (length + sum > offset)
-			{
-				return (i, offset - sum);
-			}
-			sum += length;
+			rightNode.Left.Parent = node;
 		}
-		return (_pieces.Count, 0);
+
+		rightNode.Parent = node.Parent;
+
+		if (node.Parent == null)
+		{
+			_root = rightNode;
+		}
+		else if (node.Parent.Left == node)
+		{
+			node.Parent.Left = rightNode;
+		}
+		else
+		{
+			node.Parent.Right = rightNode;
+		}
+
+		rightNode.Left = node;
+		node.Parent = rightNode;
+
+		rightNode.LeftSubtreeBufferLength +=
+			node.LeftSubtreeBufferLength + node.Length;
+
+		rightNode.LeftSubtreeLineFeedCount +=
+			node.LeftSubtreeLineFeedCount + node.LineFeedCount;
 	}
+
+	private void RightRotate(PieceNode node)
+	{
+		var leftNode = node.Left;
+
+		node.Left = leftNode!.Right;
+
+		if (leftNode.Right != null)
+		{
+			leftNode.Right.Parent = node;
+		}
+
+		leftNode.Parent = node.Parent;
+
+		if (node.Parent == null)
+		{
+			_root = leftNode;
+		}
+		else if (node.Parent.Right == node)
+		{
+			node.Parent.Right = leftNode;
+		}
+		else
+		{
+			node.Parent.Left = leftNode;
+		}
+
+		leftNode.Right = node;
+		node.Parent = leftNode;
+
+		// Update metadata
+		node.LeftSubtreeBufferLength -=
+			leftNode.LeftSubtreeBufferLength + leftNode.Length;
+
+		node.LeftSubtreeLineFeedCount -=
+			leftNode.LeftSubtreeLineFeedCount + leftNode.LineFeedCount;
+	}
+	private void ExtendLastAddBufferPiece(PieceNode piece, string text)
+	{
+		var bufferInsertOffset = _addBuffer.Count;
+		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+
+		//push to addbuffer line breaks
+		_addBufferLineBreaks.AddRange(linebreaks);
+
+		//push text to buffer
+		_addBuffer.AddRange(text);
+		var oldLfCount = piece.LineFeedCount;
+		piece.End += text.Length;
+		piece.LineFeedCount += linebreaks.Count;
+		var lfdelta = piece.LineFeedCount - oldLfCount;
+		UpdatePieceMetadataWithDelta(piece, text.Length, lfdelta);
+	}
+
+	private void UpdatePieceMetadataWithDelta(PieceNode piece, int bufferLengthDelta, int lfdelta)
+	{
+		if (bufferLengthDelta == 0 && lfdelta == 0) return;
+		while (piece != _root)
+		{
+			if (piece.Parent!.Left == piece)
+			{
+				piece.Parent.LeftSubtreeBufferLength += bufferLengthDelta;
+				piece.Parent.LeftSubtreeLineFeedCount += lfdelta;
+			}
+			piece = piece.Parent;
+		}
+	}
+
+	private void UpdatePieceMetadata(PieceNode node)
+	{
+		if (node == _root) return;
+		while (node != _root && node != node.Parent!.Left)
+		{
+			node = node.Parent;
+		}
+
+		if (node == _root) return;
+		node = node.Parent!;
+		var lengthDelta = PieceNode.TotalBufferLength(node.Left) - node.LeftSubtreeBufferLength;
+		var lfDelta = PieceNode.TotalLineFeedCount(node.Left) - node.LeftSubtreeLineFeedCount;
+		node.LeftSubtreeBufferLength += lengthDelta;
+		node.LeftSubtreeLineFeedCount += lfDelta;
+		UpdatePieceMetadataWithDelta(node, lengthDelta, lfDelta);
+
+	}
+
+	private PiecePosition GetPieceByOffset(int offset)
+	{
+		var node = _root;
+		var absoluteOffset = 0;
+		while (node != null)
+		{
+			if (node.LeftSubtreeBufferLength > offset)
+			{
+				node = node.Left;
+			}
+			else if (node.Length >= offset - node.LeftSubtreeBufferLength)
+			{
+				absoluteOffset += node.LeftSubtreeBufferLength;
+				return new(node, absoluteOffset, offset - node.LeftSubtreeBufferLength);
+			}
+			else
+			{
+				var bufferLength = node.LeftSubtreeBufferLength + node.Length;
+				offset -= bufferLength;
+				absoluteOffset += bufferLength;
+				node = node.Right;
+			}
+		}
+		throw new ArgumentOutOfRangeException();
+	}
+
 
 	private IReadOnlyList<char> GetPieceBuffer(PieceNode node)
 	{
-		if (node.pieceBuffer == PieceBuffer.Original) return originalBuffer;
+		if (node.pieceBuffer == PieceBuffer.Original) return _originalBuffer;
 		return _addBuffer;
+	}
+	private IReadOnlyList<int> GetPieceBufferLineBreaksCache(PieceNode node)
+	{
+		if (node.pieceBuffer == PieceBuffer.Original) return _originalBufferLineBreaks;
+		return _addBufferLineBreaks;
 	}
 }
