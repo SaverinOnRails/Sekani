@@ -41,7 +41,8 @@ public sealed class SekaniDocument
 			return;
 		if (invokePieceTable)
 		{
-			_pieceTable.Insert(text, 1);
+			var offset = _pieceTable.GetOffset(position);
+			_pieceTable.Insert(text, offset);
 		}
 		CaretPosition = _buffer.InsertText(
 			position.Col,
@@ -612,7 +613,10 @@ public sealed class SekaniDocument
 	}
 	public void PrintPieceTable()
 	{
-		_pieceTable.Print();
+		// Console.WriteLine(_pieceTable.Print());
+		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
+		Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
+		Console.WriteLine();
 	}
 }
 

@@ -77,10 +77,10 @@ public enum PieceBuffer
 internal class PieceTable
 {
 	private readonly IReadOnlyList<char> _originalBuffer;
-	private IReadOnlyList<int> _originalBufferLineBreaks;
+	private IReadOnlyList<int> _originalBufferLineStarts = [0];
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
-	private readonly List<int> _addBufferLineBreaks = [];
+	private readonly List<int> _addBufferLineStarts = [0];
 
 	public PieceTable(string original)
 	{
@@ -89,23 +89,47 @@ internal class PieceTable
 		{
 			Color = RBColor.Black
 		};
-		var originalLineBreaks = GetLineBreaks(original, 0);
-		_originalBufferLineBreaks = originalLineBreaks;
-		root.LineFeedCount = originalLineBreaks.Count;
+		var originalLineStarts = GetLineStarts(original, 0);
+		_originalBufferLineStarts = [0, .. originalLineStarts];
+		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
 	}
 
-	private List<int> GetLineBreaks(string text, int offset)
+	private List<int> GetLineStarts(string text, int offset)
 	{
 		List<int> lineBreakOffsets = [];
 		for (int i = 0; i < text.Length; i++)
 		{
 			if (text[i] == '\n')
 			{
-				lineBreakOffsets.Add(i + offset);
+				lineBreakOffsets.Add(i + 1 + offset);
 			}
 		}
 		return lineBreakOffsets;
+	}
+
+	//this is obviously retarded which is why it is temp
+	public int TempHardLoopLogicalCoordinatedToOffset(Coordinate pos)
+	{
+		var text = Print();
+		var line = 0;
+		var col = 0;
+		int offset = 0;
+		for (int i = 0; i < text.Length; i++)
+		{
+			if (col == pos.Col && line == pos.Line) return offset;
+			if (text[i] == '\n')
+			{
+				col = 0;
+				line++;
+			}
+			else
+			{
+				col++;
+			}
+			offset++;
+		}
+		return offset;
 	}
 
 	public void Insert(string text, int offset)
@@ -116,24 +140,25 @@ internal class PieceTable
 		//if inserting into the end of piece at the end of the add buffer, extend the the piece instead of creating one
 		if (piece.pieceBuffer == PieceBuffer.Add && piece.End == _addBuffer.Count && targetNodePosition.LocalOffset == piece.Length)
 		{
+			Console.WriteLine("extending last add buffer piece");
 			ExtendLastAddBufferPiece(piece, text);
 		}
 		//if inserting at the begining of the piece, 
 		else if (targetNodePosition.LocalOffset == 0)
 		{
-			// Console.WriteLine("inserting into left");
+			Console.WriteLine("inserting into left");
 			InsertLeft(piece, text);
 		}
 		//if inserting at the end of the piece
 		else if (targetNodePosition.LocalOffset == piece.Length)
 		{
-			// Console.WriteLine("inserting into right");
+			Console.WriteLine("inserting into right");
 			InsertRight(piece, text);
 		}
 		//inserting into the middle of the piece
 		else
 		{
-			// Console.WriteLine("inserting into middle");
+			Console.WriteLine("inserting into middle");
 			InsertMiddle(piece, text, targetNodePosition.LocalOffset);
 		}
 	}
@@ -143,22 +168,26 @@ internal class PieceTable
 		//offset is guaranteed to be somewhere inside the piece and not the edges
 		//firstpiece
 		var firstPiece = new PieceNode(piece.pieceBuffer, piece.Start, piece.Start + localOffset);
-		firstPiece.LineFeedCount = CountLineBreakInPieceSlice(firstPiece);
-		
+		var pieceBufferLineStarts = GetPieceBufferLineStartsForNodeBuffer(firstPiece);
+		var pieceBuffer = GetPieceBuffer(piece);
+
+		//how many linebreaks between piece.start and piece.start + localOffset?
+		var l = LowerBound(pieceBufferLineStarts, piece.Start);
+		var h = LowerBound(pieceBufferLineStarts, piece.Start + localOffset);
+		firstPiece.LineFeedCount = h - l;
+
 		//middle piece
 		var bufferInsertOffset = _addBuffer.Count;
-		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
-		//push to addbuffer line breaks
-		_addBufferLineBreaks.AddRange(linebreaks);
-		//push text to buffer
+		var linestarts = GetLineStarts(text, bufferInsertOffset);
+		_addBufferLineStarts.AddRange(linestarts);
 		_addBuffer.AddRange(text);
 
 		var middlePiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
-		middlePiece.LineFeedCount = linebreaks.Count;
+		middlePiece.LineFeedCount = linestarts.Count;
 
 		//last piece
 		var lastPiece = new PieceNode(piece.pieceBuffer, piece.Start + localOffset, piece.End);
-		lastPiece.LineFeedCount = CountLineBreakInPieceSlice(lastPiece);
+		lastPiece.LineFeedCount = piece.LineFeedCount - firstPiece.LineFeedCount;
 
 		// Shorten piece to match firstPiece
 		var oldLfCount = piece.LineFeedCount;
@@ -174,6 +203,18 @@ internal class PieceTable
 		InsertAsSuccessor(middlePiece, lastPiece);
 	}
 
+	private int LowerBound(IReadOnlyList<int> buf, int target)
+	{
+		int lo = 0, hi = buf.Count;
+		while (lo < hi)
+		{
+			int mid = lo + ((hi - lo) >> 1);
+			var val = buf[mid] - 1; //subtracting one because array contains linestarts while we want linebreaks
+			if (val < target) lo = mid + 1;
+			else hi = mid;
+		}
+		return lo;
+	}
 	private void InsertAsSuccessor(PieceNode target, PieceNode newNode)
 	{
 		if (target.Right is null)
@@ -190,7 +231,7 @@ internal class PieceTable
 		}
 		FixAfterInsertion(newNode);
 	}
-	public void Print()
+	public string Print()
 	{
 		StringBuilder builder = new();
 		ForEach((PieceNode node) =>
@@ -201,7 +242,11 @@ internal class PieceTable
 				builder.Append(buffer[i]);
 			}
 		});
-		Console.WriteLine(builder.ToString());
+		return builder.ToString();
+	}
+	public int GetOffset(Coordinate pos)
+	{
+		return LogicalCoorinatesToOffset(pos);
 	}
 	private void ForEach(Action<PieceNode> fn)
 	{
@@ -216,45 +261,19 @@ internal class PieceTable
 		InOrder(node.Right, fn);
 	}
 
-	private int CountLineBreakInPieceSlice(PieceNode piece)
-	{
-		var bufferLineBreaks = GetPieceBufferLineBreaksCache(piece);
-		var list = bufferLineBreaks;
-		var start = piece.Start;
-		var end = piece.End;
-		//thanks gemini
-		int low = 0, high = list.Count;
-		while (low < high)
-		{
-			int mid = low + ((high - low) >> 1);
-			if (list[mid] < start) low = mid + 1;
-			else high = mid;
-		}
-		int lower = low;
-
-		low = 0;
-		high = list.Count;
-		while (low < high)
-		{
-			int mid = low + ((high - low) >> 1);
-			if (list[mid] < end) low = mid + 1;
-			else high = mid;
-		}
-
-		return low - lower;
-	}
-
 
 	private void InsertRight(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
-		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+		var linestarts = GetLineStarts(text, bufferInsertOffset);
 
-		//push to addbuffer line breaks
-		_addBufferLineBreaks.AddRange(linebreaks);
+		//push to addbuffer line starts
+		_addBufferLineStarts.AddRange(linestarts);
 		_addBuffer.AddRange(text);
-		var newPiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
-		newPiece.LineFeedCount = linebreaks.Count;
+		var newPiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length)
+		{
+			LineFeedCount = linestarts.Count
+		};
 
 		//insert after piece
 		InsertAsSuccessor(piece, newPiece);
@@ -264,14 +283,14 @@ internal class PieceTable
 	private void InsertLeft(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
-		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
-		//push to addbuffer line breaks
-		_addBufferLineBreaks.AddRange(linebreaks);
+		var linestarts = GetLineStarts(text, bufferInsertOffset);
+		//push to addbuffer line starts
+		_addBufferLineStarts.AddRange(linestarts);
 
 		//push text to buffer
 		_addBuffer.AddRange(text);
 		var newPiece = new PieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
-		newPiece.LineFeedCount = linebreaks.Count;
+		newPiece.LineFeedCount = linestarts.Count;
 
 		//insert before piece
 		if (piece.Left is null)
@@ -423,16 +442,16 @@ internal class PieceTable
 	private void ExtendLastAddBufferPiece(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
-		var linebreaks = GetLineBreaks(text, bufferInsertOffset);
+		var linestarts = GetLineStarts(text, bufferInsertOffset);
 
-		//push to addbuffer line breaks
-		_addBufferLineBreaks.AddRange(linebreaks);
+		//push to addbuffer line starts
+		_addBufferLineStarts.AddRange(linestarts);
 
 		//push text to buffer
 		_addBuffer.AddRange(text);
 		var oldLfCount = piece.LineFeedCount;
 		piece.End += text.Length;
-		piece.LineFeedCount += linebreaks.Count;
+		piece.LineFeedCount += linestarts.Count;
 		var lfdelta = piece.LineFeedCount - oldLfCount;
 		UpdatePieceMetadataWithDelta(piece, text.Length, lfdelta);
 	}
@@ -466,8 +485,39 @@ internal class PieceTable
 		node.LeftSubtreeBufferLength += lengthDelta;
 		node.LeftSubtreeLineFeedCount += lfDelta;
 		UpdatePieceMetadataWithDelta(node, lengthDelta, lfDelta);
-
 	}
+
+	private int LogicalCoorinatesToOffset(Coordinate pos)
+	{
+		var line = pos.Line;
+		var col = pos.Col;
+		var node = _root;
+		int offset = 0;
+		while (node is not null)
+		{
+			if (node.Left is not null && node.LeftSubtreeLineFeedCount >= line)
+			{
+				node = node.Left;
+			}
+			else if (node.LineFeedCount >= line - node.LeftSubtreeLineFeedCount)
+			{
+				var k = line - node.LeftSubtreeLineFeedCount;     
+				var starts = GetPieceBufferLineStartsForNodeBuffer(node);
+				var first = LowerBound(starts, node.Start);       
+				var local = starts[first + k - 1] - node.Start;   
+				return offset + node.LeftSubtreeBufferLength + local + col;
+			}
+			else
+			{
+				var totalLines = node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+				line -= totalLines;
+				offset += node.LeftSubtreeBufferLength + node.Length;
+				node = node.Right;
+			}
+		}
+		return offset;
+	}
+
 
 	private PiecePosition GetPieceByOffset(int offset)
 	{
@@ -501,9 +551,9 @@ internal class PieceTable
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBuffer;
 		return _addBuffer;
 	}
-	private IReadOnlyList<int> GetPieceBufferLineBreaksCache(PieceNode node)
+	private IReadOnlyList<int> GetPieceBufferLineStartsForNodeBuffer(PieceNode node)
 	{
-		if (node.pieceBuffer == PieceBuffer.Original) return _originalBufferLineBreaks;
-		return _addBufferLineBreaks;
+		if (node.pieceBuffer == PieceBuffer.Original) return _originalBufferLineStarts;
+		return _addBufferLineStarts;
 	}
 }
