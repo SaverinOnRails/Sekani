@@ -279,7 +279,6 @@ internal class PieceTable
 				//insert the last node directly as successor of the resized node, discarding the middle
 				InsertAsSuccessor(targetPiece, lastPiece);
 			}
-			Console.WriteLine("DELTED IN PIECE");
 			return;
 		}
 		//deletion spans multiple nodes
@@ -689,27 +688,75 @@ internal class PieceTable
 		return new(0, 0);
 	}
 
-	// public string PrintLine(int line)
-	// {
-	// 	StringBuilder lineBuilder = new("");
-	// 	var node = _root;
-	// 	while (node != NULL_NODE)
-	// 	{
-	// 		if (node.Left != NULL_NODE && node.LeftSubtreeLineFeedCount >= line)
-	// 		{
-	// 			node = node.Left;
-	// 		}
-	// 		//line is within current piece
-	// 		else if (node.LineFeedCount > line - node.LeftSubtreeLineFeedCount)
-	// 		{
-	// 			var buffer = GetPieceBuffer(node);
-	// 			var pieceStart = node.Start;
-	// 			var k = line - node.LeftSubtreeLineFeedCount;
+	public string PrintRawLine(int offset)
+	{
+		var pos = GetCoordinate(offset);
+		return PrintRawLineCore(pos.Line);
+	}
 
-	// 		}
-	// 	}
-	// }
+	//Thanks Claude
+	private string PrintRawLineCore(int line)
+	{
+		var sb = new StringBuilder();
+		var node = _root;
 
+		while (node != NULL_NODE)
+		{
+			if (node.Left != NULL_NODE && node.LeftSubtreeLineFeedCount >= line)
+			{
+				node = node.Left;
+			}
+			else if (node.LeftSubtreeLineFeedCount + node.LineFeedCount > line)
+			{
+				// line starts and ends inside this piece
+				var k = line - node.LeftSubtreeLineFeedCount;
+				var buffer = GetPieceBuffer(node);
+				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
+				var first = LowerBound(linestarts, node.Start);
+
+				var start = k == 0 ? node.Start : linestarts[first + k - 1];
+				var end = linestarts[first + k];          // just past the terminating newline
+				sb.Append([.. buffer], start, end - start);
+				return sb.ToString();
+			}
+			else if (node.LeftSubtreeLineFeedCount + node.LineFeedCount == line)
+			{
+				// line starts in this piece (after its last newline) and runs off the end
+				var buffer = GetPieceBuffer(node);
+				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
+				var first = LowerBound(linestarts, node.Start);
+
+				var start = node.LineFeedCount == 0 ? node.Start : linestarts[first + node.LineFeedCount - 1];
+				var end = node.Start + node.Length;
+				sb.Append([.. buffer], start, end - start);
+				break;
+			}
+			else
+			{
+				line -= node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+				node = node.Right;
+			}
+		}
+
+		if (node == NULL_NODE) return sb.ToString();   // line is past the end
+
+		// the tail of the line continues in the following pieces
+		for (var next = PieceNode.Next(node); next != NULL_NODE; next = PieceNode.Next(next))
+		{
+			var buffer = GetPieceBuffer(next);
+			if (next.LineFeedCount > 0)
+			{
+				var linestarts = GetPieceBufferLineStartsForNodeBuffer(next);
+				var first = LowerBound(linestarts, next.Start);
+				var end = linestarts[first];              // just past the first newline
+				sb.Append([.. buffer], next.Start, end - next.Start);
+				break;
+			}
+			sb.Append([.. buffer], next.Start, next.Length);
+		}
+
+		return sb.ToString();
+	}
 	public int GetOffset(Coordinate pos)
 	{
 		return LogicalCoorinatesToOffset(pos);
