@@ -241,12 +241,11 @@ public sealed class SekaniDocument
 		var newcoord = DeleteCore(pos);
 		//piece table test
 		{
-			// var end = pos;
-			// var endOffset = _pieceTable.GetOffsetFromLogicalCoordinates(pos);
-			// if (endOffset == 0) return;
-			// var startOffset = endOffset - 1;
-			// var start = _pieceTable.GetCoordinateFromOffset(startOffset);
-			// _pieceTable.Delete(start, end);
+			var end = pos;
+			var offset = _pieceTable.GetOffset(pos);
+			if (offset == 0) return;
+			var startOffset = offset - 1;
+			_pieceTable.Delete(startOffset, 1);
 		}
 		if (newcoord is not null)
 		{
@@ -613,9 +612,9 @@ public sealed class SekaniDocument
 	}
 	public void PrintPieceTable()
 	{
-		// Console.WriteLine(_pieceTable.Print());
+		Console.WriteLine(_pieceTable.Print());
 		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
-		Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
+		// Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
 		Console.WriteLine();
 	}
 }

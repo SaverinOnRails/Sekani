@@ -23,7 +23,7 @@ internal class PieceNode
 	public int LeftSubtreeLineFeedCount { get; internal set; } = 0;
 
 	public int LineFeedCount { get; internal set; }
-	public RBColor Color { get; internal set; } = RBColor.Red;
+	public RBColor Color { get; internal set; } = RBColor.Black;
 
 	public PieceNode(PieceBuffer pieceBufferType, int start, int end)
 	{
@@ -68,6 +68,45 @@ internal class PieceNode
 		}
 		return node;
 	}
+
+	public static void Isolate(PieceNode node)
+	{
+		node.Left = NULL_NODE;
+		node.Right = NULL_NODE;
+		node.Parent = NULL_NODE;
+	}
+
+	public static PieceNode Next(PieceNode node)
+	{
+		if (node.Right != NULL_NODE)
+		{
+			var leftMost = PieceNode.LeftMost(node.Right);
+			return leftMost == NULL_NODE ? node.Right : leftMost;
+		}
+		while (node.Parent != NULL_NODE)
+		{
+			if (node.Parent.Left == node)
+			{
+				break;
+			}
+
+			node = node.Parent;
+		}
+		if (node.Parent == NULL_NODE)
+		{
+			return NULL_NODE;
+		}
+
+		return node.Parent;
+	}
+
+	internal static void Copy(PieceNode to, PieceNode from)
+	{
+		to.Left = from.Left;
+		to.Right = from.Right;
+		to.Parent = from.Parent;
+		to.Color = from.Color;
+	}
 }
 
 public enum PieceBuffer
@@ -90,7 +129,7 @@ internal class PieceTable
 	public PieceTable(string original)
 	{
 		_originalBuffer = [.. original];
-		var root = CreatePieceNode(PieceBuffer.Original, 0, original.Length);
+		var root = CreatePieceNode(PieceBuffer.Original, 0, original.Length, RBColor.Black);
 		var originalLineStarts = GetLineStarts(original, 0);
 		_originalBufferLineStarts = [0, .. originalLineStarts];
 		root.LineFeedCount = originalLineStarts.Count;
@@ -124,13 +163,14 @@ internal class PieceTable
 		return lineBreakOffsets;
 	}
 
-	private PieceNode CreatePieceNode(PieceBuffer pieceBuffer, int start, int end)
+	private PieceNode CreatePieceNode(PieceBuffer pieceBuffer, int start, int end, RBColor color = RBColor.Red)
 	{
 		var node = new PieceNode(pieceBuffer, start, end)
 		{
 			Parent = NULL_NODE,
 			Left = NULL_NODE,
-			Right = NULL_NODE
+			Right = NULL_NODE,
+			Color = color,
 		};
 		return node;
 	}
@@ -168,65 +208,363 @@ internal class PieceTable
 		//if inserting into the end of piece at the end of the add buffer, extend the the piece instead of creating one
 		if (piece.pieceBuffer == PieceBuffer.Add && piece.End == _addBuffer.Count && targetNodePosition.LocalOffset == piece.Length)
 		{
-			Console.WriteLine("extending last add buffer piece");
+			// Console.WriteLine("extending last add buffer piece");
 			ExtendLastAddBufferPiece(piece, text);
 		}
 		//if inserting at the begining of the piece, 
 		else if (targetNodePosition.LocalOffset == 0)
 		{
-			Console.WriteLine("inserting into left");
+			// Console.WriteLine("inserting into left");
 			InsertLeft(piece, text);
 		}
 		//if inserting at the end of the piece
 		else if (targetNodePosition.LocalOffset == piece.Length)
 		{
-			Console.WriteLine("inserting into right");
+			// Console.WriteLine("inserting into right");
 			InsertRight(piece, text);
 		}
 		//inserting into the middle of the piece
 		else
 		{
-			Console.WriteLine("inserting into middle");
+			// Console.WriteLine("inserting into middle");
 			InsertMiddle(piece, text, targetNodePosition.LocalOffset);
 		}
 	}
 
-	private void Delete(int startOffset, int length)
+	public void Delete(int startOffset, int length)
 	{
-		if (length < 0) return;
+		if (length <= 0) return;
 		var startPosition = GetPieceByOffset(startOffset);
 		var endPosition = GetPieceByOffset(startOffset + length);
 
 		var startPiece = startPosition.Piece;
-		var endPiece = startPosition.Piece;
+		var endPiece = endPosition.Piece;
 
 		//deletion range is in one piece. Simple case
 		if (startPiece == endPiece)
 		{
+			var targetPiece = startPiece;
 			//if deletion starts at the beginning of the piece
-			if (startPiece.Start == startOffset)
+			if (startPosition.AbsoluteOffset == startOffset)
 			{
 				//if deleting the entire piece
-				if (startPiece.Length == length)
+				if (targetPiece.Length == length)
 				{
+					DeleteNode(targetPiece);
+					return;
+				}
+				else
+				{
+					//conserve the last piece from the split
+					TrimStart(targetPiece, length);
+				}
+			}
+			//if deletion ends at the end of the piece
+			else if (startPosition.AbsoluteOffset + targetPiece.Length == startOffset + length)
+			{
+				//conserve the first piece from the split
+				TrimEnd(targetPiece, length);
+			}
+			//deletion falls inside middle of piece
+			else
+			{
+				//split the head
+				var (firstPiece, _) = SplitNodeAtMiddle(targetPiece, startOffset - startPosition.AbsoluteOffset);
+				//split the tail
+				var (_, lastPiece) = SplitNodeAtMiddle(targetPiece, (startOffset - startPosition.AbsoluteOffset) + length);
+				//resize piece
+				ResizeTo(targetPiece, firstPiece, false);
 
+				//insert the last node directly as successor of the resized node, discarding the middle
+				InsertAsSuccessor(targetPiece, lastPiece);
+			}
+			Console.WriteLine("DELTED IN PIECE");
+			return;
+		}
+		//deletion spans multiple nodes
+
+		List<PieceNode> dirtyPieces = [];
+		//i like to do this in a direct order
+		bool trimFirst = true;
+		bool trimLast = true;
+
+		if (startPosition.LocalOffset == 0)
+		{
+			dirtyPieces.Add(startPiece);
+			trimFirst = false;
+		}
+		var node = PieceNode.Next(startPiece);
+		while (node != endPiece)
+		{
+			dirtyPieces.Add(node);
+			node = PieceNode.Next(node);
+		}
+		if (endPosition.LocalOffset == endPiece.Length)
+		{
+			dirtyPieces.Add(endPiece);
+			trimLast = false;
+		}
+		if (trimFirst)
+		{
+			//Trim start first node
+			// TODO: will probably not work if the whole piece is covered in deletion
+			TrimEnd(startPiece, startPiece.Length - startPosition.LocalOffset);
+		}
+		//delete dirty pieces
+		foreach (var dirtyPiece in dirtyPieces)
+		{
+			DeleteNode(dirtyPiece);
+		}
+		if (trimLast)
+		{
+			//Trim End of Last Node
+			TrimStart(endPiece, endPosition.LocalOffset);
+		}
+	}
+
+	private void TrimStart(PieceNode piece, int length)
+	{
+		var (_, tail) = SplitNodeAtMiddle(piece, length);
+		ResizeTo(piece, tail, copyStart: true);
+	}
+
+	private void TrimEnd(PieceNode piece, int length)
+	{
+		var (head, _) = SplitNodeAtMiddle(piece, piece.Length - length);
+		ResizeTo(piece, head, copyStart: false);
+	}
+
+	private void ResizeTo(PieceNode piece, PieceNode source, bool copyStart)
+	{
+		int oldLfCount = piece.LineFeedCount;
+		int oldLength = piece.Length;
+
+		if (copyStart) piece.Start = source.Start;
+		piece.End = source.End;
+		piece.LineFeedCount = source.LineFeedCount;
+
+		UpdatePieceMetadataWithDelta(
+			piece,
+			piece.Length - oldLength,
+			piece.LineFeedCount - oldLfCount);
+	}
+
+	private void DeleteNode(PieceNode z)
+	{
+		PieceNode x; // always points to replacement for y or z.
+		PieceNode y; // always points to node to be deleted or replaced.
+
+		if (z.Left == NULL_NODE)
+		{
+			y = z;
+			x = y.Right;
+		}
+		else if (z.Right == NULL_NODE)
+		{
+			y = z;
+			x = y.Left;
+		}
+		else
+		{
+			var leftMost = PieceNode.LeftMost(z.Right);
+			var predecessor = leftMost == NULL_NODE ? z.Right : leftMost;
+			y = predecessor;
+			x = y.Right;
+		}
+
+		if (y == _root)
+		{
+			_root = x;
+			x.Color = RBColor.Black;
+			PieceNode.Isolate(z);
+			NULL_NODE.Parent = NULL_NODE;
+			_root.Parent = NULL_NODE;
+			return;
+		}
+
+		var yWasRed = y.Color == RBColor.Red;
+
+		if (y == y.Parent.Left)
+		{
+			y.Parent.Left = x;
+		}
+		else
+		{
+			y.Parent.Right = x;
+		}
+
+		if (y == z)
+		{
+			x.Parent = y.Parent;
+			UpdatePieceMetadata(x);
+		}
+		else
+		{
+			if (y.Parent == z)
+			{
+				x.Parent = y;
+			}
+			else
+			{
+				x.Parent = y.Parent;
+			}
+
+			UpdatePieceMetadata(x);
+			PieceNode.Copy(y, z);
+
+			if (z == _root)
+			{
+				_root = y;
+			}
+			else
+			{
+				if (z == z.Parent.Left)
+				{
+					z.Parent.Left = y;
+				}
+				else
+				{
+					z.Parent.Right = y;
+				}
+			}
+
+			if (y.Left != NULL_NODE)
+			{
+				y.Left.Parent = y;
+			}
+
+			if (y.Right != NULL_NODE)
+			{
+				y.Right.Parent = y;
+			}
+
+			y.LeftSubtreeBufferLength = z.LeftSubtreeBufferLength;
+			y.LeftSubtreeLineFeedCount = z.LeftSubtreeLineFeedCount;
+			UpdatePieceMetadata(y);
+		}
+
+		PieceNode.Isolate(z);
+
+		if (x.Parent.Left == x)
+		{
+			var newBufferLength = PieceNode.TotalBufferLength(x);
+			var newLfCount = PieceNode.TotalLineFeedCount(x);
+
+			if (newBufferLength != x.Parent.LeftSubtreeBufferLength ||
+				newLfCount != x.Parent.LeftSubtreeLineFeedCount)
+			{
+				var bufferDelta =
+					newBufferLength - x.Parent.LeftSubtreeBufferLength;
+
+				var lfDelta =
+					newLfCount - x.Parent.LeftSubtreeLineFeedCount;
+
+				x.Parent.LeftSubtreeBufferLength = newBufferLength;
+				x.Parent.LeftSubtreeLineFeedCount = newLfCount;
+
+				UpdatePieceMetadataWithDelta(
+					x.Parent,
+					bufferDelta,
+					lfDelta);
+			}
+		}
+
+		UpdatePieceMetadata(x.Parent);
+
+		if (yWasRed)
+		{
+			NULL_NODE.Parent = NULL_NODE;
+			return;
+		}
+		FixAfterDeletion(x);
+	}
+
+	private void FixAfterDeletion(PieceNode node)
+	{
+		PieceNode sibling;
+		while (node != _root && node.Color == RBColor.Black)
+		{
+			if (node == node.Parent.Left)
+			{
+				sibling = node.Parent.Right;
+
+				if (sibling.Color == RBColor.Red)
+				{
+					sibling.Color = RBColor.Black;
+					node.Parent.Color = RBColor.Red;
+					LeftRotate(node.Parent);
+					sibling = node.Parent.Right;
+				}
+
+				if (sibling.Left.Color == RBColor.Black &&
+					sibling.Right.Color == RBColor.Black)
+				{
+					sibling.Color = RBColor.Red;
+					node = node.Parent;
+				}
+				else
+				{
+					if (sibling.Right.Color == RBColor.Black)
+					{
+						sibling.Left.Color = RBColor.Black;
+						sibling.Color = RBColor.Red;
+						RightRotate(sibling);
+						sibling = node.Parent.Right;
+					}
+
+					sibling.Color = node.Parent.Color;
+					node.Parent.Color = RBColor.Black;
+					sibling.Right.Color = RBColor.Black;
+					LeftRotate(node.Parent);
+					node = _root;
+				}
+			}
+			else
+			{
+				sibling = node.Parent.Left;
+
+				if (sibling.Color == RBColor.Red)
+				{
+					sibling.Color = RBColor.Black;
+					node.Parent.Color = RBColor.Red;
+					RightRotate(node.Parent);
+					sibling = node.Parent.Left;
+				}
+
+				if (sibling.Left.Color == RBColor.Black &&
+					sibling.Right.Color == RBColor.Black)
+				{
+					sibling.Color = RBColor.Red;
+					node = node.Parent;
+				}
+				else
+				{
+					if (sibling.Left.Color == RBColor.Black)
+					{
+						sibling.Right.Color = RBColor.Black;
+						sibling.Color = RBColor.Red;
+						LeftRotate(sibling);
+						sibling = node.Parent.Left;
+					}
+
+					sibling.Color = node.Parent.Color;
+					node.Parent.Color = RBColor.Black;
+					sibling.Left.Color = RBColor.Black;
+					RightRotate(node.Parent);
+					node = _root;
 				}
 			}
 		}
+
+		node.Color = RBColor.Black;
+		NULL_NODE.Parent = NULL_NODE;
 	}
 
 	private void InsertMiddle(PieceNode piece, string text, int localOffset)
 	{
 		//offset is guaranteed to be somewhere inside the piece and not the edges
-		//firstpiece
-		var firstPiece = CreatePieceNode(piece.pieceBuffer, piece.Start, piece.Start + localOffset);
-		var pieceBufferLineStarts = GetPieceBufferLineStartsForNodeBuffer(firstPiece);
-		var pieceBuffer = GetPieceBuffer(piece);
 
-		//how many linebreaks between piece.start and piece.start + localOffset?
-		var l = LowerBound(pieceBufferLineStarts, piece.Start);
-		var h = LowerBound(pieceBufferLineStarts, piece.Start + localOffset);
-		firstPiece.LineFeedCount = h - l;
+		var (firstPiece, lastPiece) = SplitNodeAtMiddle(piece, localOffset);
 
 		//middle piece
 		var bufferInsertOffset = _addBuffer.Count;
@@ -237,22 +575,29 @@ internal class PieceTable
 		var middlePiece = CreatePieceNode(PieceBuffer.Add, bufferInsertOffset, bufferInsertOffset + text.Length);
 		middlePiece.LineFeedCount = linestarts.Count;
 
-		//last piece
-		var lastPiece = CreatePieceNode(piece.pieceBuffer, piece.Start + localOffset, piece.End);
-		lastPiece.LineFeedCount = piece.LineFeedCount - firstPiece.LineFeedCount;
-
-		// Shorten piece to match firstPiece
-		var oldLfCount = piece.LineFeedCount;
-		var oldLength = piece.Length;
-		piece.End = firstPiece.End;
-		piece.LineFeedCount = firstPiece.LineFeedCount;
-		var lfDelta = piece.LineFeedCount - oldLfCount;
-		var bufferLengthDelta = piece.Length - oldLength;
-		UpdatePieceMetadataWithDelta(piece, bufferLengthDelta, lfDelta);
+		//Shorten piece to match firstPiece
+		ResizeTo(piece, firstPiece, false);
 
 		InsertAsSuccessor(piece, middlePiece);
-
 		InsertAsSuccessor(middlePiece, lastPiece);
+	}
+
+	private (PieceNode, PieceNode) SplitNodeAtMiddle(PieceNode piece, int offset)
+	{
+		var linestarts = GetPieceBufferLineStartsForNodeBuffer(piece);
+		var firstPiece = CreatePieceNode(piece.pieceBuffer, piece.Start, piece.Start + offset);
+
+		//how many linebreaks between piece.start and piece.start + localOffset?
+		var l = LowerBound(linestarts, piece.Start);
+		var h = LowerBound(linestarts, piece.Start + offset);
+		firstPiece.LineFeedCount = h - l;
+
+
+		var lastPiece = CreatePieceNode(piece.pieceBuffer, piece.Start + offset, piece.End);
+		lastPiece.LineFeedCount = piece.LineFeedCount - firstPiece.LineFeedCount;
+
+		return (firstPiece, lastPiece);
+
 	}
 
 	private int LowerBound(IReadOnlyList<int> buf, int target)
@@ -305,9 +650,10 @@ internal class PieceTable
 		InOrder(_root, fn);
 	}
 
-	private void InOrder(PieceNode? node, Action<PieceNode> fn)
+	//TODO: DO this iteratively
+	private void InOrder(PieceNode node, Action<PieceNode> fn)
 	{
-		if (node is null) return;
+		if (node == NULL_NODE) return;
 		InOrder(node.Left, fn);
 		fn(node);
 		InOrder(node.Right, fn);
@@ -327,7 +673,6 @@ internal class PieceTable
 
 		//insert after piece
 		InsertAsSuccessor(piece, newPiece);
-		FixAfterInsertion(newPiece);
 	}
 
 	private void InsertLeft(PieceNode piece, string text)
@@ -511,7 +856,7 @@ internal class PieceTable
 		if (bufferLengthDelta == 0 && lfdelta == 0) return;
 		while (piece != _root)
 		{
-			if (piece.Parent!.Left == piece)
+			if (piece.Parent.Left == piece)
 			{
 				piece.Parent.LeftSubtreeBufferLength += bufferLengthDelta;
 				piece.Parent.LeftSubtreeLineFeedCount += lfdelta;
@@ -520,6 +865,16 @@ internal class PieceTable
 		}
 	}
 
+	// private void UpdateTableMetadata() {
+	// 	var node = _root;
+	// 	var pieceLength = 0;
+	// 	var lfCount = 1;
+	// 	while(node != NULL_NODE) {
+	// 		pieceLength += node.LeftSubtreeBufferLength + node.Length;
+	// 		lfCount += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+	// 		node = node.Right;
+	// 	}
+	// }
 	private void UpdatePieceMetadata(PieceNode node)
 	{
 		if (node == _root) return;
@@ -537,12 +892,14 @@ internal class PieceTable
 		UpdatePieceMetadataWithDelta(node, lengthDelta, lfDelta);
 	}
 
+	//TODO: this func is weird as hell. Have to make it simpler
 	private int LogicalCoorinatesToOffset(Coordinate pos)
 	{
 		var line = pos.Line;
 		var col = pos.Col;
 		var node = _root;
 		int offset = 0;
+		if (line == 0) return col;
 		while (node != NULL_NODE)
 		{
 			if (node.Left != NULL_NODE && node.LeftSubtreeLineFeedCount >= line)
@@ -569,10 +926,12 @@ internal class PieceTable
 	}
 
 
+	//NOTE: Crash happening here after complete deletion is probably because we don't have any pieces anymore
 	private PiecePosition GetPieceByOffset(int offset)
 	{
 		var node = _root;
 		var absoluteOffset = 0;
+		Console.WriteLine(offset);
 		while (node != NULL_NODE)
 		{
 			if (node.LeftSubtreeBufferLength > offset)
