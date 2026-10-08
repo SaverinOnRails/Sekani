@@ -218,11 +218,23 @@ public sealed class SekaniDocument
 		var coord = CaretPosition;
 		if (!coord.HasRange())
 		{
+			//piece table test
+			{
+				//TODO: capping range
+				var offset = _pieceTable.GetOffset(coord);
+				_pieceTable.Delete(offset, 1);
+			}
 			var pos = RangeUpCursor(coord);
 			DeleteCore(pos);
 		}
 		else
 		{
+			//piece table test
+			{
+				var s = _pieceTable.GetOffset(coord.LesserRangeEnd()!);
+				var e = _pieceTable.GetOffset(coord.GreaterRangeEnd()!) + 1;
+				_pieceTable.Delete(s, e - s);
+			}
 			var start = coord.LesserRangeEnd()!;
 			var end = RangeUpCursor(coord.GreaterRangeEnd()!);
 			var position = end;

@@ -926,12 +926,11 @@ internal class PieceTable
 	}
 
 
-	//NOTE: Crash happening here after complete deletion is probably because we don't have any pieces anymore
+	//TODO: handle when all piece is deleted and when offset > total buffer
 	private PiecePosition GetPieceByOffset(int offset)
 	{
 		var node = _root;
 		var absoluteOffset = 0;
-		Console.WriteLine(offset);
 		while (node != NULL_NODE)
 		{
 			if (node.LeftSubtreeBufferLength > offset)
