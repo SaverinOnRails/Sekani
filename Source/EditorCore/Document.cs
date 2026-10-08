@@ -624,9 +624,12 @@ public sealed class SekaniDocument
 	}
 	public void PrintPieceTable()
 	{
-		Console.WriteLine(_pieceTable.Print());
+		// Console.WriteLine(_pieceTable.Print());
 		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
 		// Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
+		// Console.WriteLine();
+		Console.WriteLine($"True coord {CaretPosition}");
+		Console.WriteLine($"Calculated coord {_pieceTable.GetCoordinate(_pieceTable.GetOffset(CaretPosition))}");
 		Console.WriteLine();
 	}
 }

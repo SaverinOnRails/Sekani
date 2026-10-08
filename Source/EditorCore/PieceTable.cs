@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 namespace Sekani.EditorCore;
@@ -641,6 +642,74 @@ internal class PieceTable
 		});
 		return builder.ToString();
 	}
+
+	public Coordinate GetCoordinate(int offset)
+	{
+		var node = _root;
+		var line = 0;
+		var initOffset = offset;
+		while (node != NULL_NODE)
+		{
+			if (node.LeftSubtreeBufferLength >= offset)
+			{
+				node = node.Left;
+			}
+			else if (node.Length >= offset - node.LeftSubtreeBufferLength)
+			{
+				var k = offset - node.LeftSubtreeBufferLength;
+				line += node.LeftSubtreeLineFeedCount;
+				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
+				var target = node.Start + k;
+				var first = LowerBound(linestarts, node.Start);
+				var last = LowerBound(linestarts, target);
+				var lfDelta = last - first;
+				line += lfDelta;
+
+				if (lfDelta == 0)
+				{
+					var lineStartOffset = GetOffset(new(0, line));
+					return new(initOffset - lineStartOffset, line);
+				}
+				var column = target - linestarts[last - 1];
+				return new(column, line);
+			}
+			else
+			{
+				offset -= node.LeftSubtreeBufferLength + node.Length;
+				line += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+				if (node.Right == NULL_NODE)
+				{
+					var lineStartOffset = GetOffset(new(0, line));
+					var lineOffset = initOffset - offset - lineStartOffset;
+					return new(lineOffset, line);
+				}
+				node = node.Right;
+			}
+		}
+		return new(0, 0);
+	}
+
+	// public string PrintLine(int line)
+	// {
+	// 	StringBuilder lineBuilder = new("");
+	// 	var node = _root;
+	// 	while (node != NULL_NODE)
+	// 	{
+	// 		if (node.Left != NULL_NODE && node.LeftSubtreeLineFeedCount >= line)
+	// 		{
+	// 			node = node.Left;
+	// 		}
+	// 		//line is within current piece
+	// 		else if (node.LineFeedCount > line - node.LeftSubtreeLineFeedCount)
+	// 		{
+	// 			var buffer = GetPieceBuffer(node);
+	// 			var pieceStart = node.Start;
+	// 			var k = line - node.LeftSubtreeLineFeedCount;
+
+	// 		}
+	// 	}
+	// }
+
 	public int GetOffset(Coordinate pos)
 	{
 		return LogicalCoorinatesToOffset(pos);
@@ -649,6 +718,7 @@ internal class PieceTable
 	{
 		InOrder(_root, fn);
 	}
+
 
 	//TODO: DO this iteratively
 	private void InOrder(PieceNode node, Action<PieceNode> fn)
