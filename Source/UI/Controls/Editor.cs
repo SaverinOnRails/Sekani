@@ -535,12 +535,12 @@ public class Editor : Control
 		var visibleTextBounds = ComputeVisibleText();
 		DrawMainRectangle(context);
 		DrawText(context, visibleTextBounds);
-		DrawLineNumbers(context, visibleTextBounds);
-		DrawSelection(context);
-		DrawCaret(context);
-		DrawCaretFocusBubble(context);
-		DrawHorizontalScrollbar(context);
-		DrawVerticalScrollbar(context);
+		// DrawLineNumbers(context, visibleTextBounds);
+		// DrawSelection(context);
+		// DrawCaret(context);
+		// DrawCaretFocusBubble(context);
+		// DrawHorizontalScrollbar(context);
+		// DrawVerticalScrollbar(context);
 	}
 
 	private void DrawCaretFocusBubble(DrawingContext context)

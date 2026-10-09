@@ -123,6 +123,10 @@ internal class PieceTable
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
+	public event EventHandler<BufferChangeData>? BufferChangedEvent;
+
+	public int BufferLength { get; private set; } = 0;
+	public int LineFeedCount { get; private set; } = 0;
 
 	//static sentinel
 	public static readonly PieceNode NULL_NODE;
@@ -135,6 +139,7 @@ internal class PieceTable
 		_originalBufferLineStarts = [0, .. originalLineStarts];
 		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
+		UpdateTableMetadata();
 	}
 
 	static PieceTable()
@@ -199,7 +204,35 @@ internal class PieceTable
 		return offset;
 	}
 
+	//TODO cache this
+	public int LineCount()
+	{
+		var node = _root;
+		var lineFeeds = 0;
+		while (node != NULL_NODE)
+		{
+			lineFeeds += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+			node = node.Right;
+		}
+		return lineFeeds + 1;
+	}
+
 	public void Insert(string text, int offset)
+	{
+		if (text.Length == 0) return;
+		int line = GetCoordinate(offset).Line;
+		int addedLines = GetLineStarts(text, 0).Count - 1;
+		InsertCore(text, offset);
+
+		RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
+		for (int i = 1; i <= addedLines; i++)
+		{
+			RaiseBufferChangedEvent(line + i, BufferChangeKind.LineAdded);
+		}
+		UpdateTableMetadata();
+	}
+
+	private void InsertCore(string text, int offset)
 	{
 
 		//TODO: do we need to handle empty tree case here?
@@ -233,6 +266,20 @@ internal class PieceTable
 	}
 
 	public void Delete(int startOffset, int length)
+	{
+		if (length <= 0) return;
+		int first = GetCoordinate(startOffset).Line;
+		int last = GetCoordinate(startOffset + length).Line;
+		DeleteCore(startOffset, length);
+		RaiseBufferChangedEvent(first, BufferChangeKind.LineChanged);
+		for (int i = first; i < last; i++)
+		{
+			RaiseBufferChangedEvent(first + 1, BufferChangeKind.LineRemoved);
+		}
+		UpdateTableMetadata();
+	}
+
+	public void DeleteCore(int startOffset, int length)
 	{
 		if (length <= 0) return;
 		var startPosition = GetPieceByOffset(startOffset);
@@ -307,7 +354,6 @@ internal class PieceTable
 		if (trimFirst)
 		{
 			//Trim start first node
-			// TODO: will probably not work if the whole piece is covered in deletion
 			TrimEnd(startPiece, startPiece.Length - startPosition.LocalOffset);
 		}
 		//delete dirty pieces
@@ -334,6 +380,10 @@ internal class PieceTable
 		ResizeTo(piece, head, copyStart: false);
 	}
 
+	private void RaiseBufferChangedEvent(int line, BufferChangeKind kind)
+	{
+		BufferChangedEvent?.Invoke(this, new(line, kind));
+	}
 	private void ResizeTo(PieceNode piece, PieceNode source, bool copyStart)
 	{
 		int oldLfCount = piece.LineFeedCount;
@@ -563,7 +613,6 @@ internal class PieceTable
 	private void InsertMiddle(PieceNode piece, string text, int localOffset)
 	{
 		//offset is guaranteed to be somewhere inside the piece and not the edges
-
 		var (firstPiece, lastPiece) = SplitNodeAtMiddle(piece, localOffset);
 
 		//middle piece
@@ -591,7 +640,6 @@ internal class PieceTable
 		var l = LowerBound(linestarts, piece.Start);
 		var h = LowerBound(linestarts, piece.Start + offset);
 		firstPiece.LineFeedCount = h - l;
-
 
 		var lastPiece = CreatePieceNode(piece.pieceBuffer, piece.Start + offset, piece.End);
 		lastPiece.LineFeedCount = piece.LineFeedCount - firstPiece.LineFeedCount;
@@ -688,13 +736,17 @@ internal class PieceTable
 		return new(0, 0);
 	}
 
-	public string PrintRawLine(int offset)
+	private string PrintRawLine(int line)
 	{
-		var pos = GetCoordinate(offset);
-		return PrintRawLineCore(pos.Line);
+		return PrintRawLineCore(line);
 	}
 
-	//Thanks Claude
+	public string PrintCleanLine(int line)
+	{
+		return PrintRawLine(line).TrimEnd('\n');
+	}
+
+	//Thanks Claude for porting this, looks tedious as hell
 	private string PrintRawLineCore(int line)
 	{
 		var sb = new StringBuilder();
@@ -754,7 +806,6 @@ internal class PieceTable
 			}
 			sb.Append([.. buffer], next.Start, next.Length);
 		}
-
 		return sb.ToString();
 	}
 	public int GetOffset(Coordinate pos)
@@ -982,16 +1033,18 @@ internal class PieceTable
 		}
 	}
 
-	// private void UpdateTableMetadata() {
-	// 	var node = _root;
-	// 	var pieceLength = 0;
-	// 	var lfCount = 1;
-	// 	while(node != NULL_NODE) {
-	// 		pieceLength += node.LeftSubtreeBufferLength + node.Length;
-	// 		lfCount += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
-	// 		node = node.Right;
-	// 	}
-	// }
+	private void UpdateTableMetadata()
+	{
+		var node = _root;
+		var pieceLength = 0;
+		var lfCount = 1;
+		while (node != NULL_NODE)
+		{
+			pieceLength += node.LeftSubtreeBufferLength + node.Length;
+			lfCount += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
+			node = node.Right;
+		}
+	}
 	private void UpdatePieceMetadata(PieceNode node)
 	{
 		if (node == _root) return;
@@ -1081,4 +1134,7 @@ internal class PieceTable
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBufferLineStarts;
 		return _addBufferLineStarts;
 	}
+
 }
+
+public readonly record struct LineChange(int FirstLine, int OldCount, int NewCount);

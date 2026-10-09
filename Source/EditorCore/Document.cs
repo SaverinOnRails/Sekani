@@ -8,7 +8,7 @@ namespace Sekani.EditorCore;
 public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
-	private SekaniBuffer _buffer = new();
+	private SekaniBuffer _buffer = null;
 	public Coordinate CaretPosition { get; set; } = new(0, 0);
 	private int _preferredVisualColumn = 0;
 	public IReadOnlyList<Line> Lines => _buffer.Lines;
@@ -27,7 +27,7 @@ public sealed class SekaniDocument
 	{
 		_filePath = filePath;
 		_pieceTable = new(File.ReadAllText(filePath));
-		TypeChars(File.ReadAllText(filePath), false);
+		// TypeChars(File.ReadAllText(filePath), false);
 	}
 
 	public void TypeChars(string text, bool invokePieceTable = true)
@@ -313,7 +313,7 @@ public sealed class SekaniDocument
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
-		_lineCache = new LineCache(_buffer, tabSize, wordWrap, maxVisualColsPerLine);
+		_lineCache = new LineCache(_buffer,_pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
 		return _lineCache;
 	}
 
@@ -631,7 +631,8 @@ public sealed class SekaniDocument
 		// Console.WriteLine($"True coord {CaretPosition}");
 		// Console.WriteLine($"Calculated coord {_pieceTable.GetCoordinate(_pieceTable.GetOffset(CaretPosition))}");
 		// Console.WriteLine();
-		Console.WriteLine(_pieceTable.PrintRawLine(_pieceTable.GetOffset(CaretPosition)));
+		Console.WriteLine(_pieceTable.PrintCleanLine(CaretPosition.Line));
+		// Console.WriteLine(_pieceTable.LineCount());
 	}
 }
 
