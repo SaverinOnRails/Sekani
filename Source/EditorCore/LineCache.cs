@@ -105,7 +105,6 @@ public sealed class LineCache
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
 
-		if (_layoutCache[index] != null) return _layoutCache[index];
 		var line = new Line() { Text = _pieceTable.PrintCleanLine(index) };
 		var lineLayout = new LineLayout(
 			line,
@@ -177,7 +176,6 @@ public sealed class LineCache
 	}
 
 
-	//This is the initial build call
 	public void BuildVisualLinesIndexes()
 	{
 		_visualLineTree.Clear();

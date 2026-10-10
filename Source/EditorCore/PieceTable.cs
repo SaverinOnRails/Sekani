@@ -747,7 +747,6 @@ internal class PieceTable
 		return PrintRawLine(line).TrimEnd('\n');
 	}
 
-	//Thanks Claude for porting this, looks tedious as hell
 	private string PrintRawLineCore(int line)
 	{
 		var sb = new StringBuilder();
@@ -769,7 +768,7 @@ internal class PieceTable
 
 				var start = k == 0 ? node.Start : linestarts[first + k - 1];
 				var end = linestarts[first + k];          // just past the terminating newline
-				sb.Append([.. buffer], start, end - start);
+				AppendRange(sb, buffer, start, end);
 				return sb.ToString();
 			}
 			else if (node.LeftSubtreeLineFeedCount + node.LineFeedCount == line)
@@ -781,7 +780,7 @@ internal class PieceTable
 
 				var start = node.LineFeedCount == 0 ? node.Start : linestarts[first + node.LineFeedCount - 1];
 				var end = node.Start + node.Length;
-				sb.Append([.. buffer], start, end - start);
+				AppendRange(sb, buffer, start, end);
 				break;
 			}
 			else
@@ -802,12 +801,17 @@ internal class PieceTable
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(next);
 				var first = LowerBound(linestarts, next.Start);
 				var end = linestarts[first];              // just past the first newline
-				sb.Append([.. buffer], next.Start, end - next.Start);
+				AppendRange(sb, buffer, next.Start, end);
 				break;
 			}
-			sb.Append([.. buffer], next.Start, next.Length);
+			AppendRange(sb, buffer, next.Start, next.Start + next.Length);
 		}
 		return sb.ToString();
+	}
+	private static void AppendRange(StringBuilder sb, IReadOnlyList<char> buffer, int start, int end)
+	{
+		for (int i = start; i < end; i++)
+			sb.Append(buffer[i]);
 	}
 	public int GetOffset(Coordinate pos)
 	{

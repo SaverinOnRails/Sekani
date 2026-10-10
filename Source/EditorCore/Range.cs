@@ -1,23 +1,32 @@
 
 namespace Sekani.EditorCore;
 
-public class Range
+public readonly struct Range
 {
 	public int Anchor { get; }
-	private int? _head;
+	private readonly int? _head;
 
-	public int Cursor { get; set; }
+	public int Cursor { get; }
+	public bool TrailVisualLine { get; } = false;
 
 	public int Head
 	{
 		get => _head ?? Anchor + 1;
-		set => _head = value;
 	}
-	public Range(int anchor, int? head = null)
+	public Range(int anchor, int? head = null, int? cursor = null, bool trailVisualLine = false)
 	{
 		Anchor = anchor;
-		Cursor = anchor;
+		if (cursor is null)
+		{
+
+			Cursor = anchor;
+		}
+		else
+		{
+			Cursor = cursor.Value;
+		}
 		_head = head;
+		TrailVisualLine = trailVisualLine;
 	}
 
 	public int Lower => Math.Min(Anchor, Head);

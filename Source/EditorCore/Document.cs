@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection.Metadata;
 
 namespace Sekani.EditorCore;
 
@@ -6,10 +7,35 @@ public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
 	private SekaniBuffer _buffer = null;
-	public Coordinate CaretPosition { get; set; } = new(0, 0);
-	public Range CaretRange { get; set; } = new Range(0);
+	public Coordinate CaretPosition
+	{
+		get
+		{
+			var position = _pieceTable.GetCoordinate(CaretRange.Cursor);
+			position.TrailVisualLine = CaretRange.TrailVisualLine;
+			return position;
+		}
+	}
+	public Range CaretRange { get; private set; } = new Range(0);
 	public int LineCount => _pieceTable.LineFeedCount;
 	private int _preferredVisualColumn = 0;
+
+	public void SetCaretRange(Coordinate pos)
+	{
+		CaretRange = new(_pieceTable.GetOffset(pos));
+	}
+	public void SetCaretRange(int anchor)
+	{
+		CaretRange = new(anchor);
+	}
+
+	public void SetCaretRange(int anchor, int head)
+	{
+		CaretRange = new(anchor, head, head);
+	}
+
+	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
+	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
 	public IReadOnlyList<Line> Lines => _buffer.Lines;
 	private LineCache? _lineCache;
 	private string? _filePath = null;
@@ -33,53 +59,25 @@ public sealed class SekaniDocument
 	{
 		var offset = CaretRange.Cursor;
 		_pieceTable.Insert(text, offset);
-		// if (string.IsNullOrEmpty(text))
-		// 	return;
+		AdvanceCaretCol(text.Length);
+		UpdatePreferredVisualColumn();
 
-		// var position = CaretPosition;
-
-		// if (position.Line < 0 || position.Col < 0)
-		// 	return;
-		// if (invokePieceTable)
-		// {
-		// 	var offset = _pieceTable.GetOffset(position);
-		// 	_pieceTable.Insert(text, offset);
-		// }
-		// CaretPosition = _buffer.InsertText(
-		// 	position.Col,
-		// 	position.Line,
-		// 	text);
-
-		// UpdatePreferredVisualColumn();
 	}
 	public void CaretRight()
 	{
-		var line = Lines[CaretPosition.Line];
-
-		if (CaretPosition.Col < line.Text.Length)
+		if (CaretRange.Cursor < _pieceTable.BufferLength)
 		{
 			AdvanceCaretCol(1);
 			UpdatePreferredVisualColumn();
-			return;
 		}
-
-		if (CaretPosition.Line == Lines.Count - 1)
-			return;
-
-		CaretPosition = new Coordinate(
-			0,
-			CaretPosition.Line + 1);
-
-		UpdatePreferredVisualColumn();
 	}
 
 	public void UpdatePreferredVisualColumn()
 	{
 		if (_lineCache is null)
 			return;
-
-		var line = Lines[CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(CaretPosition.Line);
+		var pos = _pieceTable.GetCoordinate(CaretRange.Cursor);
+		var layout = _lineCache.GetOrCreate(pos.Line);
 
 		if (layout is null)
 			return;
@@ -94,8 +92,8 @@ public sealed class SekaniDocument
 		if (_lineCache is null)
 			throw new InvalidOperationException();
 
-		var line = Lines[CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(CaretPosition.Line);
+		var pos = CaretPosition;
+		var layout = _lineCache.GetOrCreate(pos.Line);
 
 		if (layout is null)
 			return;
@@ -110,12 +108,14 @@ public sealed class SekaniDocument
 				var targetVisualPos = new VisualCoordinate(
 					_preferredVisualColumn,
 					visualLineIndex + 1);
-				CaretPosition = new(
+				Coordinate newpos = new(
 					layout.GetLogicalColumn(targetVisualPos),
 					CaretPosition.Line)
 				{
 					TrailVisualLine = _preferredVisualColumn == 0
 				};
+				var offset = _pieceTable.GetOffset(newpos);
+				CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
 				return;
 			}
 
@@ -126,22 +126,24 @@ public sealed class SekaniDocument
 					_preferredVisualColumn,
 					visualLineIndex - 1);
 
-				CaretPosition = new(
+				Coordinate newpos = new(
 					layout.GetLogicalColumn(targetVisualPos),
 					CaretPosition.Line)
 				{
 					TrailVisualLine = _preferredVisualColumn == 0
 				};
+				var offset = _pieceTable.GetOffset(newpos);
+				CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
 				return;
 			}
 		}
 		if (direction == CaretVerticalDirection.Up)
 		{
-			if (CaretPosition.Line == 0)
+			if (pos.Line == 0)
 				return;
 
-			var targetLine = Lines[CaretPosition.Line - 1];
-			var targetLineLayout = _lineCache.GetOrCreate(CaretPosition.Line - 1);
+			var targetLine = pos.Line - 1;
+			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
 
 			if (targetLineLayout is null)
 				return;
@@ -150,20 +152,22 @@ public sealed class SekaniDocument
 				_preferredVisualColumn,
 				targetLineLayout.VisualLines.Count - 1);
 
-			CaretPosition = new(
+			Coordinate newpos = new(
 				targetLineLayout.GetLogicalColumn(targetVisual),
 				CaretPosition.Line - 1)
 			{
 				TrailVisualLine = _preferredVisualColumn == 0
 			};
+			var offset = _pieceTable.GetOffset(newpos);
+			CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
 		}
 		else
 		{
-			if (CaretPosition.Line >= Lines.Count - 1)
+			if (pos.Line > LineCount)
 				return;
 
-			var targetLine = Lines[CaretPosition.Line + 1];
-			var targetLineLayout = _lineCache.GetOrCreate(CaretPosition.Line + 1);
+			var targetLine = pos.Line + 1;
+			var targetLineLayout = _lineCache.GetOrCreate(targetLine);
 
 			if (targetLineLayout is null)
 				return;
@@ -172,30 +176,20 @@ public sealed class SekaniDocument
 				_preferredVisualColumn,
 				0);
 
-			CaretPosition = new(
+			Coordinate newpos = new(
 				targetLineLayout.GetLogicalColumn(targetVisual),
 				CaretPosition.Line + 1);
+			var offset = _pieceTable.GetOffset(newpos);
+			CaretRange = new Range(offset);
 		}
 	}
 	public void CaretLeft()
 	{
-		if (CaretPosition.Col > 0)
+		if (CaretRange.Cursor > 0)
 		{
 			AdvanceCaretCol(-1);
 			UpdatePreferredVisualColumn();
-			return;
 		}
-
-		if (CaretPosition.Line == 0)
-			return;
-
-		var previousLine = Lines[CaretPosition.Line - 1];
-
-		CaretPosition = new Coordinate(
-			previousLine.Text.Length,
-			CaretPosition.Line - 1);
-
-		UpdatePreferredVisualColumn();
 	}
 
 	//Returns the next possible location of the cursor.
@@ -245,27 +239,18 @@ public sealed class SekaniDocument
 				if (pos is null) return;
 				position = pos;
 			}
-			CaretPosition = new(start);
+			// CaretPosition = new(start);
 		}
 	}
 
 	public void BackSpace(Coordinate pos)
 	{
-		var newcoord = DeleteCore(pos);
-		//piece table test
-		{
-			var end = pos;
-			var offset = _pieceTable.GetOffset(pos);
-			if (offset == 0) return;
-			var startOffset = offset - 1;
-			_pieceTable.Delete(startOffset, 1);
-		}
-		if (newcoord is not null)
-		{
-
-			CaretPosition = newcoord;
-			UpdatePreferredVisualColumn();
-		}
+		var offset = CaretRange.Cursor;
+		if (offset == 0) return;
+		var startOffset = offset - 1;
+		_pieceTable.Delete(startOffset, 1);
+		AdvanceCaretCol(-1);
+		UpdatePreferredVisualColumn();
 	}
 	private Coordinate? DeleteCore(Coordinate position)
 	{
@@ -308,9 +293,7 @@ public sealed class SekaniDocument
 
 	private void AdvanceCaretCol(int count)
 	{
-		CaretPosition = new(
-			CaretPosition.Col + count,
-			CaretPosition.Line);
+		CaretRange = new(CaretRange.Cursor + count);
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
@@ -328,7 +311,7 @@ public sealed class SekaniDocument
 			line.Text.Length,
 			lineIndex,
 			Environment.NewLine);
-		CaretPosition = new(0, lineIndex + 1);
+		// CaretPosition = new(0, lineIndex + 1);
 	}
 
 	public void TrySave()
@@ -364,7 +347,7 @@ public sealed class SekaniDocument
 	{
 
 		var lower = CaretRange.Lower;
-		CaretRange.Cursor = lower;
+		CaretRange = new(lower);
 		// if (!CaretPosition.HasRange()) return; //nothing to do
 		// var lesser = CaretPosition.LesserRangeEnd()!;
 		// Coordinate greater = new(CaretPosition.GreaterRangeEnd()!);
@@ -395,13 +378,13 @@ public sealed class SekaniDocument
 			if (!char.IsWhiteSpace(line.Text[i])) break;
 			firstNonWhiteSpace++;
 		}
-		CaretPosition = new(firstNonWhiteSpace, lineIndex);
+		// CaretPosition = new(firstNonWhiteSpace, lineIndex);
 	}
 	public void PlaceCursorAtLineEnd()
 	{
 		var lineIndex = CaretPosition.Line;
 		var line = Lines[lineIndex];
-		CaretPosition = new(line.Text.Length, lineIndex);
+		// CaretPosition = new(line.Text.Length, lineIndex);
 	}
 
 	public void AddNewLineAboveSelection()
@@ -412,7 +395,7 @@ public sealed class SekaniDocument
 			0,
 			lineIndex,
 			Environment.NewLine);
-		CaretPosition = new(0, lineIndex);
+		// CaretPosition = new(0, lineIndex);
 	}
 	public void SelectToNextWordStart()
 	{
