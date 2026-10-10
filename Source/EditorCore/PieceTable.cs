@@ -25,6 +25,7 @@ internal class PieceNode
 
 	public int LineFeedCount { get; internal set; }
 	public RBColor Color { get; internal set; } = RBColor.Black;
+	public int Width { get; internal set; } = 0;
 
 	public PieceNode(PieceBuffer pieceBufferType, int start, int end)
 	{
@@ -205,7 +206,7 @@ internal class PieceTable
 	}
 
 	//TODO cache this
-	public int LineCount()
+	private int LineCount()
 	{
 		var node = _root;
 		var lineFeeds = 0;
@@ -1044,6 +1045,8 @@ internal class PieceTable
 			lfCount += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
 			node = node.Right;
 		}
+		BufferLength = pieceLength;
+		LineFeedCount = lfCount;
 	}
 	private void UpdatePieceMetadata(PieceNode node)
 	{

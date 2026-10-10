@@ -18,13 +18,12 @@ public class Editor : Control
 	private
 	const float _baseLineNumberWidth = 20;
 
-	//TODO: This can change during normal editing operations like adding a new line that increasing this count, which indirectly invalidates the max width of wrapped characters
 	private double LineNumberSectDisplayWidth =>
 	  _baseLineNumberWidth +
-	  Math.Max(0, Math.Max(Document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
+	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
 	private bool _drawLineNumbers = true;
-	private bool _useRelativeLineNumber = false;
+	private bool _useRelativeLineNumber = true;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
@@ -230,6 +229,7 @@ public class Editor : Control
 	}
 	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
 	{
+		return;
 		if (!_isSmoothScrolling)
 		{
 			_targetScrollYOffset = _scrollYOffset;
@@ -535,12 +535,12 @@ public class Editor : Control
 		var visibleTextBounds = ComputeVisibleText();
 		DrawMainRectangle(context);
 		DrawText(context, visibleTextBounds);
-		// DrawLineNumbers(context, visibleTextBounds);
+		DrawLineNumbers(context, visibleTextBounds);
 		// DrawSelection(context);
-		// DrawCaret(context);
-		// DrawCaretFocusBubble(context);
-		// DrawHorizontalScrollbar(context);
-		// DrawVerticalScrollbar(context);
+		DrawCaret(context);
+		DrawCaretFocusBubble(context);
+		DrawHorizontalScrollbar(context);
+		DrawVerticalScrollbar(context);
 	}
 
 	private void DrawCaretFocusBubble(DrawingContext context)
@@ -656,8 +656,7 @@ public class Editor : Control
 		lastLogicalLine += 5;
 		for (int i = visibleTextBounds.firstLogicalLine; i < lastLogicalLine; i++)
 		{
-			if (i >= Document.Lines.Count) return;
-			var line = Document.Lines[i];
+			if (i >= Document.LineCount) return;
 			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null)
 				continue;
@@ -1097,9 +1096,8 @@ public class Editor : Control
 		{
 			for (int i = logicalLineToBeginCount; i <= visibleTextBounds.lastPossibleLogicalLine; i++)
 			{
-				if (i >= Document.Lines.Count) break;
+				if (i >= Document.LineCount) break;
 				if (i < 0) continue;
-				var line = Document.Lines[i];
 				var lineLayout = _lineCache.GetOrCreate(i);
 
 				if (lineLayout is null) return;

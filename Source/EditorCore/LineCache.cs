@@ -81,18 +81,6 @@ public sealed class LineCache
 	// }
 
 
-	private void RecalculateWidth()
-	{
-		int lineCount = _pieceTable.LineCount();
-		for (int i = 0; i < lineCount; i++)
-		{
-			int lineLength = _pieceTable.PrintCleanLine(i).Length;
-			if (lineLength > Width)
-			{
-				Width = lineLength;
-			}
-		}
-	}
 	// private void RecalculateWidth()
 	// {
 	// 	_longestLine = null;
@@ -110,7 +98,7 @@ public sealed class LineCache
 	//Source from the piece table
 	public LineLayout? GetOrCreate(int index)
 	{
-		if (index > _pieceTable.LineCount()) return null;
+		if (index > _pieceTable.LineFeedCount) return null;
 		//pad to fill up
 		while (_layoutCache.Count <= index)
 			_layoutCache.Insert(_layoutCache.Count, null);
@@ -193,7 +181,7 @@ public sealed class LineCache
 	public void BuildVisualLinesIndexes()
 	{
 		_visualLineTree.Clear();
-		var buffer = new int[_buffer.Lines.Count];
+		var buffer = new int[_pieceTable.LineFeedCount];
 		Array.Fill(buffer, 1);
 		_visualLineTree.Build(buffer);
 	}
@@ -216,7 +204,7 @@ public sealed class LineCache
 
 	public int TotalVisualLines()
 	{
-		return VisualLinesPrefixSum(_buffer.Lines.Count);
+		return VisualLinesPrefixSum(_pieceTable.LineFeedCount);
 	}
 
 	public int VisualLineCountAt(int index)
