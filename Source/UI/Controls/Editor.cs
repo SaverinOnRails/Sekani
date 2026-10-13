@@ -13,6 +13,8 @@ public class Editor : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
+	private Typeface _normalLineNumberFontFace = Typeface.Default;
+	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
 	private readonly float _fontSize = 15;
 	private LineCache _lineCache;
 	private
@@ -37,6 +39,7 @@ public class Editor : Control
 	private bool _shouldDrawCaretFocusBubble = false;
 	private readonly IBrush _mainTextBrush = Brush.Parse("#F3E6D5");
 	private readonly IBrush _lineNumberBrush = new SolidColorBrush(Colors.White, 0.4);
+	private readonly IBrush _lineNumberGutterBrush = new SolidColorBrush(Colors.White, 0.1);
 	private readonly IBrush _focusedLineNumberBrush = new SolidColorBrush(Colors.White, 0.8);
 	private int _caretFocusBubbleRadius = 0;
 	private double _caretFocusBubbleProgress = 0;
@@ -491,13 +494,23 @@ public class Editor : Control
 	private void SetEditorMetrics()
 	{
 		_editorFontFace = new Typeface("Cascadia Code");
+		_normalLineNumberFontFace = new Typeface(
+		_editorFontFace.FontFamily,
+		_editorFontFace.Style,
+		_editorFontFace.Weight);
+
+		_focusedLineNumberTypeFace = new Typeface(
+		_editorFontFace.FontFamily,
+		_editorFontFace.Style,
+		FontWeight.Bold);
+
 		var text = new FormattedText(
-		  "#",
-		  CultureInfo.InvariantCulture,
-		  FlowDirection.LeftToRight,
-		  _editorFontFace,
-		  _fontSize,
-		  Brushes.White);
+			"#",
+			CultureInfo.InvariantCulture,
+			FlowDirection.LeftToRight,
+			_editorFontFace,
+			_fontSize,
+			Brushes.White);
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = text.Height * 1.25;
@@ -645,7 +658,7 @@ public class Editor : Control
 
 		// gutter
 		context.DrawLine(
-		  new Pen(new SolidColorBrush(Colors.White, 0.1)),
+		  new Pen(_lineNumberGutterBrush),
 		  new Point(LineNumbersSectRect.Right, 0),
 		  new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
@@ -662,17 +675,11 @@ public class Editor : Control
 			var number = _useRelativeLineNumber
 				? (i == caretLine ? i + 1 : Math.Abs(i - caretLine))
 				: i + 1;
-			var fontFace = new Typeface(
-					_editorFontFace.FontFamily,
-					_editorFontFace.Style,
-					i == Document.CaretPosition.Line
-						? FontWeight.Bold
-						: _editorFontFace.Weight);
 			var ft = new FormattedText(
 			  number.ToString(),
 			  CultureInfo.InvariantCulture,
 			  FlowDirection.LeftToRight,
-			  fontFace,
+			  i == Document.CaretPosition.Line ? _focusedLineNumberTypeFace : _normalLineNumberFontFace,
 			  _fontSize,
 			  i == Document.CaretPosition.Line ? _focusedLineNumberBrush : _lineNumberBrush
 			);
@@ -1059,7 +1066,6 @@ public class Editor : Control
 		});
 
 		int currentVisualLine = 0;
-		//pre measure some lines above the viewport.
 		int logicalLineToBeginCount = visibleTextBounds.firstLogicalLine;
 		var lastLogicalLine = visibleTextBounds.lastPossibleLogicalLine + 5;
 		var caretPos = Document.CaretPosition;

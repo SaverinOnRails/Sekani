@@ -46,6 +46,8 @@ public sealed class LineCache
 		InvalidateLayout(e.Line);
 	}
 
+	private void UpdateDocumentWidth(int width) => Width = Math.Max(Width, width);
+
 	// private void BufferChanged(object? sender, BufferChangeData e)
 	// {
 	// 	//do this first as a removed line may no longer be in the buffer
@@ -112,6 +114,7 @@ public sealed class LineCache
 			_wordWrap,
 			_maxVisualColsPerLine);
 		_layoutCache[index] = lineLayout;
+		UpdateDocumentWidth(lineLayout.VisualText.Length);
 		var oldCount = VisualLineCountAt(index);
 		var newCount = lineLayout.VisualLines.Count;
 		var delta = newCount - oldCount;
@@ -179,6 +182,7 @@ public sealed class LineCache
 	public void BuildVisualLinesIndexes()
 	{
 		_visualLineTree.Clear();
+		Width = 0;
 		var buffer = new int[_pieceTable.LineFeedCount];
 		Array.Fill(buffer, 1);
 		_visualLineTree.Build(buffer);
