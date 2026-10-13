@@ -29,8 +29,15 @@ public sealed class SekaniDocument
 		CaretRange = new(anchor);
 	}
 
-	public void SetCaretRange(int anchor, int head)
+	public void SetDocumentCaretRangeHead(int head)
 	{
+		var anchor = CaretRange.Anchor;
+		CaretRange = new(anchor, head, head);
+	}
+	public void SetDocumentCaretRangeHead(Coordinate headpos)
+	{
+		var head = _pieceTable.GetOffset(headpos);
+		var anchor = CaretRange.Anchor;
 		CaretRange = new(anchor, head, head);
 	}
 
@@ -280,7 +287,6 @@ public sealed class SekaniDocument
 		}
 	}
 
-
 	public void CaretUp()
 	{
 		MoveCaretVertical(CaretVerticalDirection.Up);
@@ -345,40 +351,32 @@ public sealed class SekaniDocument
 
 	public void PlaceCursorBeforeSelection()
 	{
-
 		var lower = CaretRange.Lower;
-		CaretRange = new(lower);
-		// if (!CaretPosition.HasRange()) return; //nothing to do
-		// var lesser = CaretPosition.LesserRangeEnd()!;
-		// Coordinate greater = new(CaretPosition.GreaterRangeEnd()!);
-		// CaretPosition.SetCoord(lesser);
-		// CaretPosition.Anchor = greater;
+		var higher = CaretRange.Higher;
+		CaretRange = new(higher, lower, lower);
 	}
 
 	public void PlaceCursorAfterSelection()
 	{
-		if (!CaretPosition.HasRange())
-		{
-			CaretPosition.SetCoord(RangeUpCursor(CaretPosition));
-			return;
-		}
-		var lesser = new Coordinate(CaretPosition.LesserRangeEnd()!);
-		var greater = RangeUpCursor(CaretPosition.GreaterRangeEnd()!);
-		CaretPosition.SetCoord(greater);
-		CaretPosition.Anchor = lesser;
+		var lower = CaretRange.Lower;
+		var higher = CaretRange.Higher;
+		var sethigh = higher == CaretRange.Cursor ? higher + 1 : higher;
+		CaretRange = new(lower, sethigh, sethigh);
 	}
 
 	public void PlaceCursorAtLineStart()
 	{
-		var lineIndex = CaretPosition.Line;
-		var line = Lines[lineIndex];
-		var firstNonWhiteSpace = 0;
-		for (int i = 0; i < line.Text.Length; i++)
+		var line = CaretPosition.Line;
+		var text = _pieceTable.PrintCleanLine(line);
+		int firstNonWhiteSpace = 0;
+
+		for (int i = 0; i < text.Length; i++)
 		{
-			if (!char.IsWhiteSpace(line.Text[i])) break;
+			if (!char.IsWhiteSpace(text[i])) break;
 			firstNonWhiteSpace++;
 		}
-		// CaretPosition = new(firstNonWhiteSpace, lineIndex);
+		var pos = new Coordinate(firstNonWhiteSpace, line);
+		CaretRange = new(GetOffset(pos));
 	}
 	public void PlaceCursorAtLineEnd()
 	{

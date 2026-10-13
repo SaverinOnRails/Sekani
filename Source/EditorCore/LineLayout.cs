@@ -123,7 +123,8 @@ public class LineLayout
 
 			currentVisualCol += width;
 		}
-		return visualLine.LogicalOffset + visualLine.LogicalLength;
+		//return max position in the visual line
+		return visualLine.LogicalOffset + visualLine.LogicalLength - 1 ;
 	}
 
 	private VisualLine? GetVisualLine(int logicalCol, out int index)

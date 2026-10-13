@@ -13,19 +13,24 @@ public readonly struct Range
 	{
 		get => _head ?? Anchor + 1;
 	}
-	public Range(int anchor, int? head = null, int? cursor = null, bool trailVisualLine = false)
+
+	public Range(int cursor, bool trailVisualLine = false)
+	{
+		Anchor = cursor;
+		Cursor = cursor;
+		_head = null;
+		TrailVisualLine = trailVisualLine;
+	}
+
+	public Range(
+		int anchor,
+		int head,
+		int cursor,
+		bool trailVisualLine = false)
 	{
 		Anchor = anchor;
-		if (cursor is null)
-		{
-
-			Cursor = anchor;
-		}
-		else
-		{
-			Cursor = cursor.Value;
-		}
 		_head = head;
+		Cursor = cursor;
 		TrailVisualLine = trailVisualLine;
 	}
 

@@ -22,7 +22,7 @@ public class Editor : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
@@ -97,7 +97,7 @@ public class Editor : Control
 		 VisualLineTreeUpdatedParams e)
 	{
 		var (firstLogicalLine, _, _) = ComputeVisibleText();
-		if (e.lineIndex > firstLogicalLine)
+		if (e.lineIndex >= firstLogicalLine)
 			return;
 
 		var deltaPixels = e.delta * _editorMetrics.LineHeight;
@@ -490,7 +490,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code", FontStyle.Italic);
+		_editorFontFace = new Typeface("Cascadia Code");
 		var text = new FormattedText(
 		  "#",
 		  CultureInfo.InvariantCulture,
@@ -594,7 +594,7 @@ public class Editor : Control
 			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
 			{
 				var startAtPixels = EditorArea.Left;
-				var endOfVisualLine = Math.Max(1, lineLayout.VisualLines[j].VisualLength);
+				var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
 				if (i == firstLine)
 				{
@@ -803,11 +803,9 @@ public class Editor : Control
 		var point = e.GetPosition(this);
 		if (point.Y < EditorArea.Top + _autoScrollMargin || point.Y > EditorArea.Bottom - _autoScrollMargin)
 		{
-			Console.WriteLine("starign sdrag");
 			StartAutoDragScrollTimer(e);
 			return;
 		}
-		Console.WriteLine("killing timer");
 		_autoDragScrollTimer?.Stop();
 		_autoDragScrollTimer = null;
 	}
@@ -841,11 +839,8 @@ public class Editor : Control
 						  posInLine.VisualLine - 1);
 
 						var newLogicalCol = layout.GetLogicalColumn(newVisualCoord);
-
-						Document.CaretPosition.SetCoord(
-						  newLogicalCol,
-						  Document.CaretPosition.Line);
-
+						var offset = Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line));
+						Document.SetDocumentCaretRangeHead(offset);
 						EnsureCaretVisible();
 						Redraw();
 						return;
@@ -870,10 +865,7 @@ public class Editor : Control
 				  layoutOfPrevLine.GetLogicalColumn(
 					newVisualCoordOfLastLine);
 
-				Document.CaretPosition.SetCoord(
-				  newLogicalColOfLastLine,
-				  Document.CaretPosition.Line - 1);
-
+				Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.CaretPosition.Line - 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -895,18 +887,14 @@ public class Editor : Control
 
 						var newLogicalCol = layout.GetLogicalColumn(
 						  newVisualCoord);
-
-						Document.CaretPosition.SetCoord(
-						  newLogicalCol,
-						  Document.CaretPosition.Line);
-
+						Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line)));
 						EnsureCaretVisible();
 						Redraw();
 						return;
 					}
 				}
 
-				if (Document.CaretPosition.Line >= Document.Lines.Count - 1)
+				if (Document.CaretPosition.Line >= Document.LineCount - 1)
 					return;
 
 				var layoutOfNextLine = _lineCache.GetOrCreate(
@@ -921,11 +909,7 @@ public class Editor : Control
 				var newLogicalColOfFirstLine =
 				  layoutOfNextLine.GetLogicalColumn(
 					newVisualCoordOfFirstLine);
-
-				Document.CaretPosition.SetCoord(
-				  newLogicalColOfFirstLine,
-				  Document.CaretPosition.Line + 1);
-
+				Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.CaretPosition.Line + 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -940,8 +924,7 @@ public class Editor : Control
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
 
-		var anchor = Document.CaretRange.Anchor;
-		Document.SetCaretRange(anchor, Document.GetOffset(pos));
+		Document.SetDocumentCaretRangeHead(Document.GetOffset(pos));
 		var layout = _lineCache.GetOrCreate(pos.Line);
 		if (layout is null) return;
 		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.CaretPosition).VisualCol;

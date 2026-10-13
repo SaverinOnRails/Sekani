@@ -744,7 +744,7 @@ internal class PieceTable
 
 	public string PrintCleanLine(int line)
 	{
-		return PrintRawLine(line).TrimEnd('\n');
+		return PrintRawLine(line);
 	}
 
 	private string PrintRawLineCore(int line)
