@@ -218,8 +218,10 @@ public sealed class SekaniDocument
 		var lower = CaretRange.Lower;
 		var higher = CaretRange.Higher;
 		var sethigh = higher == CaretRange.Cursor ? higher + 1 : higher;
+
+		//clamp sethigh
+		sethigh = Math.Min(sethigh, _pieceTable.BufferLength);
 		var delta = sethigh - lower;
-		Console.WriteLine(delta);
 		_pieceTable.Delete(lower, delta);
 		CaretRange = new(lower);
 	}
@@ -232,33 +234,6 @@ public sealed class SekaniDocument
 		_pieceTable.Delete(startOffset, 1);
 		AdvanceCaretCol(-1);
 		UpdatePreferredVisualColumn();
-	}
-	private Coordinate? DeleteCore(Coordinate position)
-	{
-		if (position.Col > 0)
-		{
-			_buffer.Delete(position.Col, position.Line);
-			return new Coordinate(
-				position.Col - 1,
-				position.Line);
-		}
-		else if (position.Line > 0)
-		{
-			var previousLine = _buffer.GetLine(position.Line - 1);
-
-			if (previousLine is null)
-				return null;
-			var newCol = previousLine.Text.Length;
-			_buffer.Delete(position.Col, position.Line);
-
-			return new Coordinate(
-				newCol,
-				position.Line - 1);
-		}
-		else
-		{
-			return null;
-		}
 	}
 
 	public void CaretUp()
@@ -284,12 +259,14 @@ public sealed class SekaniDocument
 
 	public void AddNewLineUnderSelection()
 	{
-		var higher = CaretRange.Higher;
-		var pos = GetCoordinate(higher);
+		var offset = CaretRange.Width > 1 ? CaretRange.Higher : CaretRange.Lower;
+		var pos = GetCoordinate(offset);
 		var text = _pieceTable.PrintCleanLine(pos.Line);
 		var insertpos = new Coordinate(text.Length, pos.Line);
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		var newpos = new Coordinate(0, pos.Line + 1);
+		Console.WriteLine(pos);
+		Console.WriteLine(newpos);
 		CaretRange = new(GetOffset(newpos));
 	}
 
@@ -303,7 +280,6 @@ public sealed class SekaniDocument
 	public void TrySave()
 	{
 		try
-
 		{
 			if (_filePath is null) TryCreateFileAndSave();
 			else
@@ -368,12 +344,11 @@ public sealed class SekaniDocument
 
 	public void AddNewLineAboveSelection()
 	{
-		var pos = CaretPosition;
-		int lineIndex = pos.HasRange() ? pos.LesserRangeEnd()!.Line : pos.Line;
-		_buffer.InsertText(
-			0,
-			lineIndex,
-			Environment.NewLine);
+		var higher = CaretRange.Higher;
+		var pos = GetCoordinate(higher);
+		var insertpos = new Coordinate(0, pos.Line);
+		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
+		CaretRange = new(GetOffset(insertpos));
 	}
 	public void SelectToNextWordStart()
 	{
@@ -596,7 +571,8 @@ public sealed class SekaniDocument
 		// Console.WriteLine($"True coord {CaretPosition}");
 		// Console.WriteLine($"Calculated coord {_pieceTable.GetCoordinate(_pieceTable.GetOffset(CaretPosition))}");
 		// Console.WriteLine();
-		Console.WriteLine(_pieceTable.PrintCleanLine(CaretPosition.Line));
+		// Console.WriteLine(_pieceTable.PrintCleanLine(CaretPosition.Line));
+		// Console.WriteLine(GetCoordinate(CaretRange.Cursor));
 		// Console.WriteLine(_pieceTable.LineCount());
 		// Console.WriteLine(_pieceTable.LineFeedCount);
 	}

@@ -24,7 +24,7 @@ public class Editor : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
@@ -735,8 +735,7 @@ public class Editor : Control
 			_editorMetrics.CharAdvance));
 
 		// Find the logical line containing targetVisualLine.
-		int logicalLineIndex = _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum);
-		if (logicalLineIndex >= Document.LineCount) return null;
+		int logicalLineIndex = Math.Min(Document.LineCount, _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum));
 		var layout = _lineCache.GetOrCreate(
 		  logicalLineIndex);
 

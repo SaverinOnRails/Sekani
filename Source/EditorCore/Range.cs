@@ -36,4 +36,5 @@ public readonly struct Range
 
 	public int Lower => Math.Min(Anchor, Head);
 	public int Higher => Math.Max(Anchor, Head);
+	public int Width => Higher - Lower;
 }

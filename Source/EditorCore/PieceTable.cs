@@ -655,8 +655,8 @@ internal class PieceTable
 		var firstPiece = CreatePieceNode(piece.pieceBuffer, piece.Start, piece.Start + offset);
 
 		//how many linebreaks between piece.start and piece.start + localOffset?
-		var l = LowerBound(linestarts, piece.Start);
-		var h = LowerBound(linestarts, piece.Start + offset);
+		var l = CountLineBreaksUntil(linestarts, piece.Start);
+		var h = CountLineBreaksUntil(linestarts, piece.Start + offset);
 		firstPiece.LineFeedCount = h - l;
 
 		var lastPiece = CreatePieceNode(piece.pieceBuffer, piece.Start + offset, piece.End);
@@ -666,7 +666,7 @@ internal class PieceTable
 
 	}
 
-	private int LowerBound(IReadOnlyList<int> buf, int target)
+	private int CountLineBreaksUntil(IReadOnlyList<int> buf, int target)
 	{
 		int lo = 0, hi = buf.Count;
 		while (lo < hi)
@@ -731,8 +731,8 @@ internal class PieceTable
 				line += node.LeftSubtreeLineFeedCount;
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
 				var target = node.Start + k;
-				var first = LowerBound(linestarts, node.Start);
-				var last = LowerBound(linestarts, target);
+				var first = CountLineBreaksUntil(linestarts, node.Start);
+				var last = CountLineBreaksUntil(linestarts, target);
 				var lfDelta = last - first;
 				line += lfDelta;
 
@@ -787,7 +787,7 @@ internal class PieceTable
 				var k = line - node.LeftSubtreeLineFeedCount;
 				var buffer = GetPieceBuffer(node);
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
-				var first = LowerBound(linestarts, node.Start);
+				var first = CountLineBreaksUntil(linestarts, node.Start);
 
 				var start = k == 0 ? node.Start : linestarts[first + k - 1];
 				var end = linestarts[first + k];          // just past the terminating newline
@@ -799,7 +799,7 @@ internal class PieceTable
 				// line starts in this piece (after its last newline) and runs off the end
 				var buffer = GetPieceBuffer(node);
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(node);
-				var first = LowerBound(linestarts, node.Start);
+				var first = CountLineBreaksUntil(linestarts, node.Start);
 
 				var start = node.LineFeedCount == 0 ? node.Start : linestarts[first + node.LineFeedCount - 1];
 				var end = node.Start + node.Length;
@@ -822,7 +822,7 @@ internal class PieceTable
 			if (next.LineFeedCount > 0)
 			{
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(next);
-				var first = LowerBound(linestarts, next.Start);
+				var first = CountLineBreaksUntil(linestarts, next.Start);
 				var end = linestarts[first];              // just past the first newline
 				AppendRange(sb, buffer, next.Start, end);
 				break;
@@ -1115,7 +1115,7 @@ internal class PieceTable
 			{
 				var k = line - node.LeftSubtreeLineFeedCount;
 				var starts = GetPieceBufferLineStartsForNodeBuffer(node);
-				var first = LowerBound(starts, node.Start);
+				var first = CountLineBreaksUntil(starts, node.Start);
 				var local = starts[first + k - 1] - node.Start;
 				return offset + node.LeftSubtreeBufferLength + local + col;
 			}
