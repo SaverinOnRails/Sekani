@@ -97,7 +97,6 @@ public sealed class LineCache
 	// 	}
 	// }
 
-	//Source from the piece table
 	public LineLayout? GetOrCreate(int index)
 	{
 		if (index > _pieceTable.LineFeedCount) return null;

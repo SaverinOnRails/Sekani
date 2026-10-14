@@ -220,23 +220,33 @@ internal class PieceTable
 
 	public void Insert(string text, int offset)
 	{
-		if (text.Length == 0) return;
-		int line = GetCoordinate(offset).Line;
-		int addedLines = GetLineStarts(text, 0).Count - 1;
-		InsertCore(text, offset);
-
-		RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
-		for (int i = 1; i <= addedLines; i++)
+		try
 		{
-			RaiseBufferChangedEvent(line + i, BufferChangeKind.LineAdded);
+			if (text.Length == 0) return;
+			int line = GetCoordinate(offset).Line;
+			int addedLines = GetLineStarts(text, 0).Count - 1;
+			InsertCore(text, offset);
+
+			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
+			for (int i = 1; i <= addedLines; i++)
+			{
+				RaiseBufferChangedEvent(line + i, BufferChangeKind.LineAdded);
+			}
+			UpdateTableMetadata();
 		}
-		UpdateTableMetadata();
+		catch (ArgumentOutOfRangeException)
+		{
+			Console.WriteLine("argument was out of range, ignoring action");
+		}
 	}
 
 	private void InsertCore(string text, int offset)
 	{
-
-		//TODO: do we need to handle empty tree case here?
+		if (_root == NULL_NODE)
+		{
+			InsertRight(NULL_NODE, text);
+			return;
+		}
 		var targetNodePosition = GetPieceByOffset(offset);
 		var nodeAbsoluteOffset = targetNodePosition.AbsoluteOffset;
 		var piece = targetNodePosition.Piece;
@@ -268,19 +278,26 @@ internal class PieceTable
 
 	public void Delete(int startOffset, int length)
 	{
-		if (length <= 0) return;
-		int first = GetCoordinate(startOffset).Line;
-		int last = GetCoordinate(startOffset + length).Line;
-		DeleteCore(startOffset, length);
-		RaiseBufferChangedEvent(first, BufferChangeKind.LineChanged);
-		for (int i = first; i < last; i++)
+		try
 		{
-			RaiseBufferChangedEvent(first + 1, BufferChangeKind.LineRemoved);
+			if (length <= 0) return;
+			int first = GetCoordinate(startOffset).Line;
+			int last = GetCoordinate(startOffset + length).Line;
+			DeleteCore(startOffset, length);
+			RaiseBufferChangedEvent(first, BufferChangeKind.LineChanged);
+			for (int i = first; i < last; i++)
+			{
+				RaiseBufferChangedEvent(first + 1, BufferChangeKind.LineRemoved);
+			}
+			UpdateTableMetadata();
 		}
-		UpdateTableMetadata();
+		catch (ArgumentOutOfRangeException)
+		{
+			Console.WriteLine("argument was out of range, ignoring action");
+		}
 	}
 
-	public void DeleteCore(int startOffset, int length)
+	private void DeleteCore(int startOffset, int length)
 	{
 		if (length <= 0) return;
 		var startPosition = GetPieceByOffset(startOffset);
@@ -663,7 +680,13 @@ internal class PieceTable
 	}
 	private void InsertAsSuccessor(PieceNode target, PieceNode newNode)
 	{
-		if (target.Right == NULL_NODE)
+		if (_root == NULL_NODE)
+		{
+			_root = newNode;
+			_root.Color = RBColor.Black;
+			return;
+		}
+		else if (target.Right == NULL_NODE)
 		{
 			target.Right = newNode;
 			newNode.Parent = target;
@@ -861,7 +884,12 @@ internal class PieceTable
 		newPiece.LineFeedCount = linestarts.Count;
 
 		//insert before piece
-		if (piece.Left == NULL_NODE)
+		if (_root == NULL_NODE)
+		{
+			_root = newPiece;
+			_root.Color = RBColor.Black;
+		}
+		else if (piece.Left == NULL_NODE)
 		{
 			piece.Left = newPiece;
 			newPiece.Parent = piece;
@@ -1103,11 +1131,11 @@ internal class PieceTable
 	}
 
 
-	//TODO: handle when all piece is deleted and when offset > total buffer
 	private PiecePosition GetPieceByOffset(int offset)
 	{
 		var node = _root;
 		var absoluteOffset = 0;
+		int originalOffset = offset;
 		while (node != NULL_NODE)
 		{
 			if (node.LeftSubtreeBufferLength > offset)
@@ -1127,7 +1155,7 @@ internal class PieceTable
 				node = node.Right;
 			}
 		}
-		throw new ArgumentOutOfRangeException();
+		throw new ArgumentOutOfRangeException($"Max Offset : {BufferLength} , original passed offset {originalOffset}");
 	}
 
 

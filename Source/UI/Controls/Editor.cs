@@ -24,7 +24,7 @@ public class Editor : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = true;
+	private bool _drawLineNumbers = false;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
@@ -51,7 +51,7 @@ public class Editor : Control
 	private double _scrollbarPointerStartY;
 	private int _preferredDragScrollVisualColumn = 0;
 	private double _scrollbarScrollStartY;
-	private bool _softWordWrap = false;
+	private bool _softWordWrap = true;
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
