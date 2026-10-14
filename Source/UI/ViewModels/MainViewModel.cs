@@ -24,8 +24,8 @@ public partial class MainViewModel : ViewModelBase
        // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
        var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
         // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
-        Document = new(file);
-        // Document = new();
+        // Document = new(file);
+        Document = new();
     }
 
     public void HandleCommand(string? command)

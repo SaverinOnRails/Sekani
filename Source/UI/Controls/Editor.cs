@@ -526,7 +526,7 @@ public class Editor : Control
 	private double GetDocumentHeightInPixels()
 	{
 		return _lineCache.TotalVisualLines() *
-		  _editorMetrics.LineHeight;
+		  _editorMetrics.LineHeight + (EditorArea.Height / 2);
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 15;
