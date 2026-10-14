@@ -106,6 +106,7 @@ public sealed class SekaniDocument
 		{
 			var visualLineIndex =
 				layout.GetVisualCoordinate(CaretPosition).VisualLine;
+			Console.WriteLine(CaretPosition);
 			if (direction == CaretVerticalDirection.Down &&
 				visualLineIndex < layout.VisualLines.Count - 1)
 			{
@@ -118,9 +119,12 @@ public sealed class SekaniDocument
 				{
 					TrailVisualLine = _preferredVisualColumn == 0
 				};
-				var offset = _pieceTable.GetOffset(newpos);
-				CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
-				return;
+				if (newpos != CaretPosition)
+				{
+					var offset = _pieceTable.GetOffset(newpos);
+					CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
+					return;
+				}
 			}
 
 			if (direction == CaretVerticalDirection.Up &&
@@ -265,8 +269,6 @@ public sealed class SekaniDocument
 		var insertpos = new Coordinate(text.Length, pos.Line);
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		var newpos = new Coordinate(0, pos.Line + 1);
-		Console.WriteLine(pos);
-		Console.WriteLine(newpos);
 		CaretRange = new(GetOffset(newpos));
 	}
 
