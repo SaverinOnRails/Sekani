@@ -106,7 +106,6 @@ public sealed class SekaniDocument
 		{
 			var visualLineIndex =
 				layout.GetVisualCoordinate(CaretPosition).VisualLine;
-			Console.WriteLine(CaretPosition);
 			if (direction == CaretVerticalDirection.Down &&
 				visualLineIndex < layout.VisualLines.Count - 1)
 			{
