@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Sekani.EditorCore;
@@ -120,10 +119,10 @@ public enum PieceBuffer
 
 internal class PieceTable
 {
-	private readonly IReadOnlyList<byte> _originalBuffer;
+	private readonly IReadOnlyList<char> _originalBuffer;
 	private IReadOnlyList<int> _originalBufferLineStarts = [0];
 	private PieceNode _root;
-	private readonly List<byte> _addBuffer = [];
+	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
 	public event EventHandler<BufferChangeData>? BufferChangedEvent;
 
@@ -135,10 +134,9 @@ internal class PieceTable
 
 	public PieceTable(string original)
 	{
-		var originalBytes = Encoding.UTF8.GetBytes(original);
-		_originalBuffer = [.. originalBytes];
-		var root = CreatePieceNode(PieceBuffer.Original, 0, originalBytes.Length, RBColor.Black);
-		var originalLineStarts = GetLineStarts(originalBytes, 0);
+		_originalBuffer = [.. original];
+		var root = CreatePieceNode(PieceBuffer.Original, 0, original.Length, RBColor.Black);
+		var originalLineStarts = GetLineStarts(original, 0);
 		_originalBufferLineStarts = [0, .. originalLineStarts];
 		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
@@ -159,7 +157,7 @@ internal class PieceTable
 		NULL_NODE.Right = NULL_NODE;
 		NULL_NODE.Parent = NULL_NODE;
 	}
-	private List<int> GetLineStarts(ReadOnlySpan<byte> text, int offset)
+	private List<int> GetLineStarts(string text, int offset)
 	{
 		List<int> lineBreakOffsets = [];
 		for (int i = 0; i < text.Length; i++)
@@ -222,13 +220,12 @@ internal class PieceTable
 
 	public void Insert(string text, int offset)
 	{
-		var bytes = Encoding.UTF8.GetBytes(text);
 		try
 		{
 			if (text.Length == 0) return;
 			int line = GetCoordinate(offset).Line;
-			int addedLines = GetLineStarts(bytes, 0).Count - 1;
-			InsertCore(bytes, offset);
+			int addedLines = GetLineStarts(text, 0).Count - 1;
+			InsertCore(text, offset);
 
 			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
 			for (int i = 1; i <= addedLines; i++)
@@ -243,7 +240,7 @@ internal class PieceTable
 		}
 	}
 
-	private void InsertCore(ReadOnlySpan<byte> text, int offset)
+	private void InsertCore(string text, int offset)
 	{
 		if (_root == NULL_NODE)
 		{
@@ -631,7 +628,7 @@ internal class PieceTable
 		NULL_NODE.Parent = NULL_NODE;
 	}
 
-	private void InsertMiddle(PieceNode piece, ReadOnlySpan<byte> text, int localOffset)
+	private void InsertMiddle(PieceNode piece, string text, int localOffset)
 	{
 		//offset is guaranteed to be somewhere inside the piece and not the edges
 		var (firstPiece, lastPiece) = SplitNodeAtMiddle(piece, localOffset);
@@ -703,8 +700,6 @@ internal class PieceTable
 		}
 		FixAfterInsertion(newNode);
 	}
-
-	//TODO: this is still tuned to utf16
 	public string Print()
 	{
 		StringBuilder builder = new();
@@ -777,8 +772,7 @@ internal class PieceTable
 
 	private string PrintRawLineCore(int line)
 	{
-		var byteData = new List<byte>();
-		// var sb = new StringBuilder();
+		var sb = new StringBuilder();
 		var node = _root;
 
 		while (node != NULL_NODE)
@@ -797,8 +791,8 @@ internal class PieceTable
 
 				var start = k == 0 ? node.Start : linestarts[first + k - 1];
 				var end = linestarts[first + k];          // just past the terminating newline
-				AppendRange(byteData, buffer, start, end);
-				return Encoding.UTF8.GetString(CollectionsMarshal.AsSpan(byteData));
+				AppendRange(sb, buffer, start, end);
+				return sb.ToString();
 			}
 			else if (node.LeftSubtreeLineFeedCount + node.LineFeedCount == line)
 			{
@@ -809,7 +803,7 @@ internal class PieceTable
 
 				var start = node.LineFeedCount == 0 ? node.Start : linestarts[first + node.LineFeedCount - 1];
 				var end = node.Start + node.Length;
-				AppendRange(byteData, buffer, start, end);
+				AppendRange(sb, buffer, start, end);
 				break;
 			}
 			else
@@ -819,7 +813,7 @@ internal class PieceTable
 			}
 		}
 
-		if (node == NULL_NODE) return Encoding.UTF8.GetString(CollectionsMarshal.AsSpan(byteData));// line is past the end
+		if (node == NULL_NODE) return sb.ToString();   // line is past the end
 
 		// the tail of the line continues in the following pieces
 		for (var next = PieceNode.Next(node); next != NULL_NODE; next = PieceNode.Next(next))
@@ -830,22 +824,17 @@ internal class PieceTable
 				var linestarts = GetPieceBufferLineStartsForNodeBuffer(next);
 				var first = CountLineBreaksUntil(linestarts, next.Start);
 				var end = linestarts[first];              // just past the first newline
-				AppendRange(byteData, buffer, next.Start, end);
+				AppendRange(sb, buffer, next.Start, end);
 				break;
 			}
-			AppendRange(byteData, buffer, next.Start, next.Start + next.Length);
+			AppendRange(sb, buffer, next.Start, next.Start + next.Length);
 		}
-		return Encoding.UTF8.GetString(CollectionsMarshal.AsSpan(byteData));
+		return sb.ToString();
 	}
 	private static void AppendRange(StringBuilder sb, IReadOnlyList<char> buffer, int start, int end)
 	{
 		for (int i = start; i < end; i++)
 			sb.Append(buffer[i]);
-	}
-	private static void AppendRange(List<byte> sb, IReadOnlyList<byte> buffer, int start, int end)
-	{
-		for (int i = start; i < end; i++)
-			sb.Add(buffer[i]);
 	}
 	public int GetOffset(Coordinate pos)
 	{
@@ -867,7 +856,7 @@ internal class PieceTable
 	}
 
 
-	private void InsertRight(PieceNode piece, ReadOnlySpan<byte> text)
+	private void InsertRight(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
 		var linestarts = GetLineStarts(text, bufferInsertOffset);
@@ -882,7 +871,7 @@ internal class PieceTable
 		InsertAsSuccessor(piece, newPiece);
 	}
 
-	private void InsertLeft(PieceNode piece, ReadOnlySpan<byte> text)
+	private void InsertLeft(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
 		var linestarts = GetLineStarts(text, bufferInsertOffset);
@@ -1046,7 +1035,7 @@ internal class PieceTable
 		node.LeftSubtreeLineFeedCount -=
 			leftNode.LeftSubtreeLineFeedCount + leftNode.LineFeedCount;
 	}
-	private void ExtendLastAddBufferPiece(PieceNode piece, ReadOnlySpan<byte> text)
+	private void ExtendLastAddBufferPiece(PieceNode piece, string text)
 	{
 		var bufferInsertOffset = _addBuffer.Count;
 		var linestarts = GetLineStarts(text, bufferInsertOffset);
@@ -1170,7 +1159,7 @@ internal class PieceTable
 	}
 
 
-	private IReadOnlyList<byte> GetPieceBuffer(PieceNode node)
+	private IReadOnlyList<char> GetPieceBuffer(PieceNode node)
 	{
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBuffer;
 		return _addBuffer;
