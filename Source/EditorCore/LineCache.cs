@@ -1,12 +1,12 @@
 using Sekani.EditorCore.Utils;
-
 namespace Sekani.EditorCore;
 
 public sealed class LineCache
 {
 	private readonly SekaniBuffer _buffer;
+	private readonly PieceTable _pieceTable;
 	private readonly List<LineLayout?> _layoutCache = [];
-	public int Width { get; private set; }
+	public int Width { get; private set; } = 0;
 	private Line? _longestLine;
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
@@ -15,39 +15,26 @@ public sealed class LineCache
 
 	private VisualLineTree _visualLineTree = new();
 
-	public LineCache(SekaniBuffer buffer, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
+	internal LineCache(SekaniBuffer buffer, PieceTable pieceTable, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
 		_buffer = buffer;
 		_tabSize = tabSize;
+		_pieceTable = pieceTable;
 		_wordWrap = wordWrap;
 		_maxVisualColsPerLine = maxVisualColsPerLine;
-		_buffer.BufferChangedEvent += BufferChanged;
-		RecalculateWidth();
+		// _buffer.BufferChangedEvent += BufferChanged;
+		_pieceTable.BufferChangedEvent += PieceTableLineChanged;
+		// RecalculateWidth();
 	}
 
-	private void BufferChanged(object? sender, BufferChangeData e)
+	private void PieceTableLineChanged(object? sender, BufferChangeData e)
 	{
-		//do this first as a removed line may no longer be in the buffer
 		if (e.kind == BufferChangeKind.LineRemoved)
 		{
 			_visualLineTree.RemoveAt(e.Line);
 			_layoutCache.RemoveAt(e.Line);
 		}
 
-		var line = _buffer.GetLine(e.Line);
-		if (line is null)
-			return;
-
-		if (_longestLine is null ||
-			line.Text.Length >= Width)
-		{
-			_longestLine = line;
-			Width = line.Text.Length;
-		}
-		else if (line == _longestLine)
-		{
-			RecalculateWidth();
-		}
 		if (e.kind == BufferChangeKind.LineAdded)
 		{
 			if (e.Line <= _visualLineTree.Count)
@@ -59,86 +46,116 @@ public sealed class LineCache
 		InvalidateLayout(e.Line);
 	}
 
+	private void UpdateDocumentWidth(int width) => Width = Math.Max(Width, width);
 
-	private void RecalculateWidth()
+	// private void BufferChanged(object? sender, BufferChangeData e)
+	// {
+	// 	//do this first as a removed line may no longer be in the buffer
+	// 	if (e.kind == BufferChangeKind.LineRemoved)
+	// 	{
+	// 		_visualLineTree.RemoveAt(e.Line);
+	// 		_layoutCache.RemoveAt(e.Line);
+	// 	}
+
+	// 	var line = _buffer.GetLine(e.Line);
+	// 	if (line is null)
+	// 		return;
+
+	// 	if (_longestLine is null ||
+	// 		line.Text.Length >= Width)
+	// 	{
+	// 		_longestLine = line;
+	// 		Width = line.Text.Length;
+	// 	}
+	// 	else if (line == _longestLine)
+	// 	{
+	// 		RecalculateWidth();
+	// 	}
+	// 	if (e.kind == BufferChangeKind.LineAdded)
+	// 	{
+	// 		if (e.Line <= _visualLineTree.Count)
+	// 		{
+	// 			_visualLineTree.Insert(e.Line, 1);
+	// 			_layoutCache.Insert(e.Line, null);
+	// 		}
+	// 	}
+	// 	InvalidateLayout(e.Line);
+	// }
+
+
+	// private void RecalculateWidth()
+	// {
+	// 	_longestLine = null;
+	// 	Width = 0;
+	// 	foreach (var line in _buffer.Lines)
+	// 	{
+	// 		if (line.Text.Length > Width)
+	// 		{
+	// 			_longestLine = line;
+	// 			Width = line.Text.Length;
+	// 		}
+	// 	}
+	// }
+
+	public LineLayout? GetOrCreate(int index)
 	{
-		_longestLine = null;
-		Width = 0;
-		foreach (var line in _buffer.Lines)
-		{
-			if (line.Text.Length > Width)
-			{
-				_longestLine = line;
-				Width = line.Text.Length;
-			}
-		}
-	}
-	public LineLayout? GetOrCreate(int index, bool updateVisualLineCount = true)
-	{
-		if (index > _buffer.Lines.Count) return null;
+		if (index > _pieceTable.LineFeedCount) return null;
 		//pad to fill up
 		while (_layoutCache.Count <= index)
 			_layoutCache.Insert(_layoutCache.Count, null);
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-		if (_layoutCache[index] != null) return _layoutCache[index];
-		var line = _buffer.Lines[index];
+
+		var line = new Line() { Text = _pieceTable.PrintCleanLine(index) };
 		var lineLayout = new LineLayout(
 			line,
 			_tabSize,
 			_wordWrap,
 			_maxVisualColsPerLine);
 		_layoutCache[index] = lineLayout;
-		if (updateVisualLineCount)
-		{
-			var oldCount = VisualLineCountAt(index);
-			var newCount = lineLayout.VisualLines.Count;
-			var delta = newCount - oldCount;
-			if (delta != 0)
-				VisualLineTreeUpdated?.Invoke(
-					this,
-					new(index, delta));
-			SetVisualLineCount(index, newCount);
-		}
+		UpdateDocumentWidth(lineLayout.VisualText.Length);
+		var oldCount = VisualLineCountAt(index);
+		var newCount = lineLayout.VisualLines.Count;
+		var delta = newCount - oldCount;
+		if (delta != 0)
+			VisualLineTreeUpdated?.Invoke(
+				this,
+				new(index, delta));
+		SetVisualLineCount(index, newCount);
 		return lineLayout;
 
 	}
-	// public LineLayout? GetOrCreate(Line line, int? index = null)
+	// public LineLayout? GetOrCreate(int index, bool updateVisualLineCount = true)
 	// {
-	// 	if (!_layoutCache.TryGetValue(line, out var lineLayout))
+	// 	if (index > _buffer.Lines.Count) return null;
+	// 	//pad to fill up
+	// 	while (_layoutCache.Count <= index)
+	// 		_layoutCache.Insert(_layoutCache.Count, null);
+	// 	while (_visualLineTree.Count <= index)
+	// 		_visualLineTree.Insert(_visualLineTree.Count, 1);
+	// 	if (_layoutCache[index] != null) return _layoutCache[index];
+	// 	var line = _buffer.Lines[index];
+	// 	var lineLayout = new LineLayout(
+	// 		line,
+	// 		_tabSize,
+	// 		_wordWrap,
+	// 		_maxVisualColsPerLine);
+	// 	_layoutCache[index] = lineLayout;
+	// 	if (updateVisualLineCount)
 	// 	{
-	// 		lineLayout = new LineLayout(
-	// 			line,
-	// 			_tabSize,
-	// 			_wordWrap,
-	// 			_maxVisualColsPerLine);
-
-	// 		_layoutCache[line] = lineLayout;
-	// 	}
-	// 	if (index is not null)
-	// 	{
-	// 		// Pad to fill up
-	// 		while (_visualLineTree.Count <= index)
-	// 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-
-	// 		if (_buffer.Lines[index.Value] != line)
-	// 		{
-	// 			SetVisualLineCount(index.Value,
-	// 				new LineLayout(
-	// 					line,
-	// 					_tabSize,
-	// 					_wordWrap,
-	// 					_maxVisualColsPerLine)
-	// 				.VisualLines.Count
-	// 				);
-	// 		}
-	// 		else
-	// 		{
-	// 			SetVisualLineCount(index.Value, lineLayout.VisualLines.Count);
-	// 		}
+	// 		var oldCount = VisualLineCountAt(index);
+	// 		var newCount = lineLayout.VisualLines.Count;
+	// 		var delta = newCount - oldCount;
+	// 		if (delta != 0)
+	// 			VisualLineTreeUpdated?.Invoke(
+	// 				this,
+	// 				new(index, delta));
+	// 		SetVisualLineCount(index, newCount);
 	// 	}
 	// 	return lineLayout;
+
 	// }
+
 	private void InvalidateLayout(int line)
 	{
 		// _layoutCache.Remove(line);
@@ -161,11 +178,11 @@ public sealed class LineCache
 	}
 
 
-	//This is the initial build call
 	public void BuildVisualLinesIndexes()
 	{
 		_visualLineTree.Clear();
-		var buffer = new int[_buffer.Lines.Count];
+		Width = 0;
+		var buffer = new int[_pieceTable.LineFeedCount];
 		Array.Fill(buffer, 1);
 		_visualLineTree.Build(buffer);
 	}
@@ -188,7 +205,7 @@ public sealed class LineCache
 
 	public int TotalVisualLines()
 	{
-		return VisualLinesPrefixSum(_buffer.Lines.Count);
+		return VisualLinesPrefixSum(_pieceTable.LineFeedCount);
 	}
 
 	public int VisualLineCountAt(int index)

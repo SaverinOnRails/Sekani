@@ -2,7 +2,7 @@ namespace Sekani.EditorCore;
 
 public class Coordinate
 {
-	public int Col { get; private set; }
+	public int Col { get; private set; } //zero indexed utf-16 code point offset
 	public int Line { get; private set; }
 	public bool TrailVisualLine { get; set; } = false;
 	public Coordinate? Anchor = null;

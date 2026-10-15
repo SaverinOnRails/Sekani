@@ -71,7 +71,7 @@ public class LineLayout
 
 		VisualText = builder.ToString();
 	}
-	public VisualCoordinate GetVisualCoordinate(Coordinate coord , bool forceTrailVisualLine = false)
+	public VisualCoordinate GetVisualCoordinate(Coordinate coord, bool forceTrailVisualLine = false)
 	{
 		var logicalCol = coord.Col;
 		var targetVisualLine =
@@ -108,11 +108,16 @@ public class LineLayout
 	{
 		if (coord.VisualLine < 0 || coord.VisualLine >= _visualLines.Count)
 			return 0;
+
 		var visualLine = _visualLines[coord.VisualLine];
+		int start = visualLine.LogicalOffset;
+		int end = start + visualLine.LogicalLength;
+
+		// Exclude the line break from the visible range.
+		if (end > start && _logicalText[end - 1] == '\n') end--;
+
 		int currentVisualCol = 0;
-		for (int i = visualLine.LogicalOffset;
-			 i < visualLine.LogicalOffset + visualLine.LogicalLength;
-			 i++)
+		for (int i = start; i < end; i++)
 		{
 			int width = _logicalText[i] == '\t'
 				? VisualTabWidth(currentVisualCol, _tabSize)
@@ -123,9 +128,8 @@ public class LineLayout
 
 			currentVisualCol += width;
 		}
-		return visualLine.LogicalOffset + visualLine.LogicalLength;
+		return end;
 	}
-
 	private VisualLine? GetVisualLine(int logicalCol, out int index)
 	{
 		for (int i = 0; i < _visualLines.Count; i++)

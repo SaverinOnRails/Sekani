@@ -13,15 +13,16 @@ public class Editor : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
+	private Typeface _normalLineNumberFontFace = Typeface.Default;
+	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
 	private readonly float _fontSize = 15;
 	private LineCache _lineCache;
 	private
 	const float _baseLineNumberWidth = 20;
 
-	//TODO: This can change during normal editing operations like adding a new line that increasing this count, which indirectly invalidates the max width of wrapped characters
 	private double LineNumberSectDisplayWidth =>
 	  _baseLineNumberWidth +
-	  Math.Max(0, Math.Max(Document.Lines.Count.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
+	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
 	private bool _drawLineNumbers = true;
 	private bool _useRelativeLineNumber = false;
@@ -38,6 +39,7 @@ public class Editor : Control
 	private bool _shouldDrawCaretFocusBubble = false;
 	private readonly IBrush _mainTextBrush = Brush.Parse("#F3E6D5");
 	private readonly IBrush _lineNumberBrush = new SolidColorBrush(Colors.White, 0.4);
+	private readonly IBrush _lineNumberGutterBrush = new SolidColorBrush(Colors.White, 0.1);
 	private readonly IBrush _focusedLineNumberBrush = new SolidColorBrush(Colors.White, 0.8);
 	private int _caretFocusBubbleRadius = 0;
 	private double _caretFocusBubbleProgress = 0;
@@ -98,7 +100,7 @@ public class Editor : Control
 		 VisualLineTreeUpdatedParams e)
 	{
 		var (firstLogicalLine, _, _) = ComputeVisibleText();
-		if (e.lineIndex > firstLogicalLine)
+		if (e.lineIndex >= firstLogicalLine)
 			return;
 
 		var deltaPixels = e.delta * _editorMetrics.LineHeight;
@@ -112,7 +114,7 @@ public class Editor : Control
 	{
 		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
-		Document.CaretPosition = new(0, 0);
+		Document.SetCaretRange(0);
 	}
 
 	private void TimeCaret()
@@ -148,8 +150,6 @@ public class Editor : Control
 		correctiveDistance = 0;
 
 		var coord = Document.CaretPosition;
-
-		var line = Document.Lines[coord.Line];
 		var lineLayout = _lineCache.GetOrCreate(coord.Line);
 		if (lineLayout is null)
 			return false;
@@ -493,14 +493,24 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code", FontStyle.Italic);
+		_editorFontFace = new Typeface("Cascadia Code");
+		_normalLineNumberFontFace = new Typeface(
+		_editorFontFace.FontFamily,
+		_editorFontFace.Style,
+		_editorFontFace.Weight);
+
+		_focusedLineNumberTypeFace = new Typeface(
+		_editorFontFace.FontFamily,
+		_editorFontFace.Style,
+		FontWeight.Bold);
+
 		var text = new FormattedText(
-		  "#",
-		  CultureInfo.InvariantCulture,
-		  FlowDirection.LeftToRight,
-		  _editorFontFace,
-		  _fontSize,
-		  Brushes.White);
+			"#",
+			CultureInfo.InvariantCulture,
+			FlowDirection.LeftToRight,
+			_editorFontFace,
+			_fontSize,
+			Brushes.White);
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = text.Height * 1.25;
@@ -516,7 +526,7 @@ public class Editor : Control
 	private double GetDocumentHeightInPixels()
 	{
 		return _lineCache.TotalVisualLines() *
-		  _editorMetrics.LineHeight;
+		  _editorMetrics.LineHeight + (EditorArea.Height / 2);
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 15;
@@ -580,13 +590,14 @@ public class Editor : Control
 	}
 	private void DrawSelection(DrawingContext context)
 	{
-		if (!Document.CaretPosition.HasRange()) return;
 		using
 		var clip = context.PushClip(EditorArea);
-		var greaterRangeEnd = Document.CaretPosition.GreaterRangeEnd();
-		var lesserRangeEnd = Document.CaretPosition.LesserRangeEnd();
-		var firstLine = lesserRangeEnd!.Line;
-		var lastLine = greaterRangeEnd!.Line;
+		var range = Document.CaretRange;
+		var higher = Document.GetCoordinate(range.Higher);
+		var lower = Document.GetCoordinate(range.Lower);
+
+		var firstLine = lower.Line;
+		var lastLine = higher.Line;
 		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(firstLine);
 		var visualLineSum = visualLinesBefore;
 		for (int i = firstLine; i <= lastLine; i++)
@@ -596,11 +607,11 @@ public class Editor : Control
 			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
 			{
 				var startAtPixels = EditorArea.Left;
-				var endOfVisualLine = Math.Max(1, lineLayout.VisualLines[j].VisualLength);
+				var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
 				if (i == firstLine)
 				{
-					var startVisualCoord = lineLayout.GetVisualCoordinate(lesserRangeEnd, _useThickCursor);
+					var startVisualCoord = lineLayout.GetVisualCoordinate(lower, _useThickCursor);
 					if (j < startVisualCoord.VisualLine)
 					{
 						visualLineSum++;
@@ -614,7 +625,7 @@ public class Editor : Control
 				}
 				if (i == lastLine)
 				{
-					var endVisualCoord = lineLayout.GetVisualCoordinate(greaterRangeEnd, _useThickCursor);
+					var endVisualCoord = lineLayout.GetVisualCoordinate(higher, _useThickCursor);
 					if (j > endVisualCoord.VisualLine)
 					{
 						break;
@@ -647,7 +658,7 @@ public class Editor : Control
 
 		// gutter
 		context.DrawLine(
-		  new Pen(new SolidColorBrush(Colors.White, 0.1)),
+		  new Pen(_lineNumberGutterBrush),
 		  new Point(LineNumbersSectRect.Right, 0),
 		  new Point(LineNumbersSectRect.Right, LineNumbersSectRect.Height));
 
@@ -656,28 +667,19 @@ public class Editor : Control
 		lastLogicalLine += 5;
 		for (int i = visibleTextBounds.firstLogicalLine; i < lastLogicalLine; i++)
 		{
-			if (i >= Document.Lines.Count) return;
-			var line = Document.Lines[i];
+			if (i >= Document.LineCount) return;
 			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null)
 				continue;
-
 			var caretLine = Document.CaretPosition.Line;
-
 			var number = _useRelativeLineNumber
 				? (i == caretLine ? i + 1 : Math.Abs(i - caretLine))
 				: i + 1;
-			var fontFace = new Typeface(
-					_editorFontFace.FontFamily,
-					_editorFontFace.Style,
-					i == Document.CaretPosition.Line
-						? FontWeight.Bold
-						: _editorFontFace.Weight);
 			var ft = new FormattedText(
 			  number.ToString(),
 			  CultureInfo.InvariantCulture,
 			  FlowDirection.LeftToRight,
-			  fontFace,
+			  i == Document.CaretPosition.Line ? _focusedLineNumberTypeFace : _normalLineNumberFontFace,
 			  _fontSize,
 			  i == Document.CaretPosition.Line ? _focusedLineNumberBrush : _lineNumberBrush
 			);
@@ -733,8 +735,7 @@ public class Editor : Control
 			_editorMetrics.CharAdvance));
 
 		// Find the logical line containing targetVisualLine.
-		int logicalLineIndex = _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum);
-		if (logicalLineIndex >= Document.Lines.Count) return null;
+		int logicalLineIndex = Math.Min(Document.LineCount, _lineCache.FindByPrefixSum(targetVisualLine, out int visualLineSum));
 		var layout = _lineCache.GetOrCreate(
 		  logicalLineIndex);
 
@@ -756,8 +757,7 @@ public class Editor : Control
 	{
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
-		Document.CaretPosition =
-		  pos;
+		Document.SetCaretRange(pos);
 		Document.UpdatePreferredVisualColumn();
 		_caretVisible = true;
 		_pointerPressedOnCoordinate = true;
@@ -832,10 +832,8 @@ public class Editor : Control
 			if (point.Y < EditorArea.Top + _autoScrollMargin)
 			{
 				//this is rough but just check if we can move the caret up vertically
-				var currentLine = Document.Lines[Document.CaretPosition.Line];
 				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
 				if (layout is null) return;
-
 				var posInLine = layout.GetVisualCoordinate(Document.CaretPosition);
 
 				if (layout.VisualLines.Count > 1)
@@ -847,11 +845,8 @@ public class Editor : Control
 						  posInLine.VisualLine - 1);
 
 						var newLogicalCol = layout.GetLogicalColumn(newVisualCoord);
-
-						Document.CaretPosition.SetCoord(
-						  newLogicalCol,
-						  Document.CaretPosition.Line);
-
+						var offset = Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line));
+						Document.SetDocumentCaretRangeHead(offset);
 						EnsureCaretVisible();
 						Redraw();
 						return;
@@ -876,17 +871,13 @@ public class Editor : Control
 				  layoutOfPrevLine.GetLogicalColumn(
 					newVisualCoordOfLastLine);
 
-				Document.CaretPosition.SetCoord(
-				  newLogicalColOfLastLine,
-				  Document.CaretPosition.Line - 1);
-
+				Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.CaretPosition.Line - 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
 
 			if (point.Y > EditorArea.Bottom - _autoScrollMargin)
 			{
-				var currentLine = Document.Lines[Document.CaretPosition.Line];
 				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
 				if (layout is null) return;
 
@@ -902,18 +893,14 @@ public class Editor : Control
 
 						var newLogicalCol = layout.GetLogicalColumn(
 						  newVisualCoord);
-
-						Document.CaretPosition.SetCoord(
-						  newLogicalCol,
-						  Document.CaretPosition.Line);
-
+						Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line)));
 						EnsureCaretVisible();
 						Redraw();
 						return;
 					}
 				}
 
-				if (Document.CaretPosition.Line >= Document.Lines.Count - 1)
+				if (Document.CaretPosition.Line >= Document.LineCount - 1)
 					return;
 
 				var layoutOfNextLine = _lineCache.GetOrCreate(
@@ -928,11 +915,7 @@ public class Editor : Control
 				var newLogicalColOfFirstLine =
 				  layoutOfNextLine.GetLogicalColumn(
 					newVisualCoordOfFirstLine);
-
-				Document.CaretPosition.SetCoord(
-				  newLogicalColOfFirstLine,
-				  Document.CaretPosition.Line + 1);
-
+				Document.SetDocumentCaretRangeHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.CaretPosition.Line + 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -946,14 +929,9 @@ public class Editor : Control
 		EnsureCaretVisible(ensureHorizontal: true, ensureVertical: false);
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
-		if (Document.CaretPosition.Anchor is null)
-		{
-			Document.CaretPosition.Anchor = new(Document.CaretPosition.Col, Document.CaretPosition.Line);
-		}
 
-		Document.CaretPosition.SetCoord(pos.Col, pos.Line);
-		var line = Document.Lines[Document.CaretPosition.Line];
-		var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
+		Document.SetDocumentCaretRangeHead(Document.GetOffset(pos));
+		var layout = _lineCache.GetOrCreate(pos.Line);
 		if (layout is null) return;
 		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.CaretPosition).VisualCol;
 		Redraw();
@@ -1087,19 +1065,17 @@ public class Editor : Control
 		});
 
 		int currentVisualLine = 0;
-		//pre measure some lines above the viewport.
 		int logicalLineToBeginCount = visibleTextBounds.firstLogicalLine;
 		var lastLogicalLine = visibleTextBounds.lastPossibleLogicalLine + 5;
 		var caretPos = Document.CaretPosition;
-		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)!.GetVisualCoordinate(caretPos).VisualLine;
+		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)?.GetVisualCoordinate(caretPos).VisualLine;
 		Rect? hintRectangle = null;
 		using (var clip = context.PushClip(EditorArea))
 		{
 			for (int i = logicalLineToBeginCount; i <= visibleTextBounds.lastPossibleLogicalLine; i++)
 			{
-				if (i >= Document.Lines.Count) break;
+				if (i >= Document.LineCount) break;
 				if (i < 0) continue;
-				var line = Document.Lines[i];
 				var lineLayout = _lineCache.GetOrCreate(i);
 
 				if (lineLayout is null) return;
@@ -1254,6 +1230,9 @@ public class Editor : Control
 				break;
 			case "e":
 				Document.SelectToNextWordEnd();
+				break;
+			case "p":
+				Document.PrintPieceTable();
 				break;
 			case ":":
 				{
