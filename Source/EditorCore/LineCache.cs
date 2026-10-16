@@ -105,7 +105,7 @@ public sealed class LineCache
 			_layoutCache.Insert(_layoutCache.Count, null);
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-
+		if(_layoutCache[index] != null) return _layoutCache[index];
 		var line = new Line() { Text = _pieceTable.PrintCleanLine(index) };
 		var lineLayout = new LineLayout(
 			line,
@@ -129,7 +129,7 @@ public sealed class LineCache
 	// {
 	// 	if (index > _buffer.Lines.Count) return null;
 	// 	//pad to fill up
-	// 	while (_layoutCache.Count <= index)
+	// 	while (_lyoutCache.Count <= index)
 	// 		_layoutCache.Insert(_layoutCache.Count, null);
 	// 	while (_visualLineTree.Count <= index)
 	// 		_visualLineTree.Insert(_visualLineTree.Count, 1);

@@ -251,7 +251,22 @@ public sealed class SekaniDocument
 
 	private void AdvanceCaretCol(int count)
 	{
+		var line = CaretPosition.Line;
+		if (count == 1)
+		{
+			CaretRange = new(NextGraphemeBoundary(CaretRange.Cursor));
+			return;
+		}
 		CaretRange = new(CaretRange.Cursor + count);
+	}
+	public int NextGraphemeBoundary(int offset)
+	{
+		var pos = GetCoordinate(offset);
+		var line = pos.Line;
+		var layout = _lineCache!.GetOrCreate(line);
+		var next = new Coordinate(layout!.NextCol(pos.Col), line);
+		return GetOffset(next);
+
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
@@ -339,8 +354,10 @@ public sealed class SekaniDocument
 	public void PlaceCursorAtLineEnd()
 	{
 		var line = CaretPosition.Line;
-		var text = _pieceTable.PrintCleanLine(line);
-		CaretRange = new(GetOffset(new Coordinate(Math.Max(0, text.Length - 1), line)));
+		var layout = _lineCache!.GetOrCreate(line);
+		if(layout is null) return;
+		var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
+		CaretRange = new(GetOffset(new Coordinate(lastBoundary, line)));
 	}
 
 	public void AddNewLineAboveSelection()

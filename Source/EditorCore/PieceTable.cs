@@ -228,9 +228,9 @@ internal class PieceTable
 			InsertCore(text, offset);
 
 			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
-			for (int i = 1; i <= addedLines; i++)
+			for (int i = 0; i <= addedLines; i++)
 			{
-				RaiseBufferChangedEvent(line + i, BufferChangeKind.LineAdded);
+				RaiseBufferChangedEvent(line, BufferChangeKind.LineAdded);
 			}
 			UpdateTableMetadata();
 		}
