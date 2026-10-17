@@ -24,11 +24,11 @@ public class LineLayout
 		DoLayout(line);
 	}
 
-	private int GraphemeWidth(string grapheme, int visualCol)
+	private int GraphemeWidth(ReadOnlySpan<char> grapheme, int visualCol)
 	{
 		if (grapheme == "\t") return VisualTabWidth(visualCol, _tabSize);
 		if (grapheme == "\n") return 1;
-		var width = UnicodeCalculator.GetWidth(grapheme);
+		var width = UnicodeCalculator.GetWidth(grapheme.ToString());
 		return width;
 	}
 
@@ -47,7 +47,6 @@ public class LineLayout
 		{
 			var grapheme = enumerator.GetTextElement();
 			index = enumerator.ElementIndex;
-			logicalLineStartOffset = index;
 			_graphemeBoundaries.Add(index);
 
 			int width = GraphemeWidth(grapheme, visualCol);
@@ -86,6 +85,7 @@ public class LineLayout
 		VisualText = builder.ToString();
 	}
 
+	//these calls probably have bugs when working with actual unicode which i cant test yet until i fix the char advance problem
 	public VisualCoordinate GetVisualCoordinate(Coordinate coord, bool forceTrailVisualLine = false)
 	{
 		var logicalCol = AlignColumn(coord.Col);
@@ -96,18 +96,20 @@ public class LineLayout
 			return new(0, 0);
 		var logicalOffset = targetVisualLine.Value.LogicalOffset;
 		int visualCol = 0;
-		var graphemeBounaryIndexStart = _graphemeBoundaries.IndexOf(logicalOffset);
+		var graphemeBounaryIndexStart = _graphemeBoundaries.BinarySearch(logicalOffset);
 		var logicalEnd = logicalOffset + targetVisualLine.Value.LogicalLength;
-		var graphemeBounaryIndexEnd = AlignColumn(logicalEnd);
+		var graphemeBounaryIndexEnd = _graphemeBoundaries.BinarySearch(AlignColumn(logicalEnd));
 
 		if (graphemeBounaryIndexStart == -1) return new(0, targetVlineIndex);
 		for (int i = graphemeBounaryIndexStart; i < graphemeBounaryIndexEnd; i++)
 		{
-			if (i == logicalCol)
-			{
+			int offset = _graphemeBoundaries[i];
+			if (offset == logicalCol)
 				return new(visualCol, targetVlineIndex);
-			}
-			visualCol += GraphemeWidth(_logicalText[i].ToString(), visualCol);
+
+			int next = _graphemeBoundaries[i + 1];
+			var g = _logicalText.AsSpan(offset, next - offset);
+			visualCol += GraphemeWidth(g, visualCol);
 		}
 		if ((coord.TrailVisualLine || forceTrailVisualLine) && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
 		{
@@ -137,51 +139,29 @@ public class LineLayout
 			? _graphemeBoundaries[index]
 			: col;
 	}
-	// public int GetLogicalColumn(VisualCoordinate coord)
-	// {
-	// 	if (coord.VisualLine < 0 || coord.VisualLine >= _visualLines.Count)
-	// 		return 0;
-	// 	var visualLine = _visualLines[coord.VisualLine];
-	// 	var logicalOffset = visualLine.LogicalOffset;
-	// 	int visualCol = 0;
-	// 	var graphemeBounaryIndexStart = _graphemeBoundaries.IndexOf(logicalOffset);
-	// 	var logicalEnd = logicalOffset + visualLine.LogicalLength;
-	// 	var graphemeBounaryIndexEnd = AlignColumn(logicalEnd);
-	// 	int currentVisualCol = 0;
 
-	// 	// if (graphemeBounaryIndexStart == -1) return new(0, targetVlineIndex);
-	// 	for (int i = graphemeBounaryIndexStart; i < graphemeBounaryIndexEnd; i++)
-	// 	{
-	// 		if (visualCol == coord.VisualCol) return i;
-	// 		currentVisualCol += GraphemeWidth(_logicalText[i].ToString(), visualCol);
-	// 	}
-	// 	return graphemeBounaryIndexEnd;
-	// }
 	public int GetLogicalColumn(VisualCoordinate coord)
 	{
 		if (coord.VisualLine < 0 || coord.VisualLine >= _visualLines.Count)
 			return 0;
-
 		var visualLine = _visualLines[coord.VisualLine];
-		int start = visualLine.LogicalOffset;
-		int end = start + visualLine.LogicalLength;
+		var logicalOffset = visualLine.LogicalOffset;
+		int visualCol = 0;
+		var graphemeBounaryIndexStart = _graphemeBoundaries.BinarySearch(logicalOffset);
+		var logicalEnd = logicalOffset + visualLine.LogicalLength;
+		var graphemeBounaryIndexEnd = _graphemeBoundaries.BinarySearch(AlignColumn(logicalEnd));
 
-		// Exclude the line break from the visible range.
-		if (end > start && _logicalText[end - 1] == '\n') end--;
-
-		int currentVisualCol = 0;
-		for (int i = start; i < end; i++)
+		if (graphemeBounaryIndexStart == -1) return 0;
+		for (int i = graphemeBounaryIndexStart; i < graphemeBounaryIndexEnd; i++)
 		{
-			int width = _logicalText[i] == '\t'
-				? VisualTabWidth(currentVisualCol, _tabSize)
-				: 1;
-
-			if (coord.VisualCol < currentVisualCol + width)
-				return i;
-
-			currentVisualCol += width;
+			int offset = _graphemeBoundaries[i];
+			int next = _graphemeBoundaries[i + 1];
+			var width = GraphemeWidth(_logicalText.AsSpan(offset, next - offset), visualCol);
+			if (coord.VisualCol < visualCol + width)
+				return offset;
+			visualCol += width;
 		}
-		return end;
+		return _graphemeBoundaries[graphemeBounaryIndexEnd];
 	}
 	private VisualLine? GetVisualLine(int logicalCol, out int index)
 	{
