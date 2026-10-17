@@ -26,8 +26,8 @@ public class LineLayout
 
 	private int GraphemeWidth(ReadOnlySpan<char> grapheme, int visualCol)
 	{
-		if (grapheme == "\t") return VisualTabWidth(visualCol, _tabSize);
-		if (grapheme == "\n") return 1;
+		if (grapheme.SequenceEqual("\t")) return VisualTabWidth(visualCol, _tabSize);
+		if (grapheme.SequenceEqual("\n")) return 1;
 		var width = UnicodeCalculator.GetWidth(grapheme.ToString());
 		return width;
 	}
@@ -128,7 +128,7 @@ public class LineLayout
 		return index >= 0 ? _graphemeBoundaries[index] : 0;
 
 	}
-	public int NextCol(int col)
+	public int? NextCol(int col)
 	{
 		int index = _graphemeBoundaries.BinarySearch(col);
 		if (index >= 0)
@@ -137,9 +137,17 @@ public class LineLayout
 			index = ~index;
 		return index < _graphemeBoundaries.Count
 			? _graphemeBoundaries[index]
-			: col;
+			: null;
 	}
 
+	public int? PrevCol(int col)
+	{
+		col = AlignColumn(col);
+		int index = _graphemeBoundaries.BinarySearch(col) - 1;
+		return index >= 0
+			? _graphemeBoundaries[index]
+			: null;
+	}
 	public int GetLogicalColumn(VisualCoordinate coord)
 	{
 		if (coord.VisualLine < 0 || coord.VisualLine >= _visualLines.Count)

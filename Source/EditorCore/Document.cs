@@ -257,6 +257,11 @@ public sealed class SekaniDocument
 			CaretRange = new(NextGraphemeBoundary(CaretRange.Cursor));
 			return;
 		}
+		if (count == -1)
+		{
+			CaretRange = new(PrevGraphemeBoundary(CaretRange.Cursor));
+			return;
+		}
 		CaretRange = new(CaretRange.Cursor + count);
 	}
 	public int NextGraphemeBoundary(int offset)
@@ -264,9 +269,34 @@ public sealed class SekaniDocument
 		var pos = GetCoordinate(offset);
 		var line = pos.Line;
 		var layout = _lineCache!.GetOrCreate(line);
-		var next = new Coordinate(layout!.NextCol(pos.Col), line);
-		return GetOffset(next);
-
+		var nextcol = layout!.NextCol(pos.Col);
+		int next = offset;
+		if (nextcol is null)
+		{
+			next++;
+		}
+		else
+		{
+			next = GetOffset(new Coordinate(nextcol.Value, line));
+		}
+		return next;
+	}
+	public int PrevGraphemeBoundary(int offset)
+	{
+		var pos = GetCoordinate(offset);
+		var line = pos.Line;
+		var layout = _lineCache!.GetOrCreate(line);
+		var prevcol = layout!.PrevCol(pos.Col);
+		int prev = offset;
+		if (prevcol is null)
+		{
+			prev--;
+		}
+		else
+		{
+			prev = GetOffset(new Coordinate(prevcol.Value, line));
+		}
+		return prev;
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
@@ -355,7 +385,7 @@ public sealed class SekaniDocument
 	{
 		var line = CaretPosition.Line;
 		var layout = _lineCache!.GetOrCreate(line);
-		if(layout is null) return;
+		if (layout is null) return;
 		var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
 		CaretRange = new(GetOffset(new Coordinate(lastBoundary, line)));
 	}
