@@ -48,54 +48,6 @@ public sealed class LineCache
 
 	private void UpdateDocumentWidth(int width) => Width = Math.Max(Width, width);
 
-	// private void BufferChanged(object? sender, BufferChangeData e)
-	// {
-	// 	//do this first as a removed line may no longer be in the buffer
-	// 	if (e.kind == BufferChangeKind.LineRemoved)
-	// 	{
-	// 		_visualLineTree.RemoveAt(e.Line);
-	// 		_layoutCache.RemoveAt(e.Line);
-	// 	}
-
-	// 	var line = _buffer.GetLine(e.Line);
-	// 	if (line is null)
-	// 		return;
-
-	// 	if (_longestLine is null ||
-	// 		line.Text.Length >= Width)
-	// 	{
-	// 		_longestLine = line;
-	// 		Width = line.Text.Length;
-	// 	}
-	// 	else if (line == _longestLine)
-	// 	{
-	// 		RecalculateWidth();
-	// 	}
-	// 	if (e.kind == BufferChangeKind.LineAdded)
-	// 	{
-	// 		if (e.Line <= _visualLineTree.Count)
-	// 		{
-	// 			_visualLineTree.Insert(e.Line, 1);
-	// 			_layoutCache.Insert(e.Line, null);
-	// 		}
-	// 	}
-	// 	InvalidateLayout(e.Line);
-	// }
-
-
-	// private void RecalculateWidth()
-	// {
-	// 	_longestLine = null;
-	// 	Width = 0;
-	// 	foreach (var line in _buffer.Lines)
-	// 	{
-	// 		if (line.Text.Length > Width)
-	// 		{
-	// 			_longestLine = line;
-	// 			Width = line.Text.Length;
-	// 		}
-	// 	}
-	// }
 
 	public LineLayout? GetOrCreate(int index)
 	{

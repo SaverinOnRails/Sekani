@@ -1082,6 +1082,7 @@ public class Editor : Control
 
 				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
 				{
+					double x, y = 0;
 					var visualLine = lineLayout.VisualLines[j];
 					var text = lineLayout.VisualText.AsSpan(
 					  visualLine.VisualOffset,
@@ -1093,19 +1094,63 @@ public class Editor : Control
 					  _editorFontFace,
 					  _fontSize,
 					  _mainTextBrush);
-					Point point = VisualToUI(
-					  new VisualCoordinate(
-						0,
-						currentVisualLine));
-					var y = point.Y - visibleTextBounds.pixelOffset;
-					var x = point.X - _scrollXOffset;
-					point = point.WithY(y);
-					point = point.WithX(x);
+
+					var expectedPixelWidth = _editorMetrics.CharAdvance * visualLine.VisualLength;
+					var actualPixelWidth = ft.WidthIncludingTrailingWhitespace;
+					if (text.Contains('\n'))
+					{
+						expectedPixelWidth -= _editorMetrics.CharAdvance; //linebreaks are not measured by avalonia
+					}
+					const double epsilon = 0.01;
+					if (Math.Abs(expectedPixelWidth - actualPixelWidth) < epsilon)
+					{
+						Point point = VisualToUI(
+						  new VisualCoordinate(
+							0,
+							currentVisualLine));
+						y = point.Y - visibleTextBounds.pixelOffset;
+						x = point.X - _scrollXOffset;
+						point = point.WithY(y);
+						point = point.WithX(x);
+						context.DrawText(ft, point);
+					}
+					else
+					{
+						var graphemeBoundaries = lineLayout.GraphemeBoundaries;
+						var visualLineOffset = visualLine.LogicalOffset;
+						var startIndex = lineLayout.GraphemeBoundaryIndexOf(visualLineOffset);
+						var end = visualLine.LogicalOffset + visualLine.LogicalLength;
+						int visualCol = 0;
+						Point basePoint = VisualToUI(new VisualCoordinate(0, currentVisualLine));
+						double baseY = basePoint.Y - visibleTextBounds.pixelOffset;
+						double baseX = basePoint.X - _scrollXOffset;
+						for (int k = startIndex; k < graphemeBoundaries.Count - 1; k++)
+						{
+							var offset = graphemeBoundaries[k];
+							if (offset >= end) break;
+							var next = graphemeBoundaries[k + 1];
+							var grapheme = lineLayout.LogicalText.AsSpan(offset, next - offset);
+							var width = lineLayout.GraphemeWidth(grapheme, visualCol);
+							var ftglyph = new FormattedText(
+							  grapheme.ToString(),
+							  CultureInfo.InvariantCulture,
+							  FlowDirection.LeftToRight,
+							  _editorFontFace,
+							  _fontSize,
+							  _mainTextBrush);
+
+							var glyphPoint = new Point(
+								baseX + visualCol * _editorMetrics.CharAdvance,
+								baseY);
+							context.DrawText(ftglyph, glyphPoint);
+							visualCol += width;
+							context.DrawText(ftglyph, glyphPoint);
+						}
+					}
 					currentVisualLine++;
 					//true check whether we should draw this line
 					if (y + _editorMetrics.LineHeight < EditorArea.Top) continue; //is bottom in viewport?
 					if (y > EditorArea.Bottom) break;
-					context.DrawText(ft, point);
 					if (i == caretPos.Line && j == relativeCaretVisualLine)
 					{
 						hintRectangle = new Rect(new Point(0, y), new Size(Bounds.Width, _editorMetrics.LineHeight));
@@ -1119,6 +1164,7 @@ public class Editor : Control
 			context.FillRectangle(new SolidColorBrush(Colors.Gray, 0.1), hintRectangle.Value);
 		}
 	}
+
 
 	private Rect? GetCaretRect()
 	{

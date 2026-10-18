@@ -6,8 +6,9 @@ namespace Sekani.EditorCore;
 
 public class LineLayout
 {
-	public string VisualText { get; set; } = "";
+	public string VisualText { get; private set; } = "";
 	private string _logicalText = "";
+	public string LogicalText => _logicalText;
 	private readonly int _tabSize;
 	private List<VisualLine> _visualLines = [];
 	public IReadOnlyList<VisualLine> VisualLines => _visualLines;
@@ -24,7 +25,7 @@ public class LineLayout
 		DoLayout(line);
 	}
 
-	private int GraphemeWidth(ReadOnlySpan<char> grapheme, int visualCol)
+	public int GraphemeWidth(ReadOnlySpan<char> grapheme, int visualCol)
 	{
 		if (grapheme.SequenceEqual("\t")) return VisualTabWidth(visualCol, _tabSize);
 		if (grapheme.SequenceEqual("\n")) return 1;
@@ -96,9 +97,9 @@ public class LineLayout
 			return new(0, 0);
 		var logicalOffset = targetVisualLine.Value.LogicalOffset;
 		int visualCol = 0;
-		var graphemeBounaryIndexStart = _graphemeBoundaries.BinarySearch(logicalOffset);
+		var graphemeBounaryIndexStart = GraphemeBoundaryIndexOf(logicalOffset);
 		var logicalEnd = logicalOffset + targetVisualLine.Value.LogicalLength;
-		var graphemeBounaryIndexEnd = _graphemeBoundaries.BinarySearch(AlignColumn(logicalEnd));
+		var graphemeBounaryIndexEnd = GraphemeBoundaryIndexOf(AlignColumn(logicalEnd));
 
 		if (graphemeBounaryIndexStart == -1) return new(0, targetVlineIndex);
 		for (int i = graphemeBounaryIndexStart; i < graphemeBounaryIndexEnd; i++)
@@ -155,9 +156,9 @@ public class LineLayout
 		var visualLine = _visualLines[coord.VisualLine];
 		var logicalOffset = visualLine.LogicalOffset;
 		int visualCol = 0;
-		var graphemeBounaryIndexStart = _graphemeBoundaries.BinarySearch(logicalOffset);
+		var graphemeBounaryIndexStart = GraphemeBoundaryIndexOf(logicalOffset);
 		var logicalEnd = logicalOffset + visualLine.LogicalLength;
-		var graphemeBounaryIndexEnd = _graphemeBoundaries.BinarySearch(AlignColumn(logicalEnd));
+		var graphemeBounaryIndexEnd = GraphemeBoundaryIndexOf(AlignColumn(logicalEnd));
 
 		if (graphemeBounaryIndexStart == -1) return 0;
 		for (int i = graphemeBounaryIndexStart; i < graphemeBounaryIndexEnd; i++)
@@ -187,6 +188,11 @@ public class LineLayout
 
 		index = 0;
 		return null;
+	}
+
+	public int GraphemeBoundaryIndexOf(int col)
+	{
+		return _graphemeBoundaries.BinarySearch(col);
 	}
 
 	public static int VisualTabWidth(int visualCol, int tabSize)

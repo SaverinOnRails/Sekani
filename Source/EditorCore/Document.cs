@@ -233,9 +233,10 @@ public sealed class SekaniDocument
 	{
 		var offset = CaretRange.Cursor;
 		if (offset == 0) return;
-		var startOffset = offset - 1;
-		_pieceTable.Delete(startOffset, 1);
-		AdvanceCaretCol(-1);
+		var startOffset = PrevGraphemeBoundary(offset);
+		var diff = offset - startOffset;
+		_pieceTable.Delete(startOffset, diff);
+		CaretRange = new(startOffset);
 		UpdatePreferredVisualColumn();
 	}
 
@@ -251,19 +252,23 @@ public sealed class SekaniDocument
 
 	private void AdvanceCaretCol(int count)
 	{
-		var line = CaretPosition.Line;
-		if (count == 1)
+		var offset = CaretRange.Cursor;
+
+		while (count > 0)
 		{
-			CaretRange = new(NextGraphemeBoundary(CaretRange.Cursor));
-			return;
+			offset = NextGraphemeBoundary(offset);
+			count--;
 		}
-		if (count == -1)
+
+		while (count < 0)
 		{
-			CaretRange = new(PrevGraphemeBoundary(CaretRange.Cursor));
-			return;
+			offset = PrevGraphemeBoundary(offset);
+			count++;
 		}
-		CaretRange = new(CaretRange.Cursor + count);
+
+		CaretRange = new(offset);
 	}
+
 	public int NextGraphemeBoundary(int offset)
 	{
 		var pos = GetCoordinate(offset);
