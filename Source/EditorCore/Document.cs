@@ -8,7 +8,6 @@ namespace Sekani.EditorCore;
 public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
-	private SekaniBuffer _buffer = null;
 	public Coordinate CaretPosition
 	{
 		get
@@ -45,7 +44,6 @@ public sealed class SekaniDocument
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
-	public IReadOnlyList<Line> Lines => _buffer.Lines;
 	private LineCache? _lineCache;
 	private string? _filePath = null;
 
@@ -201,21 +199,6 @@ public sealed class SekaniDocument
 		}
 	}
 
-	//Returns the next possible location of the cursor.
-	// Guarantees the cursor can be here, not that a character exists here necessarily
-	private Coordinate RangeUpCursor(Coordinate coord)
-	{
-		if (coord.Col >= Lines[coord.Line].Text.Length)
-		{
-			var newLine = coord.Line + 1;
-			if (newLine >= Lines.Count) _buffer.InsertText(coord.Col, coord.Line, Environment.NewLine); //if going up range needs a new line to be created, create it
-			return new(0, newLine);
-		}
-		else
-		{
-			return new(coord.Col + 1, coord.Line);
-		}
-	}
 
 	public void DeleteSelection()
 	{
@@ -302,7 +285,7 @@ public sealed class SekaniDocument
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
-		_lineCache = new LineCache(_buffer, _pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
+		_lineCache = new LineCache( _pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
 		return _lineCache;
 	}
 
@@ -350,7 +333,7 @@ public sealed class SekaniDocument
 	private void SaveCore()
 	{
 		if (_filePath is null) return;
-		var text = _buffer.ToText();
+		var text = _pieceTable.Print();
 		File.WriteAllText(_filePath, text);
 	}
 
@@ -417,48 +400,50 @@ public sealed class SekaniDocument
 		var nextWordStart = FindWordStart(offset, out int? anchorPos);
 		if (nextWordStart is not null && anchorPos is not null)
 		{
-			SetCaretRange(anchorPos.Value);
 			SetDocumentCaretRangeHead(anchorPos.Value, nextWordStart.Value);
 		}
 	}
 
 	public void SelectToNextWordEnd()
 	{
-		var pos = CaretPosition;
-		var nextWordEnd = FindWordEnd(pos, out Coordinate? anchorPos);
+		var offset = CaretRange.Cursor;
+		var nextWordEnd = FindWordEnd(offset, out int? anchorPos);
 		if (nextWordEnd is not null && anchorPos is not null)
 		{
-			CaretPosition.Anchor = new(anchorPos);
-			CaretPosition.SetCoord(nextWordEnd);
+			SetDocumentCaretRangeHead(anchorPos.Value, nextWordEnd.Value);
 		}
 	}
 
-	private Coordinate? FindWordEnd(Coordinate pos, out Coordinate? anchorPos)
+	private int? FindWordEnd(int offset, out int? anchorPos)
 	{
-		//are we at the end of the file?
 		anchorPos = null;
-		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
-		anchorPos = FindAnchorPos(pos, MotionKind.NextWordEnd);
-		var currentCol = anchorPos.Col;
-		var currentLine = anchorPos.Line;
-		var initialToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
-		int prevCol = currentCol;
+
+		if (offset >= BufferLength)
+			return null;
+
+		anchorPos = FindAnchorPos(offset, MotionKind.NextWordEnd);
+
+		var current = anchorPos.Value;
+		if (current >= BufferLength)
+			return current;
+
+		var initialToken = CharTokenKind(GetGraphemeAtOffset(current));
+		var prevOffset = current;
+
 		while (true)
 		{
-			var next = Advance(ref currentCol, ref currentLine, out bool atEnd);
-			if (atEnd)
-			{
+			var next = AdvanceCaret(prevOffset, 1);
+
+			if (next >= BufferLength)
 				return next;
-			}
-			var newToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+
+			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
+
 			if (CanEndWordEndScan(ref initialToken, newToken))
-			{
-				return new(prevCol, currentLine);
-			}
-			prevCol = currentCol;
+				return prevOffset;
+			prevOffset = next;
 		}
 	}
-
 
 	private int? FindWordStart(int offset, out int? anchorPos)
 	{
@@ -525,72 +510,6 @@ public sealed class SekaniDocument
 		return next;
 	}
 
-	//caller verifies bounds of this
-	private Coordinate FindAnchorPos(Coordinate pos, MotionKind motionKind)
-	{
-		var col = pos.Col;
-		var line = pos.Line;
-		var currentToken = CharTokenKind(IndexLineWithLineBreak(pos.Col, pos.Line));
-		{
-			if (currentToken == SelectionTokenKind.Eol)
-			{
-				while (currentToken == SelectionTokenKind.Eol)
-				{
-					var advance = Advance(ref col, ref line, out bool atEnd);
-					if (atEnd)
-					{
-						return advance;
-					}
-					currentToken = CharTokenKind(IndexLineWithLineBreak(col, line));
-				}
-				return new(col, line);
-			}
-		}
-		var next = Advance(ref col, ref line, out bool _);
-		var nextToken = CharTokenKind(IndexLineWithLineBreak(col, line));
-		{
-			if (nextToken == SelectionTokenKind.Eol)
-			{
-				while (nextToken == SelectionTokenKind.Eol)
-				{
-					var advance = Advance(ref col, ref line, out bool atEnd);
-					if (atEnd)
-					{
-						return advance;
-					}
-					nextToken = CharTokenKind(IndexLineWithLineBreak(col, line));
-				}
-				return new(col, line);
-			}
-		}
-		if (motionKind == MotionKind.NextWordStart)
-		{
-			if (currentToken == nextToken || nextToken == SelectionTokenKind.Whitespace) return pos;
-		}
-		if (motionKind == MotionKind.NextWordEnd)
-		{
-			if (currentToken == SelectionTokenKind.Whitespace || currentToken == nextToken) return pos;
-		}
-		return next;
-	}
-
-
-	private Coordinate Advance(ref int col, ref int line, out bool atEnd)
-	{
-		atEnd = false;
-		col++;
-		if (col > Lines[line].Text.Length)
-		{
-			if (line == Lines.Count - 1)
-			{
-				atEnd = true;
-				return new(col - 1, line);
-			}
-			col = 0;
-			line++;
-		}
-		return new(col, line);
-	}
 	private bool CanEndWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
 	{
 		if (newToken == SelectionTokenKind.Whitespace)
@@ -617,22 +536,6 @@ public sealed class SekaniDocument
 		;
 		if (newToken != originalToken) return true;
 		return false;
-	}
-
-	//Since we pop out line breaks and helix motions needs them, this indexes a line and returns a line break where a line break can be
-	private char IndexLineWithLineBreak(int col, int line)
-	{
-		try
-		{
-			if (col == Lines[line].Text.Length) return '\n';
-			return Lines[line].Text[col];
-		}
-		catch
-		{
-			Console.WriteLine(col);
-			Console.WriteLine(line);
-			throw;
-		}
 	}
 
 	public ReadOnlySpan<char> GetGraphemeAtOffset(int offset)
@@ -684,32 +587,6 @@ public sealed class SekaniDocument
 			case UnicodeCategory.ModifierSymbol:
 				return SelectionTokenKind.Punctuation;
 
-			default:
-				return SelectionTokenKind.Unknown;
-		}
-	}
-	private SelectionTokenKind CharTokenKind(char c)
-	{
-		if (c is '\n' or '\r' or '\u000B' or '\u000C' or '\u0085' or '\u2028' or '\u2029')
-			return SelectionTokenKind.Eol;
-		if (char.IsWhiteSpace(c))
-			return SelectionTokenKind.Whitespace;
-		if (char.IsLetterOrDigit(c) || c == '_')
-			return SelectionTokenKind.AlphaNumerical;
-
-		switch (char.GetUnicodeCategory(c))
-		{
-			case UnicodeCategory.ConnectorPunctuation:
-			case UnicodeCategory.DashPunctuation:
-			case UnicodeCategory.OpenPunctuation:
-			case UnicodeCategory.ClosePunctuation:
-			case UnicodeCategory.InitialQuotePunctuation:
-			case UnicodeCategory.FinalQuotePunctuation:
-			case UnicodeCategory.OtherPunctuation:
-			case UnicodeCategory.MathSymbol:
-			case UnicodeCategory.CurrencySymbol:
-			case UnicodeCategory.ModifierSymbol:
-				return SelectionTokenKind.Punctuation;
 			default:
 				return SelectionTokenKind.Unknown;
 		}

@@ -1173,3 +1173,12 @@ internal class PieceTable
 }
 
 public readonly record struct LineChange(int FirstLine, int OldCount, int NewCount);
+
+
+public enum BufferChangeKind
+{
+	LineChanged,
+	LineAdded,
+	LineRemoved,
+}
+public record struct BufferChangeData(int Line, BufferChangeKind kind);

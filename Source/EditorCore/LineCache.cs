@@ -3,7 +3,6 @@ namespace Sekani.EditorCore;
 
 public sealed class LineCache
 {
-	private readonly SekaniBuffer _buffer;
 	private readonly PieceTable _pieceTable;
 	private readonly List<LineLayout?> _layoutCache = [];
 	public int Width { get; private set; } = 0;
@@ -15,9 +14,8 @@ public sealed class LineCache
 
 	private VisualLineTree _visualLineTree = new();
 
-	internal LineCache(SekaniBuffer buffer, PieceTable pieceTable, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
+	internal LineCache( PieceTable pieceTable, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
-		_buffer = buffer;
 		_tabSize = tabSize;
 		_pieceTable = pieceTable;
 		_wordWrap = wordWrap;
