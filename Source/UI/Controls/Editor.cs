@@ -593,6 +593,10 @@ public class Editor : Control
 		using
 		var clip = context.PushClip(EditorArea);
 		var range = Document.CaretRange;
+		if (range.Higher - range.Lower == 1 && Mode == Mode.Insert)
+		{
+			return;
+		}
 		var higher = Document.GetCoordinate(range.Higher);
 		var lower = Document.GetCoordinate(range.Lower);
 

@@ -21,9 +21,9 @@ public partial class MainViewModel : ViewModelBase
         // var file = "/home/noble/jquery.min.js.js";
         // var file = "/home/noble/Documents/sekanitestfiles/longfile.text";
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
-       // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
+       var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
        // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
-        var file = "/home/noble/Documents/sekanitestfiles/unicodetest.txt";
+        // var file = "/home/noble/Documents/sekanitestfiles/unicodetest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/chinesetest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
         Document = new(file);

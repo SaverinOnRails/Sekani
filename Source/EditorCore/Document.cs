@@ -34,12 +34,6 @@ public sealed class SekaniDocument
 		var anchor = CaretRange.Anchor;
 		CaretRange = new(anchor, head, head);
 	}
-	public void SetDocumentCaretRangeHead(Coordinate headpos)
-	{
-		var head = _pieceTable.GetOffset(headpos);
-		var anchor = CaretRange.Anchor;
-		CaretRange = new(anchor, head, head);
-	}
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
@@ -219,8 +213,7 @@ public sealed class SekaniDocument
 	public void DeleteSelection()
 	{
 		var lower = CaretRange.Lower;
-		var higher = CaretRange.Higher;
-		var sethigh = higher == CaretRange.Cursor ? higher + 1 : higher;
+		var sethigh = GetHigherEnd(CaretRange);
 
 		//clamp sethigh
 		sethigh = Math.Min(sethigh, _pieceTable.BufferLength);
@@ -367,8 +360,7 @@ public sealed class SekaniDocument
 	public void PlaceCursorAfterSelection()
 	{
 		var lower = CaretRange.Lower;
-		var higher = CaretRange.Higher;
-		var sethigh = higher == CaretRange.Cursor ? higher + 1 : higher;
+		var sethigh = GetHigherEnd(CaretRange);
 		CaretRange = new(lower, sethigh, sethigh);
 	}
 
@@ -393,6 +385,18 @@ public sealed class SekaniDocument
 		if (layout is null) return;
 		var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
 		CaretRange = new(GetOffset(new Coordinate(lastBoundary, line)));
+	}
+
+	public int GetHigherEnd(Range range)
+	{
+		var lower = CaretRange.Lower;
+		var higher = CaretRange.Higher;
+		if (higher == lower + 1)
+		{
+			higher = NextGraphemeBoundary(lower);
+		}
+		var sethigh = higher == CaretRange.Cursor ? higher + 1 : higher;
+		return sethigh;
 	}
 
 	public void AddNewLineAboveSelection()
