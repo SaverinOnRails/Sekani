@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -72,7 +73,8 @@ public class Editor : Control
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
-	private bool _isSmoothScrolling;
+	private readonly Stopwatch _caretFocusBubbleStopwatch = new();
+	private const double CaretFocusBubbleDurationMs = 360; private bool _isSmoothScrolling;
 	private TimeSpan _lastSmoothScrollFrameTime;
 	private int _firstVisibleLogicalLineForResizeRestore;
 
@@ -334,6 +336,7 @@ public class Editor : Control
 		_caretFocusBubbleTimer?.Stop();
 		_shouldDrawCaretFocusBubble = true;
 		_caretFocusBubbleProgress = 0;
+		_caretFocusBubbleStopwatch.Restart();
 		_caretFocusBubbleTimer = new()
 		{
 			Interval = TimeSpan.FromMilliseconds(16),
@@ -341,7 +344,6 @@ public class Editor : Control
 		_caretFocusBubbleTimer.Tick += (s, e) => Redraw();
 		_caretFocusBubbleTimer.Start();
 	}
-
 	private void CorrectScrollBarOffset()
 	{
 		_scrollXOffset = Math.Clamp(
@@ -557,19 +559,27 @@ public class Editor : Control
 		DrawVerticalScrollbar(context);
 	}
 
+
 	private void DrawCaretFocusBubble(DrawingContext context)
 	{
 		if (!_shouldDrawCaretFocusBubble)
 			return;
+
 		var caretRect = GetCaretRect();
 		if (caretRect is null)
 			return;
-		_caretFocusBubbleProgress += 0.045;
+
+		_caretFocusBubbleProgress = Math.Clamp(
+			_caretFocusBubbleStopwatch.Elapsed.TotalMilliseconds
+				/ CaretFocusBubbleDurationMs,
+			0,
+			1);
 
 		if (_caretFocusBubbleProgress >= 1)
 		{
 			_caretFocusBubbleTimer?.Stop();
 			_caretFocusBubbleTimer = null;
+			_caretFocusBubbleStopwatch.Stop();
 			_shouldDrawCaretFocusBubble = false;
 			return;
 		}
@@ -581,16 +591,17 @@ public class Editor : Control
 		var opacity = 1 - t;
 
 		var color = Color.FromArgb(
-		  (byte)(255 * opacity),
-		  0,
-		  220,
-		  255);
+			(byte)(255 * opacity),
+			0,
+			220,
+			255);
+
 		context.DrawEllipse(
-		  Brushes.Transparent,
-		  new Pen(new SolidColorBrush(color), 4),
-		  caretRect.Value.Position,
-		  radius,
-		  radius);
+			Brushes.Transparent,
+			new Pen(new SolidColorBrush(color), 4),
+			caretRect.Value.Position,
+			radius,
+			radius);
 	}
 	private void DrawSelection(DrawingContext context)
 	{
