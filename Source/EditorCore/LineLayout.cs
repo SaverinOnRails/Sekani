@@ -197,6 +197,18 @@ public class LineLayout
 
 	public static int VisualTabWidth(int visualCol, int tabSize)
 			=> tabSize - (visualCol % tabSize);
+
+	public ReadOnlySpan<char> GraphemeAt(int column)
+	{
+		//this is stupid, doing a binary search twice here
+		column = AlignColumn(column);
+		int index = _graphemeBoundaries.BinarySearch(column); // see note below
+		int start = column;
+		int end = index + 1 < _graphemeBoundaries.Count
+			? _graphemeBoundaries[index + 1]
+			: _logicalText.Length;
+		return _logicalText.AsSpan(start, end - start);
+	}
 }
 public readonly record struct VisualLine(
 	int LogicalOffset,

@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Globalization;
 using System.Reflection.Metadata;
+using System.Text;
 
 namespace Sekani.EditorCore;
 
@@ -18,6 +20,7 @@ public sealed class SekaniDocument
 	}
 	public Range CaretRange { get; private set; } = new Range(0);
 	public int LineCount => _pieceTable.LineFeedCount;
+	public int BufferLength => _pieceTable.BufferLength;
 	private int _preferredVisualColumn = 0;
 
 	public void SetCaretRange(Coordinate pos)
@@ -34,6 +37,11 @@ public sealed class SekaniDocument
 		var anchor = CaretRange.Anchor;
 		CaretRange = new(anchor, head, head);
 	}
+	public void SetDocumentCaretRangeHead(int anchor, int head)
+	{
+		CaretRange = new(anchor, head, head);
+	}
+
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
@@ -59,13 +67,12 @@ public sealed class SekaniDocument
 	public void TypeChars(string text, bool invokePieceTable = true)
 	{
 		TypeCharsCore(CaretRange.Cursor, text);
-
 	}
 	public void CaretRight()
 	{
 		if (CaretRange.Cursor < _pieceTable.BufferLength)
 		{
-			AdvanceCaretCol(1);
+			CaretRange = new(AdvanceCaret(CaretRange.Cursor, 1));
 			UpdatePreferredVisualColumn();
 		}
 	}
@@ -189,7 +196,7 @@ public sealed class SekaniDocument
 	{
 		if (CaretRange.Cursor > 0)
 		{
-			AdvanceCaretCol(-1);
+			CaretRange = new(AdvanceCaret(CaretRange.Cursor, -1));
 			UpdatePreferredVisualColumn();
 		}
 	}
@@ -243,10 +250,8 @@ public sealed class SekaniDocument
 		MoveCaretVertical(CaretVerticalDirection.Down);
 	}
 
-	private void AdvanceCaretCol(int count)
+	private int AdvanceCaret(int offset, int count)
 	{
-		var offset = CaretRange.Cursor;
-
 		while (count > 0)
 		{
 			offset = NextGraphemeBoundary(offset);
@@ -258,8 +263,7 @@ public sealed class SekaniDocument
 			offset = PrevGraphemeBoundary(offset);
 			count++;
 		}
-
-		CaretRange = new(offset);
+		return offset;
 	}
 
 	public int NextGraphemeBoundary(int offset)
@@ -317,7 +321,7 @@ public sealed class SekaniDocument
 	private void TypeCharsCore(int offset, string text)
 	{
 		_pieceTable.Insert(text, offset);
-		AdvanceCaretCol(text.Length);
+		CaretRange = new(AdvanceCaret(CaretRange.Cursor, text.Length));
 		UpdatePreferredVisualColumn();
 	}
 
@@ -409,12 +413,12 @@ public sealed class SekaniDocument
 	}
 	public void SelectToNextWordStart()
 	{
-		var pos = CaretPosition;
-		var nextWordStart = FindWordStart(pos, out Coordinate? anchorPos);
+		var offset = CaretRange.Cursor;
+		var nextWordStart = FindWordStart(offset, out int? anchorPos);
 		if (nextWordStart is not null && anchorPos is not null)
 		{
-			CaretPosition.Anchor = new(anchorPos);
-			CaretPosition.SetCoord(nextWordStart);
+			SetCaretRange(anchorPos.Value);
+			SetDocumentCaretRangeHead(anchorPos.Value, nextWordStart.Value);
 		}
 	}
 
@@ -456,30 +460,69 @@ public sealed class SekaniDocument
 	}
 
 
-	private Coordinate? FindWordStart(Coordinate pos, out Coordinate? anchorPos)
+	private int? FindWordStart(int offset, out int? anchorPos)
 	{
-		//are we at the end of the file?
 		anchorPos = null;
-		if (pos.Line >= Lines.Count - 1 && pos.Col >= Lines[pos.Line].Text.Length - 1) return null;
-		anchorPos = FindAnchorPos(pos, MotionKind.NextWordStart);
-		var currentCol = anchorPos.Col;
-		var currentLine = anchorPos.Line;
-		var initialToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
-		int prevCol = currentCol;
+		if (offset >= BufferLength) return null;
+		anchorPos = FindAnchorPos(offset, MotionKind.NextWordStart);
+		var current = anchorPos.Value;
+		if (current >= BufferLength)
+			return current;
+		var initialToken = CharTokenKind(GetGraphemeAtOffset(current));
+		var prevOffset = current;
 		while (true)
 		{
-			var next = Advance(ref currentCol, ref currentLine, out bool atEnd);
-			if (atEnd)
-			{
-				return next;
-			}
-			var newToken = CharTokenKind(IndexLineWithLineBreak(currentCol, currentLine));
+			var next = AdvanceCaret(prevOffset, 1);
+			if (next >= BufferLength) return next;
+			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
 			if (CanEndWordStartScan(ref initialToken, newToken))
-			{
-				return new(prevCol, currentLine);
-			}
-			prevCol = currentCol;
+				return prevOffset;
+
+			prevOffset = next;
 		}
+	}
+
+	private int FindAnchorPos(int offset, MotionKind motionKind)
+	{
+		int advance = offset;
+		var currentToken = CharTokenKind(GetGraphemeAtOffset(offset));
+		{
+			if (currentToken is SelectionTokenKind.Eol)
+			{
+				while (currentToken is SelectionTokenKind.Eol)
+				{
+					advance = AdvanceCaret(advance, 1);
+					if (advance >= BufferLength) return advance;
+					currentToken = CharTokenKind(GetGraphemeAtOffset(advance));
+				}
+				return advance;
+			}
+		}
+		var next = AdvanceCaret(advance, 1);
+		var nextToken = CharTokenKind(GetGraphemeAtOffset(next));
+		{
+			advance = next;
+			if (nextToken is SelectionTokenKind.Eol)
+			{
+				while (nextToken is SelectionTokenKind.Eol)
+				{
+					advance = AdvanceCaret(advance, 1);
+					if (advance >= BufferLength) return advance;
+					nextToken = CharTokenKind(GetGraphemeAtOffset(advance));
+				}
+				return advance;
+			}
+		}
+		if (motionKind is MotionKind.NextWordStart)
+		{
+			if (currentToken == nextToken || nextToken is SelectionTokenKind.Whitespace) return offset;
+		}
+
+		if (motionKind == MotionKind.NextWordEnd)
+		{
+			if (currentToken == SelectionTokenKind.Whitespace || currentToken == nextToken) return offset;
+		}
+		return next;
 	}
 
 	//caller verifies bounds of this
@@ -592,7 +635,59 @@ public sealed class SekaniDocument
 		}
 	}
 
+	public ReadOnlySpan<char> GetGraphemeAtOffset(int offset)
+	{
+		var pos = GetCoordinate(offset);
+		var layout = _lineCache!.GetOrCreate(pos.Line);
+		return layout!.GraphemeAt(pos.Col);
+	}
 
+	private SelectionTokenKind CharTokenKind(ReadOnlySpan<char> grapheme)
+	{
+		if (grapheme.IsEmpty)
+			return SelectionTokenKind.Unknown;
+		if (grapheme.SequenceEqual("\n") ||
+			grapheme.SequenceEqual("\r") ||
+			grapheme.SequenceEqual("\r\n") ||
+			grapheme.SequenceEqual("\u000B") ||
+			grapheme.SequenceEqual("\u000C") ||
+			grapheme.SequenceEqual("\u0085") ||
+			grapheme.SequenceEqual("\u2028") ||
+			grapheme.SequenceEqual("\u2029"))
+			return SelectionTokenKind.Eol;
+
+		if (grapheme.Trim().IsEmpty)
+			return SelectionTokenKind.Whitespace;
+
+		var status = Rune.DecodeFromUtf16(
+			grapheme,
+			out var rune,
+			out _);
+
+		if (status != OperationStatus.Done)
+			return SelectionTokenKind.Unknown;
+
+		if (Rune.IsLetterOrDigit(rune) || rune.Value == '_')
+			return SelectionTokenKind.AlphaNumerical;
+
+		switch (Rune.GetUnicodeCategory(rune))
+		{
+			case UnicodeCategory.ConnectorPunctuation:
+			case UnicodeCategory.DashPunctuation:
+			case UnicodeCategory.OpenPunctuation:
+			case UnicodeCategory.ClosePunctuation:
+			case UnicodeCategory.InitialQuotePunctuation:
+			case UnicodeCategory.FinalQuotePunctuation:
+			case UnicodeCategory.OtherPunctuation:
+			case UnicodeCategory.MathSymbol:
+			case UnicodeCategory.CurrencySymbol:
+			case UnicodeCategory.ModifierSymbol:
+				return SelectionTokenKind.Punctuation;
+
+			default:
+				return SelectionTokenKind.Unknown;
+		}
+	}
 	private SelectionTokenKind CharTokenKind(char c)
 	{
 		if (c is '\n' or '\r' or '\u000B' or '\u000C' or '\u0085' or '\u2028' or '\u2029')

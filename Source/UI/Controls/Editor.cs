@@ -25,6 +25,7 @@ public class Editor : Control
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
 	private bool _drawLineNumbers = true;
+	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
@@ -260,7 +261,10 @@ public class Editor : Control
 			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
 		// CorrectScrollBarOffset();
-		TryStartSmoothScroll();
+		if (_smoothScroll)
+			TryStartSmoothScroll();
+		else
+			_scrollYOffset = _targetScrollYOffset;
 	}
 
 	private void TryStartSmoothScroll()
@@ -493,7 +497,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code");
+		_editorFontFace = new Typeface("Jetbrains Mono", FontStyle.Italic);
 		_normalLineNumberFontFace = new Typeface(
 		_editorFontFace.FontFamily,
 		_editorFontFace.Style,
@@ -641,7 +645,7 @@ public class Editor : Control
 				}
 				var point = new Point(startAtPixels - _scrollXOffset, visualLineSum * _editorMetrics.LineHeight - _scrollYOffset);
 				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
-				context.FillRectangle(new SolidColorBrush(Color.Parse("#578EF5"), 0.5), new Rect(point, size));
+				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFCB3D"), 0.5), new Rect(point, size));
 				visualLineSum++;
 			}
 		}
