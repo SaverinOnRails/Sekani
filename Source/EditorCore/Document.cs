@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Reflection.Metadata;
 using System.Text;
 
@@ -475,26 +476,35 @@ public sealed class SekaniDocument
 		anchorPos = null;
 		if (offset == 0) return null;
 		anchorPos = FindAnchorPos(offset, MotionKind.CurrentWordStart);
-		var current = anchorPos.Value;
+
+		//since we're going back we can start from offset instead of anchor pos
+		var current = offset;
 		if (current == 0) return null;
 		var initialToken = CharTokenKind(GetGraphemeAtOffset(current));
 		var prevOffset = current;
-		var cursorToken = CharTokenKind(GetGraphemeAtOffset(offset));
-		bool skip = cursorToken != initialToken;
 		bool firstIter = true;
 		while (true)
 		{
 			var next = AdvanceCaret(prevOffset, -1);
 			if (next == 0) return next;
 			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
-			if (firstIter && skip == false)
+			if (firstIter)
 			{
-				skip = initialToken != newToken;
-				Console.WriteLine(initialToken);
-				Console.WriteLine(newToken);
 				firstIter = false;
+				if (initialToken != SelectionTokenKind.Whitespace && newToken != initialToken)
+				{
+					initialToken = newToken;
+					prevOffset = next;
+					continue;
+				}
 			}
-			if (CanEndCurrentWordStartScan(ref initialToken, newToken, ref skip)) return prevOffset;
+			if (CanEndCurrentWordStartScan(ref initialToken, newToken))
+			{
+				if (prevOffset != offset) return prevOffset;
+				initialToken = newToken;
+				prevOffset = next;
+				continue;
+			}
 			prevOffset = next;
 		}
 	}
@@ -550,23 +560,19 @@ public sealed class SekaniDocument
 		return next;
 	}
 
-	private bool CanEndCurrentWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken, ref bool skip)
+	private bool CanEndCurrentWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
 	{
+		if (originalToken != newToken && newToken == SelectionTokenKind.Eol)
+		{
+			return true;
+		}
+		if (originalToken == SelectionTokenKind.Whitespace || originalToken == SelectionTokenKind.Eol)
+		{
+			originalToken = newToken;
+			return false;
+		}
 		if (newToken != originalToken)
 		{
-			if (skip)
-			{
-				Console.WriteLine(skip);
-				Console.WriteLine(newToken);
-				Console.WriteLine(originalToken);
-				Console.WriteLine();
-				if (newToken != SelectionTokenKind.Whitespace)
-				{
-					skip = false;
-				}
-				originalToken = newToken;
-				return false;
-			}
 			return true;
 		}
 		return false;
@@ -593,7 +599,6 @@ public sealed class SekaniDocument
 			originalToken = newToken;
 			return false;
 		}
-		;
 		if (newToken != originalToken) return true;
 		return false;
 	}
