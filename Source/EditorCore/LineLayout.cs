@@ -109,7 +109,7 @@ public class LineLayout
 				return new(visualCol, targetVlineIndex);
 
 			int next = _graphemeBoundaries[i + 1];
-			var g = _logicalText.AsSpan(offset, next - offset);
+			var g = GraphemeAt(offset);
 			visualCol += GraphemeWidth(g, visualCol);
 		}
 		if ((coord.TrailVisualLine || forceTrailVisualLine) && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
@@ -165,7 +165,7 @@ public class LineLayout
 		{
 			int offset = _graphemeBoundaries[i];
 			int next = _graphemeBoundaries[i + 1];
-			var width = GraphemeWidth(_logicalText.AsSpan(offset, next - offset), visualCol);
+			var width = GraphemeWidth(GraphemeAt(offset), visualCol);
 			if (coord.VisualCol < visualCol + width)
 				return offset;
 			visualCol += width;
@@ -200,9 +200,10 @@ public class LineLayout
 
 	public ReadOnlySpan<char> GraphemeAt(int column)
 	{
+		if (_logicalText.Length == 0) return "\n";
 		//this is stupid, doing a binary search twice here
 		column = AlignColumn(column);
-		int index = _graphemeBoundaries.BinarySearch(column); // see note below
+		int index = _graphemeBoundaries.BinarySearch(column); 
 		int start = column;
 		int end = index + 1 < _graphemeBoundaries.Count
 			? _graphemeBoundaries[index + 1]

@@ -1296,6 +1296,9 @@ public class Editor : Control
 			case "e":
 				Document.SelectToNextWordEnd();
 				break;
+			case "b":
+				Document.SelectToCurrentWordStart();
+				break;
 			case "p":
 				Document.PrintPieceTable();
 				break;

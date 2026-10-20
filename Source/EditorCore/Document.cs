@@ -204,7 +204,6 @@ public sealed class SekaniDocument
 	{
 		var lower = CaretRange.Lower;
 		var sethigh = GetHigherEnd(CaretRange);
-
 		//clamp sethigh
 		sethigh = Math.Min(sethigh, _pieceTable.BufferLength);
 		var delta = sethigh - lower;
@@ -266,6 +265,8 @@ public sealed class SekaniDocument
 		}
 		return next;
 	}
+
+	//TODO: currently i believe the assumption that we can just decrease the offset by one would land nicely at the edge of the previous linebreak, i have to remember that this will break with windows style CRLF
 	public int PrevGraphemeBoundary(int offset)
 	{
 		var pos = GetCoordinate(offset);
@@ -285,7 +286,7 @@ public sealed class SekaniDocument
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
-		_lineCache = new LineCache( _pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
+		_lineCache = new LineCache(_pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
 		return _lineCache;
 	}
 
@@ -397,55 +398,57 @@ public sealed class SekaniDocument
 	public void SelectToNextWordStart()
 	{
 		var offset = CaretRange.Cursor;
-		var nextWordStart = FindWordStart(offset, out int? anchorPos);
+		var nextWordStart = FindNextWordStart(offset, out int? anchorPos);
 		if (nextWordStart is not null && anchorPos is not null)
 		{
 			SetDocumentCaretRangeHead(anchorPos.Value, nextWordStart.Value);
 		}
 	}
 
+	public void SelectToCurrentWordStart()
+	{
+		var offset = CaretRange.Cursor;
+		var currentWordStart = FindCurrentWordStart(offset, out int? anchorPos);
+		if (currentWordStart is not null && anchorPos is not null)
+		{
+			SetDocumentCaretRangeHead(anchorPos.Value, currentWordStart.Value);
+		}
+	}
+
 	public void SelectToNextWordEnd()
 	{
 		var offset = CaretRange.Cursor;
-		var nextWordEnd = FindWordEnd(offset, out int? anchorPos);
+		var nextWordEnd = FindNextWordEnd(offset, out int? anchorPos);
 		if (nextWordEnd is not null && anchorPos is not null)
 		{
 			SetDocumentCaretRangeHead(anchorPos.Value, nextWordEnd.Value);
 		}
 	}
 
-	private int? FindWordEnd(int offset, out int? anchorPos)
+	private int? FindNextWordEnd(int offset, out int? anchorPos)
 	{
 		anchorPos = null;
-
 		if (offset >= BufferLength)
 			return null;
-
 		anchorPos = FindAnchorPos(offset, MotionKind.NextWordEnd);
-
 		var current = anchorPos.Value;
 		if (current >= BufferLength)
 			return current;
-
 		var initialToken = CharTokenKind(GetGraphemeAtOffset(current));
 		var prevOffset = current;
-
 		while (true)
 		{
 			var next = AdvanceCaret(prevOffset, 1);
-
 			if (next >= BufferLength)
 				return next;
-
 			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
-
 			if (CanEndWordEndScan(ref initialToken, newToken))
 				return prevOffset;
 			prevOffset = next;
 		}
 	}
 
-	private int? FindWordStart(int offset, out int? anchorPos)
+	private int? FindNextWordStart(int offset, out int? anchorPos)
 	{
 		anchorPos = null;
 		if (offset >= BufferLength) return null;
@@ -460,9 +463,38 @@ public sealed class SekaniDocument
 			var next = AdvanceCaret(prevOffset, 1);
 			if (next >= BufferLength) return next;
 			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
-			if (CanEndWordStartScan(ref initialToken, newToken))
+			if (CanEndNextWordStartScan(ref initialToken, newToken))
 				return prevOffset;
 
+			prevOffset = next;
+		}
+	}
+
+	private int? FindCurrentWordStart(int offset, out int? anchorPos)
+	{
+		anchorPos = null;
+		if (offset == 0) return null;
+		anchorPos = FindAnchorPos(offset, MotionKind.CurrentWordStart);
+		var current = anchorPos.Value;
+		if (current == 0) return null;
+		var initialToken = CharTokenKind(GetGraphemeAtOffset(current));
+		var prevOffset = current;
+		var cursorToken = CharTokenKind(GetGraphemeAtOffset(offset));
+		bool skip = cursorToken != initialToken;
+		bool firstIter = true;
+		while (true)
+		{
+			var next = AdvanceCaret(prevOffset, -1);
+			if (next == 0) return next;
+			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
+			if (firstIter && skip == false)
+			{
+				skip = initialToken != newToken;
+				Console.WriteLine(initialToken);
+				Console.WriteLine(newToken);
+				firstIter = false;
+			}
+			if (CanEndCurrentWordStartScan(ref initialToken, newToken, ref skip)) return prevOffset;
 			prevOffset = next;
 		}
 	}
@@ -470,20 +502,21 @@ public sealed class SekaniDocument
 	private int FindAnchorPos(int offset, MotionKind motionKind)
 	{
 		int advance = offset;
+		int advanceWidth = motionKind == MotionKind.CurrentWordStart ? -1 : 1;
 		var currentToken = CharTokenKind(GetGraphemeAtOffset(offset));
 		{
 			if (currentToken is SelectionTokenKind.Eol)
 			{
 				while (currentToken is SelectionTokenKind.Eol)
 				{
-					advance = AdvanceCaret(advance, 1);
+					advance = AdvanceCaret(advance, advanceWidth);
 					if (advance >= BufferLength) return advance;
 					currentToken = CharTokenKind(GetGraphemeAtOffset(advance));
 				}
-				return advance;
+				return motionKind == MotionKind.CurrentWordStart ? NextGraphemeBoundary(advance) : advance;
 			}
 		}
-		var next = AdvanceCaret(advance, 1);
+		var next = AdvanceCaret(advance, advanceWidth);
 		var nextToken = CharTokenKind(GetGraphemeAtOffset(next));
 		{
 			advance = next;
@@ -491,12 +524,19 @@ public sealed class SekaniDocument
 			{
 				while (nextToken is SelectionTokenKind.Eol)
 				{
-					advance = AdvanceCaret(advance, 1);
+					advance = AdvanceCaret(advance, advanceWidth);
 					if (advance >= BufferLength) return advance;
 					nextToken = CharTokenKind(GetGraphemeAtOffset(advance));
 				}
-				return advance;
+				return motionKind == MotionKind.CurrentWordStart ? NextGraphemeBoundary(advance) : advance;
 			}
+		}
+
+		if (motionKind is MotionKind.CurrentWordStart)
+		{
+			//block cursor semantics
+			if (currentToken == nextToken || currentToken is SelectionTokenKind.Whitespace) return NextGraphemeBoundary(offset);
+			return NextGraphemeBoundary(next);
 		}
 		if (motionKind is MotionKind.NextWordStart)
 		{
@@ -510,14 +550,34 @@ public sealed class SekaniDocument
 		return next;
 	}
 
-	private bool CanEndWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	private bool CanEndCurrentWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken, ref bool skip)
+	{
+		if (newToken != originalToken)
+		{
+			if (skip)
+			{
+				Console.WriteLine(skip);
+				Console.WriteLine(newToken);
+				Console.WriteLine(originalToken);
+				Console.WriteLine();
+				if (newToken != SelectionTokenKind.Whitespace)
+				{
+					skip = false;
+				}
+				originalToken = newToken;
+				return false;
+			}
+			return true;
+		}
+		return false;
+	}
+	private bool CanEndNextWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
 	{
 		if (newToken == SelectionTokenKind.Whitespace)
 		{
 			originalToken = newToken;
 			return false;
 		}
-		;
 		if (newToken != originalToken) return true;
 		return false;
 	}
@@ -624,4 +684,5 @@ enum MotionKind
 {
 	NextWordStart,
 	NextWordEnd,
+	CurrentWordStart,
 }
