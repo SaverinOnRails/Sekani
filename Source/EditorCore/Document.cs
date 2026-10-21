@@ -249,7 +249,7 @@ public sealed class SekaniDocument
 		return offset;
 	}
 
-	public int NextGraphemeBoundary(int offset)
+	private int NextGraphemeBoundary(int offset)
 	{
 		var pos = GetCoordinate(offset);
 		var line = pos.Line;
@@ -268,7 +268,7 @@ public sealed class SekaniDocument
 	}
 
 	//TODO: currently i believe the assumption that we can just decrease the offset by one would land nicely at the edge of the previous linebreak, i have to remember that this will break with windows style CRLF
-	public int PrevGraphemeBoundary(int offset)
+	private int PrevGraphemeBoundary(int offset)
 	{
 		var pos = GetCoordinate(offset);
 		var line = pos.Line;
@@ -396,37 +396,32 @@ public sealed class SekaniDocument
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		CaretRange = new(GetOffset(insertpos));
 	}
-	public void SelectToNextWordStart()
+
+	//TODO: Yes, this entire word selection implmentation is completely shitty and illegible and entirely based on trial and error. I will fix it someday maybe.
+	public void SelectToWordMotion(WordSelectMotion motion)
 	{
 		var offset = CaretRange.Cursor;
-		var nextWordStart = FindNextWordStart(offset, out int? anchorPos);
-		if (nextWordStart is not null && anchorPos is not null)
+		var wordFinder = GetWordFinderForMotion(motion);
+		var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
+		if (next is not null && anchor is not null)
 		{
-			SetDocumentCaretRangeHead(anchorPos.Value, nextWordStart.Value);
+			SetDocumentCaretRangeHead(anchor.Value, next.Value);
 		}
 	}
 
-	public void SelectToCurrentWordStart()
+	private delegate int? WordFinder(int offset, out int? anchorPos, MotionSubKind motionSubKind);
+	private WordFinder GetWordFinderForMotion(WordSelectMotion motion)
 	{
-		var offset = CaretRange.Cursor;
-		var currentWordStart = FindCurrentWordStart(offset, out int? anchorPos);
-		if (currentWordStart is not null && anchorPos is not null)
+		return motion.motionKind switch
 		{
-			SetDocumentCaretRangeHead(anchorPos.Value, currentWordStart.Value);
-		}
+			MotionKind.NextWordStart => FindNextWordStart,
+			MotionKind.CurrentWordStart => FindCurrentWordStart,
+			MotionKind.NextWordEnd => FindNextWordEnd,
+			_ => throw new ArgumentOutOfRangeException(nameof(motion))
+		};
 	}
 
-	public void SelectToNextWordEnd()
-	{
-		var offset = CaretRange.Cursor;
-		var nextWordEnd = FindNextWordEnd(offset, out int? anchorPos);
-		if (nextWordEnd is not null && anchorPos is not null)
-		{
-			SetDocumentCaretRangeHead(anchorPos.Value, nextWordEnd.Value);
-		}
-	}
-
-	private int? FindNextWordEnd(int offset, out int? anchorPos)
+	private int? FindNextWordEnd(int offset, out int? anchorPos, MotionSubKind motionSubKind)
 	{
 		anchorPos = null;
 		if (offset >= BufferLength)
@@ -443,13 +438,18 @@ public sealed class SekaniDocument
 			if (next >= BufferLength)
 				return next;
 			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
-			if (CanEndWordEndScan(ref initialToken, newToken))
-				return prevOffset;
+			if (CanEndWordEndScan(ref initialToken, newToken, motionSubKind))
+			{
+				if (prevOffset != offset) return prevOffset;
+				initialToken = newToken;
+				prevOffset = next;
+				continue;
+			}
 			prevOffset = next;
 		}
 	}
 
-	private int? FindNextWordStart(int offset, out int? anchorPos)
+	private int? FindNextWordStart(int offset, out int? anchorPos, MotionSubKind motionSubKind)
 	{
 		anchorPos = null;
 		if (offset >= BufferLength) return null;
@@ -464,14 +464,14 @@ public sealed class SekaniDocument
 			var next = AdvanceCaret(prevOffset, 1);
 			if (next >= BufferLength) return next;
 			var newToken = CharTokenKind(GetGraphemeAtOffset(next));
-			if (CanEndNextWordStartScan(ref initialToken, newToken))
+			if (CanEndNextWordStartScan(ref initialToken, newToken, motionSubKind))
 				return prevOffset;
 
 			prevOffset = next;
 		}
 	}
 
-	private int? FindCurrentWordStart(int offset, out int? anchorPos)
+	private int? FindCurrentWordStart(int offset, out int? anchorPos, MotionSubKind motionSubKind)
 	{
 		anchorPos = null;
 		if (offset == 0) return null;
@@ -498,7 +498,7 @@ public sealed class SekaniDocument
 					continue;
 				}
 			}
-			if (CanEndCurrentWordStartScan(ref initialToken, newToken))
+			if (CanEndCurrentWordStartScan(ref initialToken, newToken, motionSubKind))
 			{
 				if (prevOffset != offset) return prevOffset;
 				initialToken = newToken;
@@ -560,47 +560,93 @@ public sealed class SekaniDocument
 		return next;
 	}
 
-	private bool CanEndCurrentWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	private bool CanEndCurrentWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken, MotionSubKind motionSubKind)
 	{
-		if (originalToken != newToken && newToken == SelectionTokenKind.Eol)
+		if (motionSubKind == MotionSubKind.Word)
 		{
-			return true;
-		}
-		if (originalToken == SelectionTokenKind.Whitespace || originalToken == SelectionTokenKind.Eol)
-		{
-			originalToken = newToken;
+
+			if (originalToken != newToken && newToken == SelectionTokenKind.Eol)
+			{
+				return true;
+			}
+			if (originalToken == SelectionTokenKind.Whitespace || originalToken == SelectionTokenKind.Eol)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			if (newToken != originalToken)
+			{
+				return true;
+			}
 			return false;
 		}
-		if (newToken != originalToken)
+		else
 		{
-			return true;
+			if (originalToken != newToken && newToken == SelectionTokenKind.Eol)
+			{
+				return true;
+			}
+			if (originalToken == SelectionTokenKind.Whitespace || originalToken == SelectionTokenKind.Eol)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			return newToken == SelectionTokenKind.Whitespace || newToken == SelectionTokenKind.Eol;
 		}
-		return false;
 	}
-	private bool CanEndNextWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	private bool CanEndNextWordStartScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken, MotionSubKind motionSubKind)
 	{
-		if (newToken == SelectionTokenKind.Whitespace)
+		if (motionSubKind == MotionSubKind.Word)
 		{
-			originalToken = newToken;
+			if (newToken == SelectionTokenKind.Whitespace)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			if (newToken != originalToken) return true;
 			return false;
 		}
-		if (newToken != originalToken) return true;
-		return false;
+		else
+		{
+			if (newToken == SelectionTokenKind.Whitespace)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			return originalToken == SelectionTokenKind.Whitespace || newToken == SelectionTokenKind.Eol;
+		}
 	}
 
-	private bool CanEndWordEndScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken)
+	private bool CanEndWordEndScan(ref SelectionTokenKind originalToken, SelectionTokenKind newToken, MotionSubKind motionSubKind)
 	{
-		if (newToken == SelectionTokenKind.Whitespace && originalToken != SelectionTokenKind.Whitespace)
+		if (motionSubKind == MotionSubKind.Word)
 		{
-			return true;
-		}
-		if (originalToken == SelectionTokenKind.Whitespace && originalToken != newToken)
-		{
-			originalToken = newToken;
+			if (newToken == SelectionTokenKind.Whitespace && originalToken != SelectionTokenKind.Whitespace)
+			{
+				return true;
+			}
+			if (originalToken == SelectionTokenKind.Whitespace && originalToken != newToken)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			if (newToken != originalToken) return true;
 			return false;
 		}
-		if (newToken != originalToken) return true;
-		return false;
+		else
+		{
+			if (newToken == SelectionTokenKind.Whitespace && originalToken != SelectionTokenKind.Whitespace || newToken == SelectionTokenKind.Eol)
+			{
+				return true;
+			}
+			if (originalToken == SelectionTokenKind.Whitespace && originalToken != newToken)
+			{
+				originalToken = newToken;
+				return false;
+			}
+			if (newToken == SelectionTokenKind.Whitespace && originalToken != newToken) return true;
+			return false;
+		}
 	}
 
 	public ReadOnlySpan<char> GetGraphemeAtOffset(int offset)
@@ -685,9 +731,16 @@ enum SelectionTokenKind
 	Eol,
 	Unknown,
 }
-enum MotionKind
+public enum MotionKind
 {
 	NextWordStart,
 	NextWordEnd,
 	CurrentWordStart,
 }
+public enum MotionSubKind
+{
+	Word,
+	WORD,
+}
+
+public readonly record struct WordSelectMotion(MotionKind motionKind, MotionSubKind motionSubKind);

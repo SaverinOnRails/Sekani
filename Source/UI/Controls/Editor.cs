@@ -1291,13 +1291,22 @@ public class Editor : Control
 				EnterInsertMode();
 				break;
 			case "w":
-				Document.SelectToNextWordStart();
+				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.Word));
 				break;
 			case "e":
-				Document.SelectToNextWordEnd();
+				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.Word));
 				break;
 			case "b":
-				Document.SelectToCurrentWordStart();
+				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.Word));
+				break;
+			case "W":
+				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.WORD));
+				break;
+			case "E":
+				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.WORD));
+				break;
+			case "B":
+				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.WORD));
 				break;
 			case "p":
 				Document.PrintPieceTable();
