@@ -12,7 +12,7 @@ namespace SekaniUI.Controls;
 public class CommandDialog : ContentControl
 {
 	private TextBox _textBox;
-	private MainViewModel _mainViewModelInstance => MainViewModel.Instance;
+	private IEditorContext _mainViewModelInstance => MainViewModel.EditorContext;
 	public CommandDialog()
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;

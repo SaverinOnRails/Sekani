@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Wcwidth" Version="4.0.1" />
+    <ProjectReference Include="../Integrations/Treesitter/Treesitter.csproj" />
   </ItemGroup>
 
 </Project>

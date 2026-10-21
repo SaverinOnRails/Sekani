@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection.Metadata;
 using System.Text;
+using Sekani.Integrations.TreeSitter;
 
 namespace Sekani.EditorCore;
 
@@ -18,6 +19,9 @@ public sealed class SekaniDocument
 			return position;
 		}
 	}
+	private LineCache? _lineCache;
+	private TreeSitterClient _treeSitterClient = new();
+
 	public Range CaretRange { get; private set; } = new Range(0);
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
@@ -45,7 +49,6 @@ public sealed class SekaniDocument
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
-	private LineCache? _lineCache;
 	private string? _filePath = null;
 
 	//piece table stuff;
@@ -54,12 +57,15 @@ public sealed class SekaniDocument
 	public SekaniDocument()
 	{
 		_pieceTable = new("");
+		_treeSitterClient.ParseBuffer("");
 	}
 
 	public SekaniDocument(string filePath)
 	{
 		_filePath = filePath;
-		_pieceTable = new(File.ReadAllText(filePath));
+		var buffer = File.ReadAllText(filePath);
+		_pieceTable = new(buffer);
+		_treeSitterClient.ParseBuffer(buffer);
 		// TypeChars(File.ReadAllText(filePath), false);
 	}
 
@@ -199,7 +205,6 @@ public sealed class SekaniDocument
 			UpdatePreferredVisualColumn();
 		}
 	}
-
 
 	public void DeleteSelection()
 	{

@@ -2,6 +2,9 @@
   <Folder Name="/Source/">
     <Project Path="Source/EditorCore/EditorCore.csproj" />
   </Folder>
+  <Folder Name="/Source/Integrations/">
+    <Project Path="Source/Integrations/Treesitter/Treesitter.csproj" />
+  </Folder>
   <Folder Name="/Source/UI/">
     <Project Path="Source/UI/SekaniUI.csproj" />
   </Folder>
