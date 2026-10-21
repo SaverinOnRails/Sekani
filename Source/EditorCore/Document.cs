@@ -285,6 +285,17 @@ public sealed class SekaniDocument
 		}
 		return prev;
 	}
+	//TODO: Yes, this entire word selection implmentation is profoundly shitty and illegible and entirely based on trial and error. I will fix it someday maybe.
+	public void SelectToWordMotion(WordSelectMotion motion)
+	{
+		var offset = CaretRange.Cursor;
+		var wordFinder = GetWordFinderForMotion(motion);
+		var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
+		if (next is not null && anchor is not null)
+		{
+			SetDocumentCaretRangeHead(anchor.Value, next.Value);
+		}
+	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
 		_lineCache = new LineCache(_pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
@@ -397,17 +408,6 @@ public sealed class SekaniDocument
 		CaretRange = new(GetOffset(insertpos));
 	}
 
-	//TODO: Yes, this entire word selection implmentation is completely shitty and illegible and entirely based on trial and error. I will fix it someday maybe.
-	public void SelectToWordMotion(WordSelectMotion motion)
-	{
-		var offset = CaretRange.Cursor;
-		var wordFinder = GetWordFinderForMotion(motion);
-		var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
-		if (next is not null && anchor is not null)
-		{
-			SetDocumentCaretRangeHead(anchor.Value, next.Value);
-		}
-	}
 
 	private delegate int? WordFinder(int offset, out int? anchorPos, MotionSubKind motionSubKind);
 	private WordFinder GetWordFinderForMotion(WordSelectMotion motion)

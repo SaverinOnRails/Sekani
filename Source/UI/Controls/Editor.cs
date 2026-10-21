@@ -1270,6 +1270,10 @@ public class Editor : Control
 			case "d":
 				Document.DeleteSelection();
 				break;
+			case "c":
+				Document.DeleteSelection();
+				EnterInsertMode();
+				break;
 			case "k":
 				Document.CaretUp();
 				break;
