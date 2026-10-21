@@ -17,6 +17,32 @@ public class Coordinate
 		Col = col;
 		Line = line;
 	}
+
+	public override bool Equals(object? obj)
+	{
+		return obj is Coordinate other && this == other;
+	}
+
+	public override int GetHashCode()
+	{
+		return HashCode.Combine(Col, Line);
+	}
+
+	public static bool operator ==(Coordinate? a, Coordinate? b)
+	{
+		if (ReferenceEquals(a, b))
+			return true;
+
+		if (a is null || b is null)
+			return false;
+
+		return a.Col == b.Col && a.Line == b.Line;
+	}
+
+	public static bool operator !=(Coordinate? a, Coordinate? b)
+	{
+		return !(a == b);
+	}
 }
 
 

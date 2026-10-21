@@ -127,6 +127,7 @@ public sealed class SekaniDocument
 				if (newpos != CaretPosition)
 				{
 					var offset = _pieceTable.GetOffset(newpos);
+					Console.WriteLine("going down");
 					CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
 					return;
 				}

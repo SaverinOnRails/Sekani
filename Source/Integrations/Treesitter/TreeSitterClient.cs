@@ -47,6 +47,15 @@ public class TreeSitterClient : IDisposable
 		if (!Active) return;
 		_tsTree = _tsParser.parse_string(null, buf);
 	}
+
+	public void GetHighlights(int start, int end)
+	{
+		if (Active == false || _tsTree is null) return;
+		var cursor = new TSQueryCursor();
+		var root = _tsTree.root_node;
+		cursor.set_range((uint)start, (uint)end);
+	}
+
 	public void Dispose()
 	{
 		_tsLanguage.Dispose();
