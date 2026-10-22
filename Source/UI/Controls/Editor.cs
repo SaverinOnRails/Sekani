@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -542,7 +543,7 @@ public class Editor : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Jetbrains Mono", FontStyle.Italic);
+		_editorFontFace = new Typeface("Jetbrains Mono");
 		_normalLineNumberFontFace = new Typeface(
 		_editorFontFace.FontFamily,
 		_editorFontFace.Style,
@@ -1183,14 +1184,16 @@ public class Editor : Control
 							//normalise start
 							if (_highlightBrushes.TryGetValue(span.Capture, out IBrush brush))
 							{
-								var map = visualLine.LogicalToVisualOffsetMap;
-								int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Count - 1)];
-								int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Count - 1)];
+								var logicalToVisualOffsetArena = lineLayout.LogicalOffsetToVisualOffsetArena;
+								 
+								//all this bullshit becuase i decided to convert tabs to spaces
+								var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
+								int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
+								int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
 								if (e <= s) continue;
 								ft.SetForegroundBrush(brush, s, e - s);
 							}
 						}
-						Console.WriteLine();
 						context.DrawText(ft, point);
 					}
 					else

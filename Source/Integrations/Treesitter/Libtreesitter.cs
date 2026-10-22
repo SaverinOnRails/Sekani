@@ -1100,10 +1100,10 @@ internal sealed class TSLanguage : IDisposable
 
 	internal TSQuery? query_new(string source, out uint error_offset, out TSQueryError error_type)
 	{
-		var ptr = ts_query_new(Ptr, source, (uint)source.Length, out error_offset, out error_type);
+		uint byteLength = (uint)System.Text.Encoding.UTF8.GetByteCount(source);
+		var ptr = ts_query_new(Ptr, source, byteLength, out error_offset, out error_type);
 		return ptr != nint.Zero ? new TSQuery(ptr) : null;
 	}
-
 	internal String[] symbols;
 	internal String[] fields;
 	internal Dictionary<String, ushort> fieldIds;

@@ -16,6 +16,8 @@ public class LineLayout
 	private int _maxVisualColsPerLine;
 	private List<int> _graphemeBoundaries = new();
 	public IReadOnlyList<int> GraphemeBoundaries => _graphemeBoundaries;
+	private List<int> _logicalOffsetToVisualOffsetArena = [];
+	public IReadOnlyList<int> LogicalOffsetToVisualOffsetArena => _logicalOffsetToVisualOffsetArena;
 
 	public LineLayout(Line line, int tabSize, bool wrap, int maxVisualColsPerLine)
 	{
@@ -44,9 +46,9 @@ public class LineLayout
 
 		var builder = new StringBuilder();
 		var index = 0;
-		List<int> logicalToVisualOffsetMap = new();
 		var visualOffset = 0;
-		logicalToVisualOffsetMap.Add(0);
+		_logicalOffsetToVisualOffsetArena.Add(0);
+		int chunkStartIndex = 0;
 		while (enumerator.MoveNext())
 		{
 			var grapheme = enumerator.GetTextElement();
@@ -55,16 +57,18 @@ public class LineLayout
 			int width = GraphemeWidth(grapheme, visualCol);
 			if (_wrap && visualCol + width > _maxVisualColsPerLine && index > logicalLineStartOffset)
 			{
+				int chunkLength = _logicalOffsetToVisualOffsetArena.Count - chunkStartIndex;
 				_visualLines.Add(
 					new VisualLine(
 						LogicalOffset: logicalLineStartOffset,
 						LogicalLength: index - logicalLineStartOffset,
 						VisualOffset: visualLineStartOffset,
 						VisualLength: builder.Length - visualLineStartOffset,
-						[.. logicalToVisualOffsetMap]
+						ArenaStartIndex: chunkStartIndex,
+						ArenaLength: chunkLength
 					));
-				logicalToVisualOffsetMap.Clear();
-				logicalToVisualOffsetMap.Add(0);
+				chunkStartIndex = _logicalOffsetToVisualOffsetArena.Count - 1;
+				_logicalOffsetToVisualOffsetArena.Add(0);
 				logicalLineStartOffset = index;
 				visualLineStartOffset = builder.Length;
 				visualCol = 0;
@@ -76,7 +80,7 @@ public class LineLayout
 			{
 				builder.Append(' ', width);
 				visualOffset += width;
-				logicalToVisualOffsetMap.Add(visualOffset);
+				_logicalOffsetToVisualOffsetArena.Add(visualOffset);
 			}
 			else
 			{
@@ -84,7 +88,7 @@ public class LineLayout
 				for (int i = 0; i < grapheme.Length; i++)
 				{
 					visualOffset += 1;
-					logicalToVisualOffsetMap.Add(visualOffset);
+					_logicalOffsetToVisualOffsetArena.Add(visualOffset);
 				}
 			}
 			visualCol += width;
@@ -100,7 +104,8 @@ public class LineLayout
 				LogicalLength: line.Text.Length - logicalLineStartOffset,
 				VisualOffset: visualLineStartOffset,
 				VisualLength: builder.Length - visualLineStartOffset,
-				[.. logicalToVisualOffsetMap]
+				ArenaStartIndex: chunkStartIndex,
+				ArenaLength: _logicalOffsetToVisualOffsetArena.Count - chunkStartIndex
 			));
 
 		VisualText = builder.ToString();
@@ -235,6 +240,7 @@ public readonly record struct VisualLine(
 	int LogicalLength,
 	int VisualOffset,
 	int VisualLength,
-	List<int> LogicalToVisualOffsetMap
-	);
+	int ArenaStartIndex,
+	int ArenaLength
+);
 
