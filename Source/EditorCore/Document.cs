@@ -46,6 +46,10 @@ public sealed class SekaniDocument
 		CaretRange = new(anchor, head, head);
 	}
 
+	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
+	{
+		return _treeSitterClient.GetHighlights(start, end);
+	}
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
@@ -58,6 +62,11 @@ public sealed class SekaniDocument
 	{
 		_pieceTable = new("");
 		_treeSitterClient.ParseBuffer("");
+	}
+
+	~SekaniDocument()
+	{
+		_treeSitterClient.Dispose();
 	}
 
 	public SekaniDocument(string filePath)
@@ -127,7 +136,6 @@ public sealed class SekaniDocument
 				if (newpos != CaretPosition)
 				{
 					var offset = _pieceTable.GetOffset(newpos);
-					Console.WriteLine("going down");
 					CaretRange = new Range(offset, trailVisualLine: _preferredVisualColumn == 0);
 					return;
 				}

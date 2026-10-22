@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
@@ -120,6 +121,48 @@ public class Editor : Control
 		Document.SetCaretRange(0);
 	}
 
+	private Dictionary<string, IBrush> _highlightBrushes = new()
+	{
+		["attribute"] = Brush.Parse("#c69f2a"),
+		["type"] = Brush.Parse("#c69f2a"),
+		["type.enum.variant"] = Brush.Parse("#48a8a0"),
+		["constructor"] = Brush.Parse("#c03054"),
+		["constant"] = Brush.Parse("#48a8a0"),
+		["constant.character"] = Brush.Parse("#143936"),
+		["constant.character.escape"] = Brush.Parse("#3f0d1a"),
+		["string"] = Brush.Parse("#c03054"),
+		["string.regexp"] = Brush.Parse("#3f0d1a"),
+		["string.special"] = Brush.Parse("#c03054"),
+		["string.special.symbol"] = Brush.Parse("#c03054"),
+		["string.special.path"] = Brush.Parse("#48a8a0"),
+		["path"] = Brush.Parse("#48a8a0"),
+		["comment"] = Brush.Parse("#79685a"),
+		["variable"] = Brush.Parse("#d8cebc"),
+		["variable.builtin"] = Brush.Parse("#48a8a0"),
+		["variable.parameter"] = Brush.Parse("#f5edd8"),
+		["variable.other.member"] = Brush.Parse("#c69f2a"),
+		["label"] = Brush.Parse("#48a8a0"),
+		["punctuation"] = Brush.Parse("#79685a"),
+		["keyword"] = Brush.Parse("#c69f2a"),
+		["keyword.control.conditional"] = Brush.Parse("#c03054"),
+		["operator"] = Brush.Parse("#48a8a0"),
+		["function"] = Brush.Parse("#c03054"),
+		["function.macro"] = Brush.Parse("#c03054"),
+		["tag"] = Brush.Parse("#48a8a0"),
+		["namespace"] = Brush.Parse("#48a8a0"),
+		["special"] = Brush.Parse("#48a8a0"),
+		["markup.heading"] = Brush.Parse("#c69f2a"),
+		["markup.list"] = Brush.Parse("#d8cebc"),
+		["markup.bold"] = Brush.Parse("#48a8a0"),
+		["markup.italic"] = Brush.Parse("#48a8a0"),
+		["markup.link.url"] = Brush.Parse("#48a8a0"),
+		["markup.link.label"] = Brush.Parse("#c69f2a"),
+		["markup.raw"] = Brush.Parse("#d8cebc"),
+		["markup.quote"] = Brush.Parse("#48a8a0"),
+		["diff.plus"] = Brush.Parse("#a6e3a1"),
+		["diff.minus"] = Brush.Parse("#c6372a"),
+		["diff.delta"] = Brush.Parse("#89b4fa")
+	};
 	private void TimeCaret()
 	{
 		_caretBlinkTimer.Tick += (_, _) =>
@@ -1095,10 +1138,10 @@ public class Editor : Control
 			{
 				if (i >= Document.LineCount) break;
 				if (i < 0) continue;
+				var logicalLineAbsoluteOffset = Document.GetOffset(new(0, i));
 				var lineLayout = _lineCache.GetOrCreate(i);
 
 				if (lineLayout is null) return;
-
 				for (int j = 0; j < lineLayout.VisualLines.Count; j++)
 				{
 					double x, y = 0;
@@ -1131,6 +1174,23 @@ public class Editor : Control
 						x = point.X - _scrollXOffset;
 						point = point.WithY(y);
 						point = point.WithX(x);
+						//apply highlighting
+						var logicalOffset = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
+						var logicalEnd = logicalOffset + visualLine.LogicalLength;
+						var highlights = Document.GetHighlights(logicalOffset, logicalEnd);
+						foreach (var span in highlights)
+						{
+							//normalise start
+							if (_highlightBrushes.TryGetValue(span.Capture, out IBrush brush))
+							{
+								var map = visualLine.LogicalToVisualOffsetMap;
+								int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Count - 1)];
+								int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Count - 1)];
+								if (e <= s) continue;
+								ft.SetForegroundBrush(brush, s, e - s);
+							}
+						}
+						Console.WriteLine();
 						context.DrawText(ft, point);
 					}
 					else
@@ -1392,3 +1452,4 @@ public readonly record struct EditorMetrics(
   int TabSize);
 
 public readonly record struct VisibleTextBounds(int firstLogicalLine, int lastPossibleLogicalLine, double pixelOffset);
+

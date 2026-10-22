@@ -48,12 +48,28 @@ public class TreeSitterClient : IDisposable
 		_tsTree = _tsParser.parse_string(null, buf);
 	}
 
-	public void GetHighlights(int start, int end)
+	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
 	{
-		if (Active == false || _tsTree is null) return;
-		var cursor = new TSQueryCursor();
-		var root = _tsTree.root_node;
+		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return [];
+		using var cursor = new TSQueryCursor();
+		var root = _tsTree.root_node();
 		cursor.set_range((uint)start, (uint)end);
+		cursor.exec(_tsHighlightQuery, root);
+		List<TreeSitterHighlightSpan> spans = new();
+		unsafe
+		{
+			while (cursor.next_capture(out TSQueryMatch match, out uint index))
+			{
+				var caps = (TSQueryCapture*)match.captures;
+				var capture = caps[index];
+				var node = capture.node;
+				int node_start = (int)node.start_offset();
+				int node_end = (int)node.end_offset();
+				var name = _tsHighlightQuery.capture_name_for_id(capture.index, out uint _);
+ 				spans.Add(new(name, node_start, node_end));
+			}
+		}
+		return spans;
 	}
 
 	public void Dispose()
@@ -63,5 +79,6 @@ public class TreeSitterClient : IDisposable
 		_tsHighlightQuery?.Dispose();
 		_tsTree?.Dispose();
 	}
-
 }
+
+public readonly record struct TreeSitterHighlightSpan(string Capture, int Start, int End);

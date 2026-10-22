@@ -44,12 +44,14 @@ public class LineLayout
 
 		var builder = new StringBuilder();
 		var index = 0;
+		List<int> logicalToVisualOffsetMap = new();
+		var visualOffset = 0;
+		logicalToVisualOffsetMap.Add(0);
 		while (enumerator.MoveNext())
 		{
 			var grapheme = enumerator.GetTextElement();
 			index = enumerator.ElementIndex;
 			_graphemeBoundaries.Add(index);
-
 			int width = GraphemeWidth(grapheme, visualCol);
 			if (_wrap && visualCol + width > _maxVisualColsPerLine && index > logicalLineStartOffset)
 			{
@@ -58,17 +60,33 @@ public class LineLayout
 						LogicalOffset: logicalLineStartOffset,
 						LogicalLength: index - logicalLineStartOffset,
 						VisualOffset: visualLineStartOffset,
-						VisualLength: builder.Length - visualLineStartOffset));
+						VisualLength: builder.Length - visualLineStartOffset,
+						[.. logicalToVisualOffsetMap]
+					));
+				logicalToVisualOffsetMap.Clear();
+				logicalToVisualOffsetMap.Add(0);
 				logicalLineStartOffset = index;
 				visualLineStartOffset = builder.Length;
 				visualCol = 0;
+				visualOffset = 0;
 				width = GraphemeWidth(grapheme, visualCol);
 			}
 
 			if (grapheme == "\t")
+			{
 				builder.Append(' ', width);
+				visualOffset += width;
+				logicalToVisualOffsetMap.Add(visualOffset);
+			}
 			else
+			{
 				builder.Append(grapheme);
+				for (int i = 0; i < grapheme.Length; i++)
+				{
+					visualOffset += 1;
+					logicalToVisualOffsetMap.Add(visualOffset);
+				}
+			}
 			visualCol += width;
 		}
 		//if this line does not end with a line break(last line in buffer), still add an offset for it at the next utf18 offset to grapheme boundaries so the cursor can visit it
@@ -81,12 +99,13 @@ public class LineLayout
 				LogicalOffset: logicalLineStartOffset,
 				LogicalLength: line.Text.Length - logicalLineStartOffset,
 				VisualOffset: visualLineStartOffset,
-				VisualLength: builder.Length - visualLineStartOffset));
+				VisualLength: builder.Length - visualLineStartOffset,
+				[.. logicalToVisualOffsetMap]
+			));
 
 		VisualText = builder.ToString();
 	}
 
-	//these calls probably have bugs when working with actual unicode which i cant test yet until i fix the char advance problem
 	public VisualCoordinate GetVisualCoordinate(Coordinate coord, bool forceTrailVisualLine = false)
 	{
 		var logicalCol = AlignColumn(coord.Col);
@@ -203,7 +222,7 @@ public class LineLayout
 		if (_logicalText.Length == 0) return "\n";
 		//this is stupid, doing a binary search twice here
 		column = AlignColumn(column);
-		int index = _graphemeBoundaries.BinarySearch(column); 
+		int index = _graphemeBoundaries.BinarySearch(column);
 		int start = column;
 		int end = index + 1 < _graphemeBoundaries.Count
 			? _graphemeBoundaries[index + 1]
@@ -215,5 +234,7 @@ public readonly record struct VisualLine(
 	int LogicalOffset,
 	int LogicalLength,
 	int VisualOffset,
-	int VisualLength);
+	int VisualLength,
+	List<int> LogicalToVisualOffsetMap
+	);
 

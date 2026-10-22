@@ -10,7 +10,7 @@ public enum RBColor : byte
 }
 internal record struct PiecePosition(PieceNode Piece, int AbsoluteOffset, int LocalOffset);
 
-internal class PieceNode
+internal sealed class PieceNode
 {
 	public PieceBuffer pieceBuffer { get; }
 	public int Start { get; internal set; }
