@@ -4,7 +4,7 @@ using System.Text;
 using System.Diagnostics;
 namespace Sekani.EditorCore;
 
-public class LineLayout
+public record LineLayout
 {
 	public string VisualText { get; private set; } = "";
 	private string _logicalText = "";

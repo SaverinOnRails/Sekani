@@ -124,7 +124,12 @@ internal class PieceTable
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
-	public event EventHandler<BufferChangeData>? BufferChangedEvent;
+
+	//this is for the line cache and layouting, easier to think and update in terms of lines there
+	public event EventHandler<BufferLineChangeData>? BufferLineChangedEvent;
+
+	//this is more precise and specific for subscribers like treesitter than want to know exactly what changed and where
+	public event EventHandler<BufferNetChangeData>? BufferNetChangedEvent;
 
 	public int BufferLength { get; private set; } = 0;
 	public int LineFeedCount { get; private set; } = 0;
@@ -227,11 +232,13 @@ internal class PieceTable
 			int addedLines = GetLineStarts(text, 0).Count - 1;
 			InsertCore(text, offset);
 
-			RaiseBufferChangedEvent(line, BufferChangeKind.LineChanged);
+			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
 			for (int i = 0; i <= addedLines; i++)
 			{
-				RaiseBufferChangedEvent(line, BufferChangeKind.LineAdded);
+				RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
 			}
+
+			RaiseBufferNetChangedEvent(offset, text, null, BufferOperation.Insertion);
 			UpdateTableMetadata();
 		}
 		catch (ArgumentOutOfRangeException)
@@ -284,10 +291,10 @@ internal class PieceTable
 			int first = GetCoordinate(startOffset).Line;
 			int last = GetCoordinate(startOffset + length).Line;
 			DeleteCore(startOffset, length);
-			RaiseBufferChangedEvent(first, BufferChangeKind.LineChanged);
+			RaiseBufferLineChangedEvent(first, BufferLineChangeKind.LineChanged);
 			for (int i = first; i < last; i++)
 			{
-				RaiseBufferChangedEvent(first + 1, BufferChangeKind.LineRemoved);
+				RaiseBufferLineChangedEvent(first + 1, BufferLineChangeKind.LineRemoved);
 			}
 			UpdateTableMetadata();
 		}
@@ -398,9 +405,14 @@ internal class PieceTable
 		ResizeTo(piece, head, copyStart: false);
 	}
 
-	private void RaiseBufferChangedEvent(int line, BufferChangeKind kind)
+	private void RaiseBufferLineChangedEvent(int line, BufferLineChangeKind kind)
 	{
-		BufferChangedEvent?.Invoke(this, new(line, kind));
+		BufferLineChangedEvent?.Invoke(this, new(line, kind));
+	}
+
+	private void RaiseBufferNetChangedEvent(int startOffset, string? insertedText, int? deletedLength, BufferOperation operation)
+	{
+		BufferNetChangedEvent?.Invoke(this, new(startOffset, insertedText, deletedLength, operation));
 	}
 	private void ResizeTo(PieceNode piece, PieceNode source, bool copyStart)
 	{
@@ -770,6 +782,10 @@ internal class PieceTable
 		return PrintRawLine(line);
 	}
 
+	// private string Slice(int offset, int length)
+	// {
+
+	// }
 	private string PrintRawLineCore(int line)
 	{
 		var sb = new StringBuilder();
@@ -1175,10 +1191,16 @@ internal class PieceTable
 public readonly record struct LineChange(int FirstLine, int OldCount, int NewCount);
 
 
-public enum BufferChangeKind
+public enum BufferLineChangeKind
 {
 	LineChanged,
 	LineAdded,
 	LineRemoved,
 }
-public record struct BufferChangeData(int Line, BufferChangeKind kind);
+public enum BufferOperation
+{
+	Insertion,
+	Deletion,
+}
+public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
+public record struct BufferNetChangeData(int StartOffset, string? InsertedText, int? DeletedLength, BufferOperation Operation);

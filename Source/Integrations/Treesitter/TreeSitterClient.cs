@@ -48,6 +48,14 @@ public class TreeSitterClient : IDisposable
 		_tsTree = _tsParser.parse_string(null, buf);
 	}
 
+	public void DoEdit(TSInputEdit edit)
+	{
+		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return;
+		_tsTree.edit(edit);
+
+
+	}
+
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
 	{
 		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return [];
@@ -66,7 +74,7 @@ public class TreeSitterClient : IDisposable
 				int node_start = (int)node.start_offset();
 				int node_end = (int)node.end_offset();
 				var name = _tsHighlightQuery.capture_name_for_id(capture.index, out uint _);
- 				spans.Add(new(name, node_start, node_end));
+				spans.Add(new(name, node_start, node_end));
 			}
 		}
 		return spans;

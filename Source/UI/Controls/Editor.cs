@@ -379,7 +379,7 @@ public class Editor : Control
 			Redraw();
 			return;
 		}
-		const double smoothing = 11.0;
+		const double smoothing = 14.0;
 		double t = 1.0 - Math.Exp(-smoothing * dt);
 		_scrollYOffset += distance * t;
 		Redraw();
@@ -1223,18 +1223,21 @@ public class Editor : Control
 						//apply highlighting
 						var logicalOffset = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
 						var logicalEnd = logicalOffset + visualLine.LogicalLength;
-						var highlights = Document.GetHighlights(logicalOffset, logicalEnd);
-						foreach (var span in highlights)
+						if (Document.TreeSitterClientActive)
 						{
-							if (_highlightBrushes.TryGetValue(span.Capture, out IBrush? brush))
+							var highlights = Document.GetHighlights(logicalOffset, logicalEnd);
+							foreach (var span in highlights)
 							{
-								var logicalToVisualOffsetArena = lineLayout.LogicalOffsetToVisualOffsetArena;
-								//all this bullshit becuase i decided to convert tabs to spaces
-								var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
-								int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
-								int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
-								if (e <= s) continue;
-								ft.SetForegroundBrush(brush, s, e - s);
+								if (_highlightBrushes.TryGetValue(span.Capture, out IBrush? brush))
+								{
+									var logicalToVisualOffsetArena = lineLayout.LogicalOffsetToVisualOffsetArena;
+									//all this bullshit becuase i decided to convert tabs to spaces
+									var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
+									int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
+									int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
+									if (e <= s) continue;
+									ft.SetForegroundBrush(brush, s, e - s);
+								}
 							}
 						}
 						context.DrawText(ft, point);

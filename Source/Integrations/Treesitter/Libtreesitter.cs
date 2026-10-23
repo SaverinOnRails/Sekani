@@ -54,13 +54,29 @@ internal enum TSQueryError
 	TSQueryErrorLanguage,
 }
 
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate nint TSReadCallback(
+	nint payload,
+	uint byteOffset,
+	TSPoint position,
+	out uint bytesRead);
+
 [StructLayout(LayoutKind.Sequential)]
-internal struct TSPoint
+internal struct TSInput
+{
+	public nint Payload;
+	public TSReadCallback Read;
+	public TSInputEncoding Encoding;
+	public nint Decode;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct TSPoint
 {
 	internal uint row;
 	internal uint column;
 
-	internal TSPoint(uint row, uint column)
+	public TSPoint(uint row, uint column)
 	{
 		this.row = row;
 		this.column = column;
@@ -77,14 +93,14 @@ internal struct TSRange
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct TSInputEdit
+public struct TSInputEdit
 {
-	internal uint start_byte;
-	internal uint old_end_byte;
-	internal uint new_end_byte;
-	internal TSPoint start_point;
-	internal TSPoint old_end_point;
-	internal TSPoint new_end_point;
+	public uint start_byte;
+	public uint old_end_byte;
+	public uint new_end_byte;
+	public TSPoint start_point;
+	public TSPoint old_end_point;
+	public TSPoint new_end_point;
 }
 
 [StructLayout(LayoutKind.Sequential)]

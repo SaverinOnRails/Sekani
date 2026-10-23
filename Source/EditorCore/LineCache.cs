@@ -21,19 +21,19 @@ public sealed class LineCache
 		_wordWrap = wordWrap;
 		_maxVisualColsPerLine = maxVisualColsPerLine;
 		// _buffer.BufferChangedEvent += BufferChanged;
-		_pieceTable.BufferChangedEvent += PieceTableLineChanged;
+		_pieceTable.BufferLineChangedEvent += PieceTableLineChanged;
 		// RecalculateWidth();
 	}
 
-	private void PieceTableLineChanged(object? sender, BufferChangeData e)
+	private void PieceTableLineChanged(object? sender, BufferLineChangeData e)
 	{
-		if (e.kind == BufferChangeKind.LineRemoved)
+		if (e.kind == BufferLineChangeKind.LineRemoved)
 		{
 			_visualLineTree.RemoveAt(e.Line);
 			_layoutCache.RemoveAt(e.Line);
 		}
 
-		if (e.kind == BufferChangeKind.LineAdded)
+		if (e.kind == BufferLineChangeKind.LineAdded)
 		{
 			if (e.Line <= _visualLineTree.Count)
 			{

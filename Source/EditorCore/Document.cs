@@ -20,11 +20,12 @@ public sealed class SekaniDocument
 		}
 	}
 	private LineCache? _lineCache;
-	private TreeSitterClient _treeSitterClient = new();
+	private TreeSitterClient _treeSitterClient;
 
 	public Range CaretRange { get; private set; } = new Range(0);
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
+	public bool TreeSitterClientActive => _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
 
 	public void SetCaretRange(Coordinate pos)
@@ -61,7 +62,9 @@ public sealed class SekaniDocument
 	public SekaniDocument()
 	{
 		_pieceTable = new("");
+		_treeSitterClient = new();
 		_treeSitterClient.ParseBuffer("");
+		SubscribeToEvents();
 	}
 
 	~SekaniDocument()
@@ -74,8 +77,49 @@ public sealed class SekaniDocument
 		_filePath = filePath;
 		var buffer = File.ReadAllText(filePath);
 		_pieceTable = new(buffer);
+		_treeSitterClient = new();
 		_treeSitterClient.ParseBuffer(buffer);
-		// TypeChars(File.ReadAllText(filePath), false);
+		SubscribeToEvents();
+	}
+
+	private void SubscribeToEvents()
+	{
+		_pieceTable.BufferNetChangedEvent += BufferNetChanged;
+	}
+
+	private void BufferNetChanged(object? sender, BufferNetChangeData e)
+	{
+		EditTreeSitter(e);
+	}
+
+	//inform tree-sitter of changes to the buffer in memory
+	private void EditTreeSitter(BufferNetChangeData e)
+	{
+		//convert all offsets to bytes
+		if (e.Operation == BufferOperation.Insertion)
+		{
+			var start_byte = e.StartOffset * sizeof(ushort);
+			var old_end_byte = start_byte;
+			var new_end_byte = start_byte + e.InsertedText!.Length * sizeof(ushort);
+
+			var start_coord = GetCoordinate(e.StartOffset);
+			var start_point = new TSPoint((uint)start_coord.Line, (uint)start_coord.Col * sizeof(ushort));
+			var old_end_point = start_point;
+			var new_end_coord = GetCoordinate(e.StartOffset + e.InsertedText!.Length);
+			var new_end_point = new TSPoint((uint)new_end_coord.Line, (uint)new_end_coord.Col * sizeof(ushort));
+
+			TSInputEdit edit = new()
+			{
+				start_byte = (uint)start_byte,
+				old_end_byte = (uint)old_end_byte,
+				new_end_byte = (uint)new_end_byte,
+
+				start_point = start_point,
+				old_end_point = old_end_point,
+				new_end_point = new_end_point
+			};
+			_treeSitterClient.DoEdit(edit);
+		}
 	}
 
 	public void TypeChars(string text, bool invokePieceTable = true)
