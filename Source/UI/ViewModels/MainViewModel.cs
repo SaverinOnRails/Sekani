@@ -47,12 +47,12 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     private Mode _mode = Mode.Normal;
 
     [ObservableProperty]
-    private int _motionCountBuffer = 0;
+    private string? _motionCountBuffer = null;
 }
 
 public interface IEditorContext
 {
-    public int MotionCountBuffer { get; }
+    public string? MotionCountBuffer { get; }
 
     public void HandleCommand(string command);
 

@@ -67,7 +67,7 @@ public class LineLayout
 						ArenaStartIndex: chunkStartIndex,
 						ArenaLength: chunkLength
 					));
-				chunkStartIndex = _logicalOffsetToVisualOffsetArena.Count - 1;
+				chunkStartIndex = _logicalOffsetToVisualOffsetArena.Count;
 				_logicalOffsetToVisualOffsetArena.Add(0);
 				logicalLineStartOffset = index;
 				visualLineStartOffset = builder.Length;

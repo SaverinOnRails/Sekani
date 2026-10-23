@@ -82,12 +82,16 @@ public sealed class SekaniDocument
 	{
 		TypeCharsCore(CaretRange.Cursor, text);
 	}
-	public void CaretRight()
+	public void CaretRight(int count)
 	{
-		if (CaretRange.Cursor < _pieceTable.BufferLength)
+		while (count > 0)
 		{
-			CaretRange = new(AdvanceCaret(CaretRange.Cursor, 1));
-			UpdatePreferredVisualColumn();
+			if (CaretRange.Cursor < _pieceTable.BufferLength)
+			{
+				CaretRange = new(AdvanceCaret(CaretRange.Cursor, 1));
+				UpdatePreferredVisualColumn();
+			}
+			count--;
 		}
 	}
 
@@ -206,12 +210,16 @@ public sealed class SekaniDocument
 			CaretRange = new Range(offset);
 		}
 	}
-	public void CaretLeft()
+	public void CaretLeft(int count)
 	{
-		if (CaretRange.Cursor > 0)
+		while (count > 0)
 		{
-			CaretRange = new(AdvanceCaret(CaretRange.Cursor, -1));
-			UpdatePreferredVisualColumn();
+			if (CaretRange.Cursor > 0)
+			{
+				CaretRange = new(AdvanceCaret(CaretRange.Cursor, -1));
+				UpdatePreferredVisualColumn();
+			}
+			count--;
 		}
 	}
 
@@ -237,14 +245,22 @@ public sealed class SekaniDocument
 		UpdatePreferredVisualColumn();
 	}
 
-	public void CaretUp()
+	public void CaretUp(int count)
 	{
-		MoveCaretVertical(CaretVerticalDirection.Up);
+		while (count > 0)
+		{
+			MoveCaretVertical(CaretVerticalDirection.Up);
+			count--;
+		}
 	}
 
-	public void CaretDown()
+	public void CaretDown(int count)
 	{
-		MoveCaretVertical(CaretVerticalDirection.Down);
+		while (count > 0)
+		{
+			MoveCaretVertical(CaretVerticalDirection.Down);
+			count--;
+		}
 	}
 
 	private int AdvanceCaret(int offset, int count)
@@ -300,14 +316,18 @@ public sealed class SekaniDocument
 		return prev;
 	}
 	//TODO: Yes, this entire word selection implmentation is profoundly shitty and illegible and entirely based on trial and error. I will fix it someday maybe.
-	public void SelectToWordMotion(WordSelectMotion motion)
+	public void SelectToWordMotion(WordSelectMotion motion, int count)
 	{
-		var offset = CaretRange.Cursor;
-		var wordFinder = GetWordFinderForMotion(motion);
-		var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
-		if (next is not null && anchor is not null)
+		while (count > 0)
 		{
-			SetDocumentCaretRangeHead(anchor.Value, next.Value);
+			var offset = CaretRange.Cursor;
+			var wordFinder = GetWordFinderForMotion(motion);
+			var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
+			if (next is not null && anchor is not null)
+			{
+				SetDocumentCaretRangeHead(anchor.Value, next.Value);
+			}
+			count--;
 		}
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)

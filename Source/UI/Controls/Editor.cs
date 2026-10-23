@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -18,8 +20,8 @@ public class Editor : Control
 	private Typeface _editorFontFace = Typeface.Default;
 	private Typeface _normalLineNumberFontFace = Typeface.Default;
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
-	private readonly float _fontSize = 15;
-	private LineCache _lineCache;
+	private readonly float _fontSize = 14;
+	private LineCache _lineCache = null!;
 	private
 	const float _baseLineNumberWidth = 20;
 
@@ -29,7 +31,7 @@ public class Editor : Control
 
 	private bool _drawLineNumbers = true;
 	private bool _smoothScroll = true;
-	private bool _useRelativeLineNumber = false;
+	private bool _useRelativeLineNumber = true;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
@@ -67,6 +69,14 @@ public class Editor : Control
 		set => SetValue(ModeProperty, value);
 	}
 	public static readonly StyledProperty<SekaniDocument> DocumentProperty = AvaloniaProperty.Register<Editor, SekaniDocument>(nameof(Document));
+	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<Editor, string?>(nameof(Document));
+
+	public string? MotionCountBuffer
+	{
+		get => GetValue(MotionCountBufferProperty);
+		set => SetValue(MotionCountBufferProperty, value);
+	}
+
 	public SekaniDocument Document
 	{
 		get => GetValue(DocumentProperty);
@@ -76,7 +86,8 @@ public class Editor : Control
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
 	private readonly Stopwatch _caretFocusBubbleStopwatch = new();
-	private const double CaretFocusBubbleDurationMs = 360; private bool _isSmoothScrolling;
+	private const double CaretFocusBubbleDurationMs = 360;
+	private bool _isSmoothScrolling;
 	private TimeSpan _lastSmoothScrollFrameTime;
 	private int _firstVisibleLogicalLineForResizeRestore;
 
@@ -97,6 +108,11 @@ public class Editor : Control
 			Interval = TimeSpan.FromMilliseconds(700)
 		};
 		TimeCaret();
+	}
+
+	private void ClearMotionCountBuffer()
+	{
+		MotionCountBuffer = null;
 	}
 
 	//Correct scroll behind when measured size changes
@@ -292,7 +308,7 @@ public class Editor : Control
 				_targetScrollYOffset += correctiveDistance;
 
 			//only do this when we are not drag selecting
-			if (correctiveDistance > _editorMetrics.LineHeight && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
+			if (correctiveDistance > _editorMetrics.LineHeight * 5 && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
 
 		if (!IsCaretVisibleHorizontal(
@@ -363,7 +379,7 @@ public class Editor : Control
 			Redraw();
 			return;
 		}
-		const double smoothing = 15.0;
+		const double smoothing = 11.0;
 		double t = 1.0 - Math.Exp(-smoothing * dt);
 		_scrollYOffset += distance * t;
 		Redraw();
@@ -388,6 +404,8 @@ public class Editor : Control
 		_caretFocusBubbleTimer.Tick += (s, e) => Redraw();
 		_caretFocusBubbleTimer.Start();
 	}
+
+
 	private void CorrectScrollBarOffset()
 	{
 		_scrollXOffset = Math.Clamp(
@@ -400,30 +418,38 @@ public class Editor : Control
 		  0,
 		  Math.Max(0, GetDocumentHeightInPixels() - EditorArea.Height));
 	}
+	private int MotionCount
+	{
+		get
+		{
+			if (MotionCountBuffer is null) return 1;
+			return int.Parse(MotionCountBuffer);
+		}
+	}
+
 	private void HandleKeyInput(KeyEventArgs e)
 	{
 		bool handled = false;
-
 		// These work in all modes
 		switch (e.Key)
 		{
 			case Key.Up:
-				Document.CaretUp();
+				Document.CaretUp(MotionCount);
 				handled = true;
 				break;
 
 			case Key.Left:
-				Document.CaretLeft();
+				Document.CaretLeft(MotionCount);
 				handled = true;
 				break;
 
 			case Key.Right:
-				Document.CaretRight();
+				Document.CaretRight(MotionCount);
 				handled = true;
 				break;
 
 			case Key.Down:
-				Document.CaretDown();
+				Document.CaretDown(MotionCount);
 				handled = true;
 				break;
 		}
@@ -453,9 +479,19 @@ public class Editor : Control
 					return;
 			}
 		}
+		if (Mode == Mode.Normal)
+		{
+			switch (e.Key)
+			{
+				case Key.Escape:
+					ClearMotionCountBuffer();
+					break;
+			}
+		}
 
 		if (handled)
 		{
+			ClearMotionCountBuffer();
 			HoldCaretAndRedraw();
 			EnsureCaretVisible();
 		}
@@ -468,6 +504,14 @@ public class Editor : Control
 	private void EnterNormalMode()
 	{
 		Mode = Mode.Normal;
+	}
+
+	private void UpdateMotionCountBuffer(char buf)
+	{
+		if (MotionCountBuffer?.Length == 5) return;
+		StringBuilder builder = new(MotionCountBuffer);
+		builder.Append(buf);
+		MotionCountBuffer = builder.ToString();
 	}
 
 	private void EnterInsertMode()
@@ -508,6 +552,7 @@ public class Editor : Control
 				_caretVisible = true;
 				Redraw();
 			}
+			ClearMotionCountBuffer();
 		}
 		if (e.Property == DocumentProperty)
 		{
@@ -700,7 +745,7 @@ public class Editor : Control
 				}
 				var point = new Point(startAtPixels - _scrollXOffset, visualLineSum * _editorMetrics.LineHeight - _scrollYOffset);
 				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
-				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFCB3D"), 0.5), new Rect(point, size));
+				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFCB3D"), 0.25), new Rect(point, size));
 				visualLineSum++;
 			}
 		}
@@ -770,7 +815,7 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#121212"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#100e0c"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -1181,11 +1226,9 @@ public class Editor : Control
 						var highlights = Document.GetHighlights(logicalOffset, logicalEnd);
 						foreach (var span in highlights)
 						{
-							//normalise start
-							if (_highlightBrushes.TryGetValue(span.Capture, out IBrush brush))
+							if (_highlightBrushes.TryGetValue(span.Capture, out IBrush? brush))
 							{
 								var logicalToVisualOffsetArena = lineLayout.LogicalOffsetToVisualOffsetArena;
-								 
 								//all this bullshit becuase i decided to convert tabs to spaces
 								var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
 								int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
@@ -1198,6 +1241,7 @@ public class Editor : Control
 					}
 					else
 					{
+						//TODO: Do highlighting for this
 						var graphemeBoundaries = lineLayout.GraphemeBoundaries;
 						var visualLineOffset = visualLine.LogicalOffset;
 						var startIndex = lineLayout.GraphemeBoundaryIndexOf(visualLineOffset);
@@ -1312,6 +1356,11 @@ public class Editor : Control
 	private void HandleNormalModeTextInput(TextInputEventArgs e)
 	{
 		if (e.Text is null) return;
+		if (e.Text.Length == 1 && char.IsNumber(e.Text[0]))
+		{
+			UpdateMotionCountBuffer(e.Text[0]);
+			return;
+		}
 		switch (e.Text)
 		{
 			case "i":
@@ -1338,16 +1387,16 @@ public class Editor : Control
 				EnterInsertMode();
 				break;
 			case "k":
-				Document.CaretUp();
+				Document.CaretUp(MotionCount);
 				break;
 			case "h":
-				Document.CaretLeft();
+				Document.CaretLeft(MotionCount);
 				break;
 			case "l":
-				Document.CaretRight();
+				Document.CaretRight(MotionCount);
 				break;
 			case "j":
-				Document.CaretDown();
+				Document.CaretDown(MotionCount);
 				break;
 			case "o":
 				Document.AddNewLineUnderSelection();
@@ -1358,22 +1407,22 @@ public class Editor : Control
 				EnterInsertMode();
 				break;
 			case "w":
-				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.Word));
+				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.Word), MotionCount);
 				break;
 			case "e":
-				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.Word));
+				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.Word), MotionCount);
 				break;
 			case "b":
-				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.Word));
+				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.Word), MotionCount);
 				break;
 			case "W":
-				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.WORD));
+				Document.SelectToWordMotion(new(MotionKind.NextWordStart, MotionSubKind.WORD), MotionCount);
 				break;
 			case "E":
-				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.WORD));
+				Document.SelectToWordMotion(new(MotionKind.NextWordEnd, MotionSubKind.WORD), MotionCount);
 				break;
 			case "B":
-				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.WORD));
+				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.WORD), MotionCount);
 				break;
 			case "p":
 				Document.PrintPieceTable();
@@ -1389,6 +1438,7 @@ public class Editor : Control
 		e.Handled = true;
 		HoldCaretAndRedraw();
 		EnsureCaretVisible();
+		ClearMotionCountBuffer();
 	}
 
 	private void HandleInsertModeTextInput(TextInputEventArgs e)

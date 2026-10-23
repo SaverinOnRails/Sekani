@@ -4,5 +4,6 @@ public enum Mode
 {
 	Insert,
 	Normal,
-	Command
+	Command,
+	Visual,
 }
