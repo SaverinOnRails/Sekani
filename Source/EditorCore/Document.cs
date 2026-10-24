@@ -501,10 +501,11 @@ public sealed class SekaniDocument
 		return sethigh;
 	}
 
+
 	public void AddNewLineAboveSelection()
 	{
-		var higher = CaretRange.Higher;
-		var pos = GetCoordinate(higher);
+		var lower = CaretRange.Lower;
+		var pos = GetCoordinate(lower);
 		var insertpos = new Coordinate(0, pos.Line);
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		CaretRange = new(GetOffset(insertpos));

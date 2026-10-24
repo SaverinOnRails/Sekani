@@ -31,7 +31,7 @@ public class Editor : Control
 
 	private bool _drawLineNumbers = true;
 	private bool _smoothScroll = true;
-	private bool _useRelativeLineNumber = true;
+	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
