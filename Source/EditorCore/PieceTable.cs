@@ -238,7 +238,7 @@ internal class PieceTable
 				RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
 			}
 
-			RaiseBufferNetChangedEvent(offset, text, null, BufferOperation.Insertion);
+			RaiseBufferNetChangedEvent(offset, text.Length, null, BufferOperation.Insertion);
 			UpdateTableMetadata();
 		}
 		catch (ArgumentOutOfRangeException)
@@ -289,13 +289,16 @@ internal class PieceTable
 		{
 			if (length <= 0) return;
 			int first = GetCoordinate(startOffset).Line;
-			int last = GetCoordinate(startOffset + length).Line;
+			int endOffset = startOffset + length;
+			var endCoordinate = GetCoordinate(endOffset);
+			int last = endCoordinate.Line;
 			DeleteCore(startOffset, length);
 			RaiseBufferLineChangedEvent(first, BufferLineChangeKind.LineChanged);
 			for (int i = first; i < last; i++)
 			{
 				RaiseBufferLineChangedEvent(first + 1, BufferLineChangeKind.LineRemoved);
 			}
+			RaiseBufferNetChangedEvent(startOffset, length, endCoordinate, BufferOperation.Deletion);
 			UpdateTableMetadata();
 		}
 		catch (ArgumentOutOfRangeException)
@@ -410,9 +413,9 @@ internal class PieceTable
 		BufferLineChangedEvent?.Invoke(this, new(line, kind));
 	}
 
-	private void RaiseBufferNetChangedEvent(int startOffset, string? insertedText, int? deletedLength, BufferOperation operation)
+	private void RaiseBufferNetChangedEvent(int startOffset, int length, Coordinate? oldEndPointBeforeDelete, BufferOperation operation)
 	{
-		BufferNetChangedEvent?.Invoke(this, new(startOffset, insertedText, deletedLength, operation));
+		BufferNetChangedEvent?.Invoke(this, new(startOffset, length, oldEndPointBeforeDelete, operation));
 	}
 	private void ResizeTo(PieceNode piece, PieceNode source, bool copyStart)
 	{
@@ -782,10 +785,50 @@ internal class PieceTable
 		return PrintRawLine(line);
 	}
 
-	// private string Slice(int offset, int length)
-	// {
-
-	// }
+	// Locates the pieced together text from offset to offset + length and fills it into a preallocated buffer of atleast size length
+	public int Slice(int offset, int length, Span<char> spanBuf)
+	{
+		var node = _root;
+		if (offset < 0 || offset >= BufferLength || length <= 0) return 0;
+		length = Math.Min(length, BufferLength - offset);
+		int remainder = 0;
+		int insertionIndex = 0;
+		while (node != NULL_NODE)
+		{
+			if (node.LeftSubtreeBufferLength > offset)
+			{
+				node = node.Left;
+			}
+			else if (node.Length >= offset - node.LeftSubtreeBufferLength)
+			{
+				//this piece contains offset
+				var local = offset - node.LeftSubtreeBufferLength;
+				var pieceBuffer = GetPieceBuffer(node);
+				var start = local + node.Start;
+				var end = Math.Min(node.End, start + length);
+				AppendRange(spanBuf, pieceBuffer, local + node.Start, end, ref insertionIndex);
+				remainder = length - (end - start); //some of the text may be in subsequent pieces
+				break;
+			}
+			else
+			{
+				var bufferLength = node.LeftSubtreeBufferLength + node.Length;
+				offset -= bufferLength;
+				node = node.Right;
+			}
+		}
+		if (remainder <= 0) return length;
+		for (var next = PieceNode.Next(node); next != NULL_NODE; next = PieceNode.Next(next))
+		{
+			var buffer = GetPieceBuffer(next);
+			var start = next.Start;
+			var end = Math.Min(next.End, start + remainder);
+			AppendRange(spanBuf, buffer, start, end, ref insertionIndex);
+			remainder -= end - start; //subtract data written
+			if (remainder <= 0) break;
+		}
+		return length;
+	}
 	private string PrintRawLineCore(int line)
 	{
 		var sb = new StringBuilder();
@@ -851,6 +894,14 @@ internal class PieceTable
 	{
 		for (int i = start; i < end; i++)
 			sb.Append(buffer[i]);
+	}
+	private static void AppendRange(Span<char> sb, IReadOnlyList<char> buffer, int start, int end, ref int insertionIndex)
+	{
+		for (int i = start; i < end; i++)
+		{
+			sb[insertionIndex] = buffer[i];
+			insertionIndex++;
+		}
 	}
 	public int GetOffset(Coordinate pos)
 	{
@@ -1203,4 +1254,5 @@ public enum BufferOperation
 	Deletion,
 }
 public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
-public record struct BufferNetChangeData(int StartOffset, string? InsertedText, int? DeletedLength, BufferOperation Operation);
+public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
+

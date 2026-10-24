@@ -177,6 +177,15 @@ internal sealed class TSParser : IDisposable
 		return ptr != nint.Zero ? new TSTree(ptr) : null;
 	}
 
+	internal TSTree? parse(TSTree? oldTree, TSInput input)
+	{
+		var ptr = ts_parser_parse(
+			Ptr,
+			oldTree != null ? oldTree.Ptr : nint.Zero,
+			input);
+		return ptr != nint.Zero ? new TSTree(ptr) : null;
+	}
+
 	internal void reset() { ts_parser_reset(Ptr); }
 	internal void set_timeout_micros(ulong timeout) { ts_parser_set_timeout_micros(Ptr, timeout); }
 	internal ulong timeout_micros() { return ts_parser_timeout_micros(Ptr); }
@@ -300,6 +309,12 @@ internal sealed class TSParser : IDisposable
 	[DllImport("libtree-sitter.so", CallingConvention = CallingConvention.Cdecl)]
 	private static extern nint ts_parser_parse_string(nint parser, nint oldTree, [MarshalAs(UnmanagedType.LPUTF8Str)] string input, uint length);
 
+
+	[DllImport("libtree-sitter.so", CallingConvention = CallingConvention.Cdecl)]
+	private static extern nint ts_parser_parse(
+		nint parser,
+		nint oldTree,
+		TSInput input);
 	/**
 	* Use the parser to parse some source code stored in one contiguous buffer.
 	* The first two parameters are the same as in the `ts_parser_parse` function

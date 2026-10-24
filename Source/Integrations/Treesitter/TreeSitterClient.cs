@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 namespace Sekani.Integrations.TreeSitter;
@@ -11,8 +12,15 @@ public class TreeSitterClient : IDisposable
 	private TSQuery? _tsHighlightQuery;
 	private string _treeSitterlib = "/home/noble/Documents/sekanitestfiles/treesitter/C/c.so";
 	private string _treeSitterHighlightQuery = "/home/noble/Documents/sekanitestfiles/treesitter/C/highlights.scm";
+	private StringBuilder _tsInputStringBuilder = new();
+	private int _readLength = 0;
 
-	public TreeSitterClient()
+	private readonly TSReadCallback _tsInputRead;
+	private Func<int, int, Span<char>, int> _getBufferSlice;
+	private char[] _tsReadBuffer = Array.Empty<char>();
+	private nint _tsReadPtr;
+
+	public TreeSitterClient(Func<int, int, Span<char>, int> getBufferSlice)
 	{
 		LoadNative();
 		if (_tsLanguage.Ptr == nint.Zero) return;
@@ -20,6 +28,10 @@ public class TreeSitterClient : IDisposable
 		var highlightsQuery = _tsLanguage.query_new(File.ReadAllText(_treeSitterHighlightQuery), out uint errorCode, out TSQueryError error);
 		if (highlightsQuery is null) return;
 		_tsHighlightQuery = highlightsQuery;
+		_getBufferSlice = getBufferSlice;
+		_tsInputRead = TsInputRead;
+		_readLength = 8192;
+		EnsureReadBuffer(_readLength);
 		Active = true;
 	}
 	private void LoadNative()
@@ -52,8 +64,33 @@ public class TreeSitterClient : IDisposable
 	{
 		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return;
 		_tsTree.edit(edit);
+		TSInput input = new()
+		{
+			Payload = nint.Zero,
+			Encoding = TSInputEncoding.TSInputEncodingUTF16,
+			Read = _tsInputRead
+		};
 
+		var newtree = _tsParser.parse(_tsTree, input);
+		if (newtree is not null)
+		{
+			_tsTree.Dispose();
+			_tsTree = newtree;
+		}
+	}
 
+	private unsafe void EnsureReadBuffer(int chars)
+	{
+		_tsReadBuffer = GC.AllocateArray<char>(chars, pinned: true);
+		_tsReadPtr = (nint)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(_tsReadBuffer));
+	}
+	private nint TsInputRead(nint payload, uint byte_index, TSPoint pos, out uint readBytes)
+	{
+		var index = byte_index / sizeof(ushort);
+		var charsRead = _getBufferSlice((int)index, _readLength, _tsReadBuffer.AsSpan());
+		var bytesRead = charsRead * sizeof(ushort);
+		readBytes = (uint)bytesRead;
+		return bytesRead == 0 ? nint.Zero : _tsReadPtr;
 	}
 
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)

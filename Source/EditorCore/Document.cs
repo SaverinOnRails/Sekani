@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Drawing;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection.Metadata;
@@ -62,7 +63,7 @@ public sealed class SekaniDocument
 	public SekaniDocument()
 	{
 		_pieceTable = new("");
-		_treeSitterClient = new();
+		_treeSitterClient = new(_pieceTable.Slice);
 		_treeSitterClient.ParseBuffer("");
 		SubscribeToEvents();
 	}
@@ -77,7 +78,7 @@ public sealed class SekaniDocument
 		_filePath = filePath;
 		var buffer = File.ReadAllText(filePath);
 		_pieceTable = new(buffer);
-		_treeSitterClient = new();
+		_treeSitterClient = new(_pieceTable.Slice);
 		_treeSitterClient.ParseBuffer(buffer);
 		SubscribeToEvents();
 	}
@@ -96,19 +97,20 @@ public sealed class SekaniDocument
 	private void EditTreeSitter(BufferNetChangeData e)
 	{
 		//convert all offsets to bytes
+		TSInputEdit edit;
 		if (e.Operation == BufferOperation.Insertion)
 		{
 			var start_byte = e.StartOffset * sizeof(ushort);
 			var old_end_byte = start_byte;
-			var new_end_byte = start_byte + e.InsertedText!.Length * sizeof(ushort);
+			var new_end_byte = start_byte + e.Length * sizeof(ushort);
 
 			var start_coord = GetCoordinate(e.StartOffset);
 			var start_point = new TSPoint((uint)start_coord.Line, (uint)start_coord.Col * sizeof(ushort));
 			var old_end_point = start_point;
-			var new_end_coord = GetCoordinate(e.StartOffset + e.InsertedText!.Length);
+			var new_end_coord = GetCoordinate(e.StartOffset + e.Length);
 			var new_end_point = new TSPoint((uint)new_end_coord.Line, (uint)new_end_coord.Col * sizeof(ushort));
 
-			TSInputEdit edit = new()
+			edit = new()
 			{
 				start_byte = (uint)start_byte,
 				old_end_byte = (uint)old_end_byte,
@@ -118,8 +120,30 @@ public sealed class SekaniDocument
 				old_end_point = old_end_point,
 				new_end_point = new_end_point
 			};
-			_treeSitterClient.DoEdit(edit);
 		}
+		else
+		{
+			var start_byte = e.StartOffset * sizeof(ushort);
+			var old_end_byte = start_byte + (e.Length * sizeof(ushort));
+			var new_end_byte = start_byte;
+
+			var start_coord = GetCoordinate(e.StartOffset);
+			var start_point = new TSPoint((uint)start_coord.Line, (uint)start_coord.Col * sizeof(ushort));
+			var old_end_coord = e.OldEndPointBeforeDelete;
+			var old_end_point = new TSPoint((uint)old_end_coord!.Line, (uint)old_end_coord.Col * sizeof(ushort));
+			var new_end_point = start_point;
+			edit = new()
+			{
+				start_byte = (uint)start_byte,
+				old_end_byte = (uint)old_end_byte,
+				new_end_byte = (uint)new_end_byte,
+
+				start_point = start_point,
+				old_end_point = old_end_point,
+				new_end_point = new_end_point
+			};
+		}
+		_treeSitterClient.DoEdit(edit);
 	}
 
 	public void TypeChars(string text, bool invokePieceTable = true)
@@ -782,6 +806,7 @@ public sealed class SekaniDocument
 	}
 	public void PrintPieceTable()
 	{
+		var builder = new StringBuilder();
 		// Console.WriteLine(_pieceTable.Print());
 		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
 		// Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
