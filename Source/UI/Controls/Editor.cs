@@ -734,18 +734,23 @@ public class Editor : Control
 
 		var firstLine = lower.Line;
 		var lastLine = higher.Line;
-		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(firstLine);
-		var visualLineSum = visualLinesBefore;
+		var VisibleTextBounds = ComputeVisibleText();
+		firstLine = Math.Max(firstLine, VisibleTextBounds.firstLogicalLine);
+		lastLine = Math.Min(lastLine, VisibleTextBounds.lastPossibleLogicalLine);
+		if (firstLine > lastLine) return;
+		var visualLineSum = _lineCache.VisualLinesPrefixSum(firstLine);
 		for (int i = firstLine; i <= lastLine; i++)
 		{
 			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null) continue;
+			if (i > firstLine)
+				visualLineSum = _lineCache.VisualLinesPrefixSum(i);
 			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
 			{
 				var startAtPixels = EditorArea.Left;
 				var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
-				if (i == firstLine)
+				if (i == lower.Line)
 				{
 					var startVisualCoord = lineLayout.GetVisualCoordinate(lower, _useWideCursor);
 					if (j < startVisualCoord.VisualLine)
@@ -753,13 +758,12 @@ public class Editor : Control
 						visualLineSum++;
 						continue;
 					}
-					;
 					if (j == startVisualCoord.VisualLine)
 					{
 						startAtPixels = EditorArea.Left + startVisualCoord.VisualCol * _editorMetrics.CharAdvance;
 					}
 				}
-				if (i == lastLine)
+				if (i == higher.Line)
 				{
 					var endVisualCoord = lineLayout.GetVisualCoordinate(higher, _useWideCursor);
 					if (j > endVisualCoord.VisualLine)
@@ -777,9 +781,7 @@ public class Editor : Control
 				visualLineSum++;
 			}
 		}
-
 	}
-
 	private void DrawLineNumbers(DrawingContext context, VisibleTextBounds visibleTextBounds)
 	{
 		if (!_drawLineNumbers || LineNumberSectWidth == 0)
@@ -1487,6 +1489,9 @@ public class Editor : Control
 				break;
 			case "p":
 				Document.PrintPieceTable();
+				break;
+			case "%":
+				Document.SelectAll();
 				break;
 			case ":":
 				{

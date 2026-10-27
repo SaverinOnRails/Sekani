@@ -427,7 +427,11 @@ public sealed class SekaniDocument
 		return _lineCache;
 	}
 
-
+	public void SelectAll()
+	{
+		var head = BufferLength - 1;
+		MoveHeadAndChangeAnchor(0, head);
+	}
 	public void AddNewLineUnderSelection()
 	{
 		var offset = CaretRange.Width > 1 ? CaretRange.Higher : CaretRange.Lower;
@@ -852,6 +856,7 @@ public sealed class SekaniDocument
 		// Console.WriteLine(_pieceTable.LineCount());
 		// Console.WriteLine(_pieceTable.LineFeedCount);
 	}
+
 }
 
 public enum CaretVerticalDirection
