@@ -14,6 +14,8 @@ public readonly struct Range
 		get => _head ?? Anchor + 1;
 	}
 
+	public bool HasActiveSelection => _head is not null;
+
 	public Range(int cursor, bool trailVisualLine = false)
 	{
 		Anchor = cursor;

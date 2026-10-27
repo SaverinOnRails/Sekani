@@ -23,6 +23,7 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
         var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
         // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
+        // var file = "/home/noble/Documents/Hyprland/src/render/OpenGL.cpp";
         // var file = "/home/noble/Documents/sekanitestfiles/unicodetest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/chinesetest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";

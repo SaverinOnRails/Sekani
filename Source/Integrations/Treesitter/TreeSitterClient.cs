@@ -16,7 +16,7 @@ public class TreeSitterClient : IDisposable
 	private int _readLength = 0;
 
 	private readonly TSReadCallback _tsInputRead;
-	private Func<int, int, Span<char>, int> _getBufferSlice;
+	private readonly Func<int, int, Span<char>, int> _getBufferSlice;
 	private char[] _tsReadBuffer = Array.Empty<char>();
 	private nint _tsReadPtr;
 

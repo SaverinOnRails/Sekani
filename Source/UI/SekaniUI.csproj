@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <PublishAOT>true</PublishAOT>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-  </PropertyGroup>
+ </PropertyGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
