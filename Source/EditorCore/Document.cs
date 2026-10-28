@@ -54,7 +54,7 @@ public sealed class SekaniDocument
 		int head = pos < anchor ? pos : GetPosAdvance(pos, 1);
 		CaretRange = new Range(anchor, head, pos, trailVisualLine);
 	}
-	public void MoveHeadAndChangeAnchor(int anchor, int head, bool trailVisualLine = false)
+	public void SetAnchorAndHead(int anchor, int head, bool trailVisualLine = false)
 	{
 		CaretRange = new(anchor, head, head, trailVisualLine);
 	}
@@ -414,7 +414,7 @@ public sealed class SekaniDocument
 			if (next is not null && anchor is not null)
 			{
 				if (!extendSelection)
-					MoveHeadAndChangeAnchor(anchor.Value, next.Value);
+					SetAnchorAndHead(anchor.Value, next.Value);
 				else
 					MoveHead(next.Value);
 			}
@@ -430,7 +430,7 @@ public sealed class SekaniDocument
 	public void SelectAll()
 	{
 		var head = BufferLength - 1;
-		MoveHeadAndChangeAnchor(0, head);
+		SetAnchorAndHead(0, head);
 	}
 	public void AddNewLineUnderSelection()
 	{
@@ -511,6 +511,35 @@ public sealed class SekaniDocument
 			MoveHead(offset);
 		else
 			SetCaret(offset);
+	}
+
+	public void SelectLine(int count)
+	{
+		var range = CaretRange;
+		var pos = GetCoordinate(range.Cursor);
+		var layout = _lineCache!.GetOrCreate(pos.Line);
+		var linestart = GetOffset(new(0, pos.Line));
+		var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
+
+		if (CaretRange.Lower <= linestart && CaretRange.Cursor == lineend)
+		{
+			var nextline = pos.Line + 1;
+			layout = _lineCache.GetOrCreate(nextline);
+			if (layout is null) return;
+			var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
+			MoveHead(GetOffset(new(nextlineend, nextline)));
+		}
+		else
+		{
+			if (CaretRange.Lower <= linestart)
+			{
+				MoveHead(lineend);
+			}
+			else
+			{
+				SetAnchorAndHead(linestart, lineend);
+			}
+		}
 	}
 	public void PlaceCursorAtLineEnd(bool extendSelection)
 	{

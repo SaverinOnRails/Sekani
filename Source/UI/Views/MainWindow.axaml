@@ -28,7 +28,7 @@
 
 
     <Grid RowDefinitions="*,Auto">
-        <controls:Editor
+        <controls:EditorView
             Document="{Binding Document}"
             Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />

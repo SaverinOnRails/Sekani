@@ -19,12 +19,12 @@ public record LineLayout
 	private List<int> _logicalOffsetToVisualOffsetArena = [];
 	public IReadOnlyList<int> LogicalOffsetToVisualOffsetArena => _logicalOffsetToVisualOffsetArena;
 
-	public LineLayout(Line line, int tabSize, bool wrap, int maxVisualColsPerLine)
+	public LineLayout(string text, int tabSize, bool wrap, int maxVisualColsPerLine)
 	{
 		_tabSize = tabSize;
 		_wrap = wrap;
 		_maxVisualColsPerLine = maxVisualColsPerLine;
-		DoLayout(line);
+		DoLayout(text);
 	}
 
 	public int GraphemeWidth(ReadOnlySpan<char> grapheme, int visualCol)
@@ -35,9 +35,9 @@ public record LineLayout
 		return width;
 	}
 
-	private void DoLayout(Line line)
+	private void DoLayout(string text)
 	{
-		_logicalText = line.Text;
+		_logicalText = text;
 		int visualCol = 0;
 		int logicalLineStartOffset = 0;
 		int visualLineStartOffset = 0;
@@ -101,7 +101,7 @@ public record LineLayout
 		_visualLines.Add(
 			new VisualLine(
 				LogicalOffset: logicalLineStartOffset,
-				LogicalLength: line.Text.Length - logicalLineStartOffset,
+				LogicalLength: text.Length - logicalLineStartOffset,
 				VisualOffset: visualLineStartOffset,
 				VisualLength: builder.Length - visualLineStartOffset,
 				ArenaStartIndex: chunkStartIndex,

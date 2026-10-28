@@ -16,7 +16,7 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-public class Editor : Control
+public class EditorView : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
@@ -82,14 +82,14 @@ public class Editor : Control
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
 
-	public static readonly StyledProperty<Mode> ModeProperty = AvaloniaProperty.Register<Editor, Mode>(nameof(Mode));
+	public static readonly StyledProperty<Mode> ModeProperty = AvaloniaProperty.Register<EditorView, Mode>(nameof(Mode));
 	public Mode Mode
 	{
 		get => GetValue(ModeProperty);
 		set => SetValue(ModeProperty, value);
 	}
-	public static readonly StyledProperty<SekaniDocument> DocumentProperty = AvaloniaProperty.Register<Editor, SekaniDocument>(nameof(Document));
-	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<Editor, string?>(nameof(Document));
+	public static readonly StyledProperty<SekaniDocument> DocumentProperty = AvaloniaProperty.Register<EditorView, SekaniDocument>(nameof(Document));
+	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<EditorView, string?>(nameof(Document));
 
 	public string? MotionCountBuffer
 	{
@@ -119,7 +119,7 @@ public class Editor : Control
 		  EditorArea.Height
 		));
 
-	public Editor()
+	public EditorView()
 	{
 		SetAvaloniaProperties();
 		SetEditorMetrics();
@@ -845,7 +845,7 @@ public class Editor : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#100e0c"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#100E0C"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -1492,6 +1492,9 @@ public class Editor : Control
 				break;
 			case "%":
 				Document.SelectAll();
+				break;
+			case "x":
+				Document.SelectLine(MotionCount);
 				break;
 			case ":":
 				{

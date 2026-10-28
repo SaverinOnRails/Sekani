@@ -6,7 +6,6 @@ public sealed class LineCache
 	private readonly PieceTable _pieceTable;
 	private readonly List<LineLayout?> _layoutCache = [];
 	public int Width { get; private set; } = 0;
-	private Line? _longestLine;
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
 	private int _maxVisualColsPerLine;
@@ -56,9 +55,8 @@ public sealed class LineCache
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
 		if(_layoutCache[index] != null) return _layoutCache[index];
-		var line = new Line() { Text = _pieceTable.PrintCleanLine(index) };
 		var lineLayout = new LineLayout(
-			line,
+			_pieceTable.PrintCleanLine(index),
 			_tabSize,
 			_wordWrap,
 			_maxVisualColsPerLine);
