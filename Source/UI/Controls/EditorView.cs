@@ -7,10 +7,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Skia;
 using Avalonia.Threading;
 using Sekani.EditorCore;
 
@@ -160,47 +158,46 @@ public class EditorView : Control
 
 	private Dictionary<string, IBrush> _highlightBrushes = new()
 	{
-		["attribute"] = Brush.Parse("#c69f2a"),
-		["type"] = Brush.Parse("#c69f2a"),
-		["type.enum.variant"] = Brush.Parse("#48a8a0"),
-		["constructor"] = Brush.Parse("#c03054"),
-		["constant"] = Brush.Parse("#48a8a0"),
-		["constant.character"] = Brush.Parse("#143936"),
-		["constant.character.escape"] = Brush.Parse("#3f0d1a"),
-		["string"] = Brush.Parse("#c03054"),
-		["string.regexp"] = Brush.Parse("#3f0d1a"),
-		["string.special"] = Brush.Parse("#c03054"),
-		["string.special.symbol"] = Brush.Parse("#c03054"),
-		["string.special.path"] = Brush.Parse("#48a8a0"),
-		["path"] = Brush.Parse("#48a8a0"),
-		["comment"] = Brush.Parse("#79685a"),
-		["variable"] = Brush.Parse("#d8cebc"),
-		["variable.builtin"] = Brush.Parse("#48a8a0"),
-		["variable.parameter"] = Brush.Parse("#f5edd8"),
-		["variable.other.member"] = Brush.Parse("#c69f2a"),
-		["label"] = Brush.Parse("#48a8a0"),
-		["punctuation"] = Brush.Parse("#79685a"),
-		["keyword"] = Brush.Parse("#c69f2a"),
-		["keyword.control.conditional"] = Brush.Parse("#c03054"),
-		["operator"] = Brush.Parse("#48a8a0"),
-		["function"] = Brush.Parse("#c03054"),
-		["function.macro"] = Brush.Parse("#c03054"),
-		["tag"] = Brush.Parse("#48a8a0"),
-		["namespace"] = Brush.Parse("#48a8a0"),
-		["special"] = Brush.Parse("#48a8a0"),
-		["markup.heading"] = Brush.Parse("#c69f2a"),
-		["markup.list"] = Brush.Parse("#d8cebc"),
-		["markup.bold"] = Brush.Parse("#48a8a0"),
-		["markup.italic"] = Brush.Parse("#48a8a0"),
-		["markup.link.url"] = Brush.Parse("#48a8a0"),
-		["markup.link.label"] = Brush.Parse("#c69f2a"),
-		["markup.raw"] = Brush.Parse("#d8cebc"),
-		["markup.quote"] = Brush.Parse("#48a8a0"),
-		["diff.plus"] = Brush.Parse("#a6e3a1"),
-		["diff.minus"] = Brush.Parse("#c6372a"),
-		["diff.delta"] = Brush.Parse("#89b4fa")
+		["attribute"] = Brush.Parse("#c69f2a"),               // primary
+		["type"] = Brush.Parse("#c69f2a"),                    // primary
+		["type.enum.variant"] = Brush.Parse("#48a8a0"),       // secondary
+		["constructor"] = Brush.Parse("#c03054"),             // tertiary
+		["constant"] = Brush.Parse("#48a8a0"),                // secondary
+		["constant.character"] = Brush.Parse("#143936"),      // secondaryContainer
+		["constant.character.escape"] = Brush.Parse("#3f0d1a"), // tertiaryContainer
+		["string"] = Brush.Parse("#c03054"),                  // tertiary
+		["string.regexp"] = Brush.Parse("#3f0d1a"),           // tertiaryContainer
+		["string.special"] = Brush.Parse("#c03054"),          // tertiary
+		["string.special.symbol"] = Brush.Parse("#c03054"),   // tertiary
+		["string.special.path"] = Brush.Parse("#48a8a0"),     // secondary
+		["path"] = Brush.Parse("#48a8a0"),                    // secondary
+		["comment"] = Brush.Parse("#79685a"),                 // outline
+		["variable"] = Brush.Parse("#d8cebc"),                // onSurface
+		["variable.builtin"] = Brush.Parse("#48a8a0"),        // secondary
+		["variable.parameter"] = Brush.Parse("#f5edd8"),      // onSurfaceVariant
+		["variable.other.member"] = Brush.Parse("#c69f2a"),   // primary
+		["label"] = Brush.Parse("#48a8a0"),                   // secondary
+		["punctuation"] = Brush.Parse("#79685a"),             // outline
+		["keyword"] = Brush.Parse("#c69f2a"),                 // primary
+		["keyword.control.conditional"] = Brush.Parse("#c03054"), // tertiary
+		["operator"] = Brush.Parse("#48a8a0"),                // secondary
+		["function"] = Brush.Parse("#c03054"),                // tertiary
+		["function.macro"] = Brush.Parse("#c03054"),          // tertiary
+		["tag"] = Brush.Parse("#48a8a0"),                     // secondary
+		["namespace"] = Brush.Parse("#48a8a0"),               // secondary
+		["special"] = Brush.Parse("#48a8a0"),                 // secondary
+		["markup.heading"] = Brush.Parse("#c69f2a"),          // primary
+		["markup.list"] = Brush.Parse("#d8cebc"),             // onSurface
+		["markup.bold"] = Brush.Parse("#48a8a0"),             // secondary
+		["markup.italic"] = Brush.Parse("#48a8a0"),           // secondary
+		["markup.link.url"] = Brush.Parse("#48a8a0"),         // secondary
+		["markup.link.label"] = Brush.Parse("#c69f2a"),       // primary
+		["markup.raw"] = Brush.Parse("#d8cebc"),              // onSurface
+		["markup.quote"] = Brush.Parse("#48a8a0"),            // secondary
+		["diff.plus"] = Brush.Parse("#a6e3a1"),               // plus
+		["diff.minus"] = Brush.Parse("#c6372a"),              // error
+		["diff.delta"] = Brush.Parse("#89b4fa")               // delta
 	};
-
 	private IBrush? TryGetHighlight(string capture)
 	{
 		var lookup = _highlightBrushes.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -845,7 +842,7 @@ public class EditorView : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#100E0C"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#100e0c"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -1212,6 +1209,7 @@ public class EditorView : Control
 		{
 			for (int i = logicalLineToBeginCount; i <= visibleTextBounds.lastPossibleLogicalLine; i++)
 			{
+				// Console.WriteLine($"Line : {i + 1}");
 				if (i >= Document.LineCount) break;
 				if (i < 0) continue;
 				var logicalLineAbsoluteOffset = Document.GetOffset(new(0, i));
@@ -1266,6 +1264,10 @@ public class EditorView : Control
 									var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
 									int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
 									int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
+									var vtext = text.Slice(s, e - s);
+									// Console.WriteLine(span.Capture);
+									// Console.WriteLine(vtext);
+									// Console.WriteLine($"range is {span.Start} - {span.End}");
 									if (e <= s) continue;
 									ft.SetForegroundBrush(hightlightBrush, s, e - s);
 								}

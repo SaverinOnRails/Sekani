@@ -515,30 +515,34 @@ public sealed class SekaniDocument
 
 	public void SelectLine(int count)
 	{
-		var range = CaretRange;
-		var pos = GetCoordinate(range.Cursor);
-		var layout = _lineCache!.GetOrCreate(pos.Line);
-		var linestart = GetOffset(new(0, pos.Line));
-		var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
+		while (count > 0)
+		{
+			var range = CaretRange;
+			var pos = GetCoordinate(range.Cursor);
+			var layout = _lineCache!.GetOrCreate(pos.Line);
+			var linestart = GetOffset(new(0, pos.Line));
+			var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
 
-		if (CaretRange.Lower <= linestart && CaretRange.Cursor == lineend)
-		{
-			var nextline = pos.Line + 1;
-			layout = _lineCache.GetOrCreate(nextline);
-			if (layout is null) return;
-			var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
-			MoveHead(GetOffset(new(nextlineend, nextline)));
-		}
-		else
-		{
-			if (CaretRange.Lower <= linestart)
+			if (CaretRange.Lower <= linestart && CaretRange.Cursor == lineend)
 			{
-				MoveHead(lineend);
+				var nextline = pos.Line + 1;
+				layout = _lineCache.GetOrCreate(nextline);
+				if (layout is null) return;
+				var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
+				MoveHead(GetOffset(new(nextlineend, nextline)));
 			}
 			else
 			{
-				SetAnchorAndHead(linestart, lineend);
+				if (CaretRange.Lower <= linestart)
+				{
+					MoveHead(lineend);
+				}
+				else
+				{
+					SetAnchorAndHead(linestart, lineend);
+				}
 			}
+			count--;
 		}
 	}
 	public void PlaceCursorAtLineEnd(bool extendSelection)
