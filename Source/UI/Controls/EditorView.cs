@@ -1264,7 +1264,7 @@ public class EditorView : Control
 									var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
 									int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
 									int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
-									var vtext = text.Slice(s, e - s);
+									var vtext = text[s..e];
 									// Console.WriteLine(span.Capture);
 									// Console.WriteLine(vtext);
 									// Console.WriteLine($"range is {span.Start} - {span.End}");

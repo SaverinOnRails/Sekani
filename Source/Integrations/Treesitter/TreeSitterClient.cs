@@ -100,9 +100,9 @@ public class TreeSitterClient : IDisposable
 
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
 	{
-		if (Active == false || _tsTree is null || _tsHighlightQuery is null) throw new InvalidOperationException();
+		if (Active == false || _tsTree == null || _tsHighlightQuery is null) throw new InvalidOperationException();
 		using var cursor = new TSQueryCursor();
-		var root = _tsTree.root_node();
+		var root = _tsTree!.root_node();
 		cursor.set_range((uint)start, (uint)end);
 		cursor.exec(_tsHighlightQuery, root);
 		List<TreeSitterHighlightSpan> spans = new();
@@ -239,7 +239,7 @@ public class TreeSitterClient : IDisposable
 				{
 					var buffer_offset = p.node.start_offset();
 					var end_offset = p.node.end_offset();
-					var length = end_offset - buffer_offset; 
+					var length = end_offset - buffer_offset;
 					//TODO: Do something about this allocation
 					var buf = new char[length];
 					var written = _getBufferSlice((int)buffer_offset, (int)length, buf.AsSpan());

@@ -101,6 +101,11 @@ public struct TSInputEdit
 	public TSPoint start_point;
 	public TSPoint old_end_point;
 	public TSPoint new_end_point;
+
+	public override string ToString()
+	{
+		return $"Start Byte : {start_byte}, Old End Byte: {old_end_byte} , New End Byte {new_end_byte}";
+	}
 }
 
 [StructLayout(LayoutKind.Sequential)]

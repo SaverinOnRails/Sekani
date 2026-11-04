@@ -164,3 +164,4 @@ public sealed class LineCache
 
 
 public readonly record struct VisualLineTreeUpdatedParams(int lineIndex, int delta);
+

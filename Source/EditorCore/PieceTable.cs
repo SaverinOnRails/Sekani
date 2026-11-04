@@ -237,9 +237,8 @@ internal class PieceTable
 			{
 				RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
 			}
-
-			RaiseBufferNetChangedEvent(offset, text.Length, null, BufferOperation.Insertion);
 			UpdateTableMetadata();
+			RaiseBufferNetChangedEvent(offset, text.Length, null, BufferOperation.Insertion);
 		}
 		catch (ArgumentOutOfRangeException)
 		{
@@ -298,8 +297,8 @@ internal class PieceTable
 			{
 				RaiseBufferLineChangedEvent(first + 1, BufferLineChangeKind.LineRemoved);
 			}
-			RaiseBufferNetChangedEvent(startOffset, length, endCoordinate, BufferOperation.Deletion);
 			UpdateTableMetadata();
+			RaiseBufferNetChangedEvent(startOffset, length, endCoordinate, BufferOperation.Deletion);
 		}
 		catch (ArgumentOutOfRangeException)
 		{

@@ -877,7 +877,7 @@ public sealed class SekaniDocument
 	public void PrintPieceTable()
 	{
 		var builder = new StringBuilder();
-		// Console.WriteLine(_pieceTable.Print());
+		Console.WriteLine(_pieceTable.Print());
 		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
 		// Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
 		// Console.WriteLine();
@@ -888,6 +888,7 @@ public sealed class SekaniDocument
 		// Console.WriteLine(GetCoordinate(CaretRange.Cursor));
 		// Console.WriteLine(_pieceTable.LineCount());
 		// Console.WriteLine(_pieceTable.LineFeedCount);
+
 	}
 
 }
