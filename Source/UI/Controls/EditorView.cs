@@ -1501,8 +1501,8 @@ public class EditorView : Control
 			case ":":
 				{
 					EnterCommandMode();
+					return;
 				}
-				break;
 			default:
 				return;
 		}
