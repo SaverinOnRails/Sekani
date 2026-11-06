@@ -531,6 +531,7 @@ public class EditorView : Control
 
 	private void EnterNormalMode()
 	{
+		Document.BeginNewTransaction();
 		Mode = Mode.Normal;
 	}
 
@@ -1355,20 +1356,7 @@ public class EditorView : Control
 		point = point.WithY(point.Y - pixelOffset);
 		point = point.WithX(point.X - _scrollXOffset);
 
-		var advanceWidth = _editorMetrics.CharAdvance;
-		var nextLogicalCol = caretLineLayout.NextCol(coord.Col);
-
-		if (nextLogicalCol is int nextCol)
-		{
-			var nextVisualCoord = caretLineLayout.GetVisualCoordinate(
-				new(nextCol, coord.Line));
-
-			if (nextVisualCoord.VisualLine == localVisualCoord.VisualLine)
-				advanceWidth = (nextVisualCoord.VisualCol - localVisualCoord.VisualCol)
-					* _editorMetrics.CharAdvance;
-			advanceWidth = Math.Max(advanceWidth, _editorMetrics.CharAdvance);
-		}
-
+		var advanceWidth = caretLineLayout.CellSize(localVisualCoord) * _editorMetrics.CharAdvance;
 		var rect = GetCaretRectGeometry(point, advanceWidth);
 		return rect;
 	}

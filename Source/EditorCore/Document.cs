@@ -94,6 +94,11 @@ public sealed class SekaniDocument
 		SubscribeToEvents();
 	}
 
+	public void BeginNewTransaction()
+	{
+		//Ends the active transaction and starts a new one
+	}
+
 	private void SubscribeToEvents()
 	{
 		_pieceTable.BufferNetChangedEvent += BufferNetChanged;

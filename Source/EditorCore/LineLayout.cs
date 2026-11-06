@@ -234,6 +234,14 @@ public record LineLayout
 			: _logicalText.Length;
 		return _logicalText.AsSpan(start, end - start);
 	}
+
+	public int CellSize(VisualCoordinate coord)
+	{
+		var logicalColumn = GetLogicalColumn(coord);
+		var grapheme = GraphemeAt(logicalColumn);
+		return GraphemeWidth(grapheme, coord.VisualCol);
+	}
+
 }
 public readonly record struct VisualLine(
 	int LogicalOffset,
