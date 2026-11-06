@@ -32,7 +32,7 @@ public record LineLayout
 		if (grapheme.SequenceEqual("\t")) return VisualTabWidth(visualCol, _tabSize);
 		if (grapheme.SequenceEqual("\n")) return 1;
 		var width = UnicodeCalculator.GetWidth(grapheme.ToString());
-		return width;
+		return Math.Max(1, width); //UnicodeCalculator returns -1 for graphemes it does not recognise.
 	}
 
 	private void DoLayout(string text)

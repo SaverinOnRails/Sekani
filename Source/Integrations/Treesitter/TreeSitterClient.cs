@@ -176,7 +176,7 @@ public class TreeSitterClient : IDisposable
 		}
 		else if (predicate.Matches("match?", "not-match?", "any-match?", "any-not-match?"))
 		{
-			if (predicate.Args.Length != 2) return;
+		if (predicate.Args.Length != 2) return;
 			var capture_idx = predicate.Args[0];
 			if (capture_idx.type != TSQueryPredicateStepType.TSQueryPredicateStepTypeCapture) return;
 			if (predicate.Args[1].type != TSQueryPredicateStepType.TSQueryPredicateStepTypeString) return;
