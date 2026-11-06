@@ -8,6 +8,30 @@ public enum RBColor : byte
 	Red,
 	Black,
 }
+public enum BufferLineChangeKind
+{
+	LineChanged,
+	LineAdded,
+	LineRemoved,
+}
+public enum BufferOperation
+{
+	Insertion,
+	Deletion,
+}
+public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
+public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
+
+//we only store information useful for reversing the edit
+internal interface ITextEdit;
+internal record struct TextInsertionEdit(int Offset, int Length) : ITextEdit;
+internal record struct TextDeletionEdit(int Offset);
+
+internal class EditTransaction
+{
+	public List<ITextEdit> TextEdits { get; } = [];
+}
+
 internal record struct PiecePosition(PieceNode Piece, int AbsoluteOffset, int LocalOffset);
 
 internal sealed class PieceNode
@@ -125,6 +149,12 @@ internal class PieceTable
 	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
 
+	private EditTransaction? _activeTransaction = null;
+
+	//History
+	private readonly Stack<EditTransaction> _undoStack = new();
+	private readonly Stack<EditTransaction> _redoStack = new();
+
 	//this is for the line cache and layouting, easier to think and update in terms of lines there
 	public event EventHandler<BufferLineChangeData>? BufferLineChangedEvent;
 
@@ -146,6 +176,7 @@ internal class PieceTable
 		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
 		UpdateTableMetadata();
+		BeginNewTransaction();
 	}
 
 	static PieceTable()
@@ -210,19 +241,6 @@ internal class PieceTable
 		return offset;
 	}
 
-	//TODO cache this
-	private int LineCount()
-	{
-		var node = _root;
-		var lineFeeds = 0;
-		while (node != NULL_NODE)
-		{
-			lineFeeds += node.LeftSubtreeLineFeedCount + node.LineFeedCount;
-			node = node.Right;
-		}
-		return lineFeeds + 1;
-	}
-
 	public void Insert(string text, int offset)
 	{
 		try
@@ -231,7 +249,7 @@ internal class PieceTable
 			int line = GetCoordinate(offset).Line;
 			int addedLines = GetLineStarts(text, 0).Count - 1;
 			InsertCore(text, offset);
-
+			PushInsertionToActiveTransaction(offset, text.Length);
 			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
 			for (int i = 0; i <= addedLines; i++)
 			{
@@ -244,6 +262,69 @@ internal class PieceTable
 		{
 			Console.WriteLine("argument was out of range, ignoring action");
 		}
+		catch (InvalidOperationException)
+		{
+			throw;
+		}
+	}
+
+	public void PushInsertionToActiveTransaction(int bufferInsertionOffset, int length)
+	{
+		if (_activeTransaction is null) BeginNewTransaction();
+		var edit = new TextInsertionEdit(bufferInsertionOffset, length);
+		_activeTransaction!.TextEdits.Add(edit);
+		_redoStack.Clear();
+	}
+
+	private void PushDeletionToActiveTransaction()
+	{
+		if (_activeTransaction is null) BeginNewTransaction();
+
+	}
+
+	public void CommitActiveTransaction()
+	{
+		if (_activeTransaction is null) return;
+		if (_activeTransaction.TextEdits.Count > 0) _undoStack.Push(_activeTransaction);
+		_activeTransaction = null;
+	}
+
+	private EditTransaction? PopUndo()
+	{
+		CommitActiveTransaction();
+		if (_undoStack.Count == 0) return null;
+		var transaction = _undoStack.Pop();
+		_redoStack.Push(transaction);
+		return transaction;
+	}
+
+	private EditTransaction? PopRedo()
+	{
+		CommitActiveTransaction();
+		if (_redoStack.Count == 0) return null;
+		var transaction = _redoStack.Pop();
+		_undoStack.Push(transaction);
+		return transaction;
+	}
+
+	public void DoUndo()
+	{
+		var transaction = PopUndo();
+		if (transaction is null) return;
+		for (int i = transaction.TextEdits.Count - 1; i >= 0; i--)
+		{
+			var edit = transaction.TextEdits[i];
+			if (edit is TextInsertionEdit e)
+			{
+				Delete(e.Offset, e.Length);
+			}
+		}
+	}
+
+	public void BeginNewTransaction()
+	{
+		CommitActiveTransaction();
+		_activeTransaction ??= new();
 	}
 
 	private void InsertCore(string text, int offset)
@@ -292,6 +373,7 @@ internal class PieceTable
 			var endCoordinate = GetCoordinate(endOffset);
 			int last = endCoordinate.Line;
 			DeleteCore(startOffset, length);
+			PushDeletionToActiveTransaction();
 			RaiseBufferLineChangedEvent(first, BufferLineChangeKind.LineChanged);
 			for (int i = first; i < last; i++)
 			{
@@ -305,6 +387,7 @@ internal class PieceTable
 			Console.WriteLine("argument was out of range, ignoring action");
 		}
 	}
+
 
 	private void DeleteCore(int startOffset, int length)
 	{
@@ -828,6 +911,7 @@ internal class PieceTable
 		}
 		return length;
 	}
+
 	private string PrintRawLineCore(int line)
 	{
 		var sb = new StringBuilder();
@@ -1224,7 +1308,6 @@ internal class PieceTable
 		throw new ArgumentOutOfRangeException($"Max Offset : {BufferLength} , original passed offset {originalOffset}");
 	}
 
-
 	private IReadOnlyList<char> GetPieceBuffer(PieceNode node)
 	{
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBuffer;
@@ -1235,23 +1318,5 @@ internal class PieceTable
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBufferLineStarts;
 		return _addBufferLineStarts;
 	}
-
 }
-
-public readonly record struct LineChange(int FirstLine, int OldCount, int NewCount);
-
-
-public enum BufferLineChangeKind
-{
-	LineChanged,
-	LineAdded,
-	LineRemoved,
-}
-public enum BufferOperation
-{
-	Insertion,
-	Deletion,
-}
-public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
-public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
 

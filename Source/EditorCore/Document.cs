@@ -96,7 +96,7 @@ public sealed class SekaniDocument
 
 	public void BeginNewTransaction()
 	{
-		//Ends the active transaction and starts a new one
+		_pieceTable.BeginNewTransaction();
 	}
 
 	private void SubscribeToEvents()
@@ -436,6 +436,11 @@ public sealed class SekaniDocument
 	{
 		var head = BufferLength - 1;
 		SetAnchorAndHead(0, head);
+	}
+
+	public void Undo(int motionCount)
+	{
+		_pieceTable.DoUndo();
 	}
 	public void AddNewLineUnderSelection()
 	{

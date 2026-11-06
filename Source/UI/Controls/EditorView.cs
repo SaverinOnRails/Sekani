@@ -531,7 +531,6 @@ public class EditorView : Control
 
 	private void EnterNormalMode()
 	{
-		Document.BeginNewTransaction();
 		Mode = Mode.Normal;
 	}
 
@@ -575,6 +574,7 @@ public class EditorView : Control
 		{
 			var oldValue = (Mode)e.OldValue!;
 			var newValue = (Mode)e.NewValue!;
+			Document.BeginNewTransaction();
 			if (oldValue == Mode.Command && newValue == Mode.Normal)
 			{
 				Focus();
@@ -1361,7 +1361,6 @@ public class EditorView : Control
 		return rect;
 	}
 
-
 	private Rect GetCaretRectGeometry(Point point, double advanceWidth)
 	{
 		var caretHeight = _cursorStyle == CursorStyle.Underline ? _editorMetrics.LineHeight * 0.1 : _editorMetrics.LineHeight;
@@ -1373,6 +1372,7 @@ public class EditorView : Control
 		}
 		return new Rect(point, new Size(caretWidth, caretHeight));
 	}
+
 	private void DrawCaret(DrawingContext context)
 	{
 		using
@@ -1491,6 +1491,9 @@ public class EditorView : Control
 					EnterCommandMode();
 					return;
 				}
+			case "u":
+					Document.Undo(MotionCount);
+				break;
 			default:
 				return;
 		}
