@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Text;
-
 namespace Sekani.EditorCore;
 
 public enum RBColor : byte
@@ -21,11 +19,15 @@ public enum BufferOperation
 }
 public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
 public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
+public readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int End, int LineFeedCount)
+{
+	public int Length => End - Start;
+}
 
-//we only store information useful for reversing the edit
 internal interface ITextEdit;
 internal record struct TextInsertionEdit(int Offset, int Length) : ITextEdit;
-internal record struct TextDeletionEdit(int Offset);
+internal record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
+
 
 internal class EditTransaction
 {
@@ -126,6 +128,11 @@ internal sealed class PieceNode
 		return node.Parent;
 	}
 
+	public PieceDescriptor ToImmutableDescriptor()
+	{
+		return new(pieceBuffer, Start, End, LineFeedCount);
+	}
+
 	internal static void Copy(PieceNode to, PieceNode from)
 	{
 		to.Left = from.Left;
@@ -148,6 +155,7 @@ internal class PieceTable
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
+	private bool _replayingHistory = false;
 
 	private EditTransaction? _activeTransaction = null;
 
@@ -217,6 +225,14 @@ internal class PieceTable
 		};
 		return node;
 	}
+
+	private PieceNode CreatePieceNode(PieceDescriptor desc)
+	{
+		var node = CreatePieceNode(desc.Buffer, desc.Start, desc.End);
+		node.LineFeedCount = desc.LineFeedCount;
+		return node;
+	}
+
 	//this is obviously retarded which is why it is temp
 	public int TempHardLoopLogicalCoordinatedToOffset(Coordinate pos)
 	{
@@ -249,7 +265,8 @@ internal class PieceTable
 			int line = GetCoordinate(offset).Line;
 			int addedLines = GetLineStarts(text, 0).Count - 1;
 			InsertCore(text, offset);
-			PushInsertionToActiveTransaction(offset, text.Length);
+			PushInsertionToActiveTransaction(offset, text.Length); //replaying history will never hit this path
+
 			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
 			for (int i = 0; i <= addedLines; i++)
 			{
@@ -262,25 +279,101 @@ internal class PieceTable
 		{
 			Console.WriteLine("argument was out of range, ignoring action");
 		}
-		catch (InvalidOperationException)
-		{
-			throw;
-		}
 	}
 
-	public void PushInsertionToActiveTransaction(int bufferInsertionOffset, int length)
+
+	//Recreate Pieces that were recently deleted, the text they point to is already spread across _addBuffer and _originalBuffer
+	private void Reinsert(int offset, IReadOnlyList<PieceDescriptor> pieceDescriptors)
+	{
+		if (pieceDescriptors.Count == 0) return;
+		int line = GetCoordinate(offset).Line;
+		int addedLines = pieceDescriptors.Sum(p => p.LineFeedCount) - 1;
+		int totalLength = pieceDescriptors.Sum(p => p.Length);
+		ReinsertCore(offset, pieceDescriptors);
+		RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
+		for (int i = 0; i <= addedLines; i++)
+		{
+			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
+		}
+		UpdateTableMetadata();
+		RaiseBufferNetChangedEvent(offset, totalLength, null, BufferOperation.Insertion);
+	}
+
+	private void ReinsertCore(int offset, IReadOnlyList<PieceDescriptor> pieces)
+	{
+		if (pieces.Count == 0) return;
+		// 1. If tree is empty
+		if (_root == NULL_NODE)
+		{
+			var newroot = CreatePieceNode(pieces[0]);
+			InsertAsSuccessor(NULL_NODE, newroot);
+			var prevNode = _root;
+			for (int i = 1; i < pieces.Count; i++)
+			{
+				var nextNode = CreatePieceNode(pieces[i]);
+				InsertAsSuccessor(prevNode, nextNode);
+				prevNode = nextNode;
+			}
+			return;
+		}
+		var targetPos = GetPieceByOffset(offset);
+		var targetPiece = targetPos.Piece;
+
+		// 2. Insert at the beginning of targetPiece (Left)
+		if (targetPos.LocalOffset == 0)
+		{
+			var first = CreatePieceNode(pieces[0]);
+			InsertAsPredecessor(targetPiece, first);
+			var prev = first;
+			for (int i = 1; i < pieces.Count; i++)
+			{
+				var next = CreatePieceNode(pieces[i]);
+				InsertAsSuccessor(prev, next);
+				prev = next;
+			}
+		}
+		// 3. Insert at the end of targetPiece (Right)
+		else if (targetPos.LocalOffset == targetPiece.Length)
+		{
+			var prev = targetPiece;
+			foreach (var desc in pieces)
+			{
+				var next = CreatePieceNode(desc);
+				InsertAsSuccessor(prev, next);
+				prev = next;
+			}
+		}
+		// 4. Insert into the middle of targetPiece
+		else
+		{
+			var (head, tail) = SplitNodeAtMiddle(targetPiece, targetPos.LocalOffset);
+			ResizeTo(targetPiece, head, copyStart: false);
+			var prev = targetPiece;
+			foreach (var desc in pieces)
+			{
+				var next = CreatePieceNode(desc);
+				InsertAsSuccessor(prev, next);
+				prev = next;
+			}
+			InsertAsSuccessor(prev, tail);
+		}
+	}
+	public void PushInsertionToActiveTransaction(int offset, int length)
 	{
 		if (_activeTransaction is null) BeginNewTransaction();
-		var edit = new TextInsertionEdit(bufferInsertionOffset, length);
+		var edit = new TextInsertionEdit(offset, length);
 		_activeTransaction!.TextEdits.Add(edit);
 		_redoStack.Clear();
 	}
 
-	private void PushDeletionToActiveTransaction()
+	private void PushDeletionToActiveTransaction(int offset, IReadOnlyList<PieceDescriptor> descriptors)
 	{
 		if (_activeTransaction is null) BeginNewTransaction();
-
+		var edit = new TextDeletionEdit(offset, descriptors);
+		_activeTransaction!.TextEdits.Add(edit);
+		_redoStack.Clear();
 	}
+
 
 	public void CommitActiveTransaction()
 	{
@@ -309,15 +402,23 @@ internal class PieceTable
 
 	public void DoUndo()
 	{
-		var transaction = PopUndo();
-		if (transaction is null) return;
-		for (int i = transaction.TextEdits.Count - 1; i >= 0; i--)
+		_replayingHistory = true;
+		try
 		{
-			var edit = transaction.TextEdits[i];
-			if (edit is TextInsertionEdit e)
+			var transaction = PopUndo();
+			if (transaction is null) return;
+			for (int i = transaction.TextEdits.Count - 1; i >= 0; i--)
 			{
-				Delete(e.Offset, e.Length);
+				var edit = transaction.TextEdits[i];
+				if (edit is TextInsertionEdit insertion)
+					Delete(insertion.Offset, insertion.Length);
+				else if (edit is TextDeletionEdit deletion)
+					Reinsert(deletion.Offset, deletion.DeletedPieces);
 			}
+		}
+		finally
+		{
+			_replayingHistory = false;
 		}
 	}
 
@@ -372,9 +473,11 @@ internal class PieceTable
 			int endOffset = startOffset + length;
 			var endCoordinate = GetCoordinate(endOffset);
 			int last = endCoordinate.Line;
-			DeleteCore(startOffset, length);
-			PushDeletionToActiveTransaction();
+			DeleteCore(startOffset, length, out List<PieceDescriptor> deletedPieceDescriptors);
+			if (!_replayingHistory)
+				PushDeletionToActiveTransaction(startOffset, deletedPieceDescriptors);
 			RaiseBufferLineChangedEvent(first, BufferLineChangeKind.LineChanged);
+			//TODO: This performs like shit. Should send a complete line range instead;
 			for (int i = first; i < last; i++)
 			{
 				RaiseBufferLineChangedEvent(first + 1, BufferLineChangeKind.LineRemoved);
@@ -389,8 +492,9 @@ internal class PieceTable
 	}
 
 
-	private void DeleteCore(int startOffset, int length)
+	private void DeleteCore(int startOffset, int length, out List<PieceDescriptor> deletedPieceDescriptors)
 	{
+		deletedPieceDescriptors = [];
 		if (length <= 0) return;
 		var startPosition = GetPieceByOffset(startOffset);
 		var endPosition = GetPieceByOffset(startOffset + length);
@@ -408,30 +512,39 @@ internal class PieceTable
 				//if deleting the entire piece
 				if (targetPiece.Length == length)
 				{
+					deletedPieceDescriptors.Add(targetPiece.ToImmutableDescriptor());
 					DeleteNode(targetPiece);
 					return;
 				}
 				else
 				{
 					//conserve the last piece from the split
-					TrimStart(targetPiece, length);
+					TrimHead(targetPiece, length, out PieceNode head);
+					deletedPieceDescriptors.Add(head.ToImmutableDescriptor());
 				}
 			}
 			//if deletion ends at the end of the piece
 			else if (startPosition.AbsoluteOffset + targetPiece.Length == startOffset + length)
 			{
 				//conserve the first piece from the split
-				TrimEnd(targetPiece, length);
+				TrimTail(targetPiece, length, out PieceNode tail);
+				deletedPieceDescriptors.Add(tail.ToImmutableDescriptor());
 			}
 			//deletion falls inside middle of piece
 			else
 			{
 				//split the head
-				var (firstPiece, _) = SplitNodeAtMiddle(targetPiece, startOffset - startPosition.AbsoluteOffset);
+				var (firstPiece, firstSplitTail) = SplitNodeAtMiddle(targetPiece, startOffset - startPosition.AbsoluteOffset);
 				//split the tail
 				var (_, lastPiece) = SplitNodeAtMiddle(targetPiece, (startOffset - startPosition.AbsoluteOffset) + length);
 				//resize piece
 				ResizeTo(targetPiece, firstPiece, false);
+
+				//Build one deleted piece from the trim
+				var start = targetPiece.Start + firstPiece.Length;
+				var end = start + length;
+				var lfcount = firstSplitTail.LineFeedCount - lastPiece.LineFeedCount;
+				deletedPieceDescriptors.Add(new PieceDescriptor(targetPiece.pieceBuffer, start, end, lfcount));
 
 				//insert the last node directly as successor of the resized node, discarding the middle
 				InsertAsSuccessor(targetPiece, lastPiece);
@@ -464,29 +577,34 @@ internal class PieceTable
 		if (trimFirst)
 		{
 			//Trim start first node
-			TrimEnd(startPiece, startPiece.Length - startPosition.LocalOffset);
+			TrimTail(startPiece, startPiece.Length - startPosition.LocalOffset, out PieceNode tail);
+			deletedPieceDescriptors.Add(tail.ToImmutableDescriptor());
 		}
 		//delete dirty pieces
 		foreach (var dirtyPiece in dirtyPieces)
 		{
+			deletedPieceDescriptors.Add(dirtyPiece.ToImmutableDescriptor());
 			DeleteNode(dirtyPiece);
 		}
 		if (trimLast)
 		{
 			//Trim End of Last Node
-			TrimStart(endPiece, endPosition.LocalOffset);
+			TrimHead(endPiece, endPosition.LocalOffset, out PieceNode head);
+			deletedPieceDescriptors.Add(head.ToImmutableDescriptor());
 		}
 	}
 
-	private void TrimStart(PieceNode piece, int length)
+	private void TrimHead(PieceNode piece, int length, out PieceNode head)
 	{
-		var (_, tail) = SplitNodeAtMiddle(piece, length);
+		PieceNode tail;
+		(head, tail) = SplitNodeAtMiddle(piece, length);
 		ResizeTo(piece, tail, copyStart: true);
 	}
 
-	private void TrimEnd(PieceNode piece, int length)
+	private void TrimTail(PieceNode piece, int length, out PieceNode tail)
 	{
-		var (head, _) = SplitNodeAtMiddle(piece, piece.Length - length);
+		PieceNode head;
+		(head, tail) = SplitNodeAtMiddle(piece, piece.Length - length);
 		ResizeTo(piece, head, copyStart: false);
 	}
 
@@ -797,6 +915,28 @@ internal class PieceTable
 		}
 		FixAfterInsertion(newNode);
 	}
+
+	private void InsertAsPredecessor(PieceNode target, PieceNode newNode)
+	{
+		if (_root == NULL_NODE)
+		{
+			_root = newNode;
+			_root.Color = RBColor.Black;
+		}
+		else if (target.Left == NULL_NODE)
+		{
+			target.Left = newNode;
+			newNode.Parent = target;
+		}
+		else
+		{
+			var rightMost = PieceNode.RightMost(target.Left);
+			var predecessor = rightMost == NULL_NODE ? target.Left : rightMost;
+			predecessor.Right = newNode;
+			newNode.Parent = predecessor;
+		}
+		FixAfterInsertion(newNode);
+	}
 	public string Print()
 	{
 		StringBuilder builder = new();
@@ -1034,24 +1174,8 @@ internal class PieceTable
 		newPiece.LineFeedCount = linestarts.Count;
 
 		//insert before piece
-		if (_root == NULL_NODE)
-		{
-			_root = newPiece;
-			_root.Color = RBColor.Black;
-		}
-		else if (piece.Left == NULL_NODE)
-		{
-			piece.Left = newPiece;
-			newPiece.Parent = piece;
-		}
-		else
-		{
-			var rightMost = PieceNode.RightMost(piece.Left);
-			var predecessor = rightMost == NULL_NODE ? piece.Left : rightMost;
-			predecessor.Right = newPiece;
-			newPiece.Parent = predecessor;
-		}
-		FixAfterInsertion(newPiece);
+		InsertAsPredecessor(piece, newPiece);
+
 	}
 
 	private void FixAfterInsertion(PieceNode node)

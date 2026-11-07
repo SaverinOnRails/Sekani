@@ -26,8 +26,9 @@ public sealed class SekaniDocument
 	public Range CaretRange { get; private set; } = new Range(0);
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
-	public bool TreeSitterClientActive => _treeSitterClient.Active;
+	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
+	private bool _useTreesitter = true;
 
 	public void SetCaretRange(Coordinate pos)
 	{
@@ -74,8 +75,11 @@ public sealed class SekaniDocument
 	public SekaniDocument()
 	{
 		_pieceTable = new("");
-		_treeSitterClient = new(_pieceTable.Slice);
-		_treeSitterClient.ParseBuffer("");
+		if (_useTreesitter)
+		{
+			_treeSitterClient = new(_pieceTable.Slice);
+			_treeSitterClient.ParseBuffer("");
+		}
 		SubscribeToEvents();
 	}
 
@@ -89,8 +93,11 @@ public sealed class SekaniDocument
 		_filePath = filePath;
 		var buffer = File.ReadAllText(filePath);
 		_pieceTable = new(buffer);
-		_treeSitterClient = new(_pieceTable.Slice);
-		_treeSitterClient.ParseBuffer(buffer);
+		if (_useTreesitter)
+		{
+			_treeSitterClient = new(_pieceTable.Slice);
+			_treeSitterClient.ParseBuffer(buffer);
+		}
 		SubscribeToEvents();
 	}
 
@@ -113,6 +120,7 @@ public sealed class SekaniDocument
 	private void EditTreeSitter(BufferNetChangeData e)
 	{
 		//convert all offsets to bytes
+		if (!TreeSitterClientActive) return;
 		TSInputEdit edit;
 		if (e.Operation == BufferOperation.Insertion)
 		{
