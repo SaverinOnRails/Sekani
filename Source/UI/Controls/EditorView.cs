@@ -574,7 +574,7 @@ public class EditorView : Control
 		{
 			var oldValue = (Mode)e.OldValue!;
 			var newValue = (Mode)e.NewValue!;
-			Document.BeginNewTransaction();
+			Document.BeginTransaction();
 			if (oldValue == Mode.Command && newValue == Mode.Normal)
 			{
 				Focus();
@@ -1492,7 +1492,10 @@ public class EditorView : Control
 					return;
 				}
 			case "u":
-					Document.Undo(MotionCount);
+				Document.Undo(MotionCount);
+				break;
+			case "U":
+				Document.Redo(MotionCount);
 				break;
 			default:
 				return;

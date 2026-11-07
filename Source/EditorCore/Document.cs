@@ -101,9 +101,14 @@ public sealed class SekaniDocument
 		SubscribeToEvents();
 	}
 
-	public void BeginNewTransaction()
+	public void BeginTransaction()
 	{
 		_pieceTable.BeginNewTransaction();
+	}
+
+	private void CommitTransaction()
+	{
+		_pieceTable.CommitTransaction();
 	}
 
 	private void SubscribeToEvents()
@@ -322,6 +327,7 @@ public sealed class SekaniDocument
 	}
 	public void DeleteSelection()
 	{
+		BeginTransaction();
 		var lower = CaretRange.Lower;
 		var sethigh = GetHigherEnd(CaretRange);
 		//clamp sethigh
@@ -329,6 +335,7 @@ public sealed class SekaniDocument
 		var delta = sethigh - lower;
 		_pieceTable.Delete(lower, delta);
 		CaretRange = new(lower);
+		CommitTransaction();
 	}
 
 	public void BackSpace(Coordinate pos)
@@ -450,8 +457,14 @@ public sealed class SekaniDocument
 	{
 		_pieceTable.DoUndo();
 	}
+
+	public void Redo(int motionCount)
+	{
+		_pieceTable.DoRedo();
+	}
 	public void AddNewLineUnderSelection()
 	{
+		BeginTransaction();
 		var offset = CaretRange.Width > 1 ? CaretRange.Higher : CaretRange.Lower;
 		var pos = GetCoordinate(offset);
 		var text = _pieceTable.PrintCleanLine(pos.Line);
@@ -459,6 +472,7 @@ public sealed class SekaniDocument
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		var newpos = new Coordinate(0, pos.Line + 1);
 		CaretRange = new(GetOffset(newpos));
+		CommitTransaction();
 	}
 
 	private void TypeCharsCore(int offset, string text)
@@ -591,11 +605,13 @@ public sealed class SekaniDocument
 
 	public void AddNewLineAboveSelection()
 	{
+		BeginTransaction();
 		var lower = CaretRange.Lower;
 		var pos = GetCoordinate(lower);
 		var insertpos = new Coordinate(0, pos.Line);
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
 		CaretRange = new(GetOffset(insertpos));
+		CommitTransaction();
 	}
 
 
