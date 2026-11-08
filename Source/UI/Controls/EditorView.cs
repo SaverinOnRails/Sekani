@@ -14,7 +14,7 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-public class EditorView : Control
+internal sealed class EditorView : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
@@ -574,7 +574,7 @@ public class EditorView : Control
 		{
 			var oldValue = (Mode)e.OldValue!;
 			var newValue = (Mode)e.NewValue!;
-			Document.BeginTransaction();
+			Document.BeginTransaction(Document.CaretRange);
 			if (oldValue == Mode.Command && newValue == Mode.Normal)
 			{
 				Focus();
@@ -650,7 +650,7 @@ public class EditorView : Control
 	private double GetDocumentHeightInPixels()
 	{
 		return _lineCache.TotalVisualLines() *
-		  _editorMetrics.LineHeight + (EditorArea.Height / 2);
+		  _editorMetrics.LineHeight + (EditorArea.Height - _editorMetrics.LineHeight);
 	}
 	private readonly float _editorHorizontalMargin = 10F;
 	private readonly float _scrollBarDimension = 15;
@@ -1436,7 +1436,7 @@ public class EditorView : Control
 				Document.DeleteSelection();
 				break;
 			case "c":
-				Document.DeleteSelection();
+				Document.DeleteSelection(true);
 				EnterInsertMode();
 				break;
 			case "k":

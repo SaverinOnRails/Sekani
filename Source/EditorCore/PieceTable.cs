@@ -25,14 +25,16 @@ public readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int
 }
 
 internal interface ITextEdit;
-internal record struct TextEdit(int Offset, IReadOnlyList<PieceDescriptor> Pieces, BufferOperation Operation);
 internal record struct TextInsertionEdit(int Offset, PieceDescriptor InsertedPiece) : ITextEdit;
 internal record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 
-internal class EditTransaction(Range CaretRange)
+internal sealed class EditTransaction(Range caretBefore)
 {
 	public List<ITextEdit> TextEdits { get; } = [];
+	public Range CaretBefore => caretBefore;
+	public Range CaretAfter { get; set; } = caretBefore;
+
 }
 
 internal record struct PiecePosition(PieceNode Piece, int AbsoluteOffset, int LocalOffset);
@@ -185,7 +187,6 @@ internal class PieceTable
 		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
 		UpdateTableMetadata();
-		BeginNewTransaction();
 	}
 
 	static PieceTable()
@@ -361,19 +362,21 @@ internal class PieceTable
 			InsertAsSuccessor(prev, tail);
 		}
 	}
-	public void PushInsertionToActiveTransaction(int offset, PieceDescriptor insertedPieceDescriptor)
+	public void PushInsertionToActiveTransaction(int offset, PieceDescriptor insertedPieceDescriptor, bool extendedLastAddBufferPiece = false)
 	{
 		if (_activeTransaction is null) throw new InvalidOperationException("No Active Transaction To Push To");
 		var edit = new TextInsertionEdit(offset, insertedPieceDescriptor);
 		_activeTransaction!.TextEdits.Add(edit);
+		_activeTransaction.CaretAfter = new Range(offset + insertedPieceDescriptor.Length);
 		_redoStack.Clear();
 	}
 
 	private void PushDeletionToActiveTransaction(int offset, IReadOnlyList<PieceDescriptor> deletedPiecesDescriptors)
 	{
-		if (_activeTransaction is null) BeginNewTransaction();
+		if (_activeTransaction is null) throw new InvalidOperationException("No Active Transaction To Push To");
 		var edit = new TextDeletionEdit(offset, deletedPiecesDescriptors);
 		_activeTransaction!.TextEdits.Add(edit);
+		_activeTransaction.CaretAfter = new Range(offset);
 		_redoStack.Clear();
 	}
 
@@ -403,9 +406,10 @@ internal class PieceTable
 		return transaction;
 	}
 
-	public void DoUndo()
+	public void DoUndo(out Range? range)
 	{
 		_replayingHistory = true;
+		range = null;
 		try
 		{
 			var transaction = PopUndo();
@@ -419,6 +423,7 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Reinsert(deletion.Offset, deletion.DeletedPieces);
 			}
+			range = transaction.CaretBefore;
 		}
 		finally
 		{
@@ -426,8 +431,9 @@ internal class PieceTable
 		}
 	}
 
-	public void DoRedo()
+	public void DoRedo(out Range? range)
 	{
+		range = null;
 		var transaction = PopRedo();
 		if (transaction == null) return;
 		_replayingHistory = true;
@@ -442,6 +448,7 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Delete(deletion.Offset, deletion.DeletedPieces.Sum(p => p.Length));
 			}
+			range = transaction.CaretAfter;
 		}
 		finally
 		{
@@ -451,7 +458,7 @@ internal class PieceTable
 	public void BeginNewTransaction(Range CaretRange)
 	{
 		CommitTransaction();
-		_activeTransaction ??= new();
+		_activeTransaction ??= new(CaretRange);
 	}
 
 	private void InsertCore(string text, int offset)
@@ -1469,4 +1476,3 @@ internal class PieceTable
 		return _addBufferLineStarts;
 	}
 }
-
