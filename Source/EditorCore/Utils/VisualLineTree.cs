@@ -82,10 +82,66 @@ internal sealed class VisualLineTree
         _root = Merge(Merge(left, node), right);
     }
 
+    public void InsertRange(int index, int count, int defaultValue = 1)
+    {
+        if (count <= 0) return;
+        Split(_root, index, out var left, out var right);
+
+        // Build a balanced treap of 'count' nodes in O(count) time
+        var middle = BuildSubtree(count, defaultValue);
+
+        _root = Merge(Merge(left, middle), right);
+    }
+
+    private TreapNode? BuildSubtree(int count, int defaultValue)
+    {
+        if (count <= 0) return null;
+        var stack = new List<TreapNode>();
+        TreapNode? root = null;
+
+        for (int i = 0; i < count; i++)
+        {
+            var node = new TreapNode(defaultValue, _rng.Next());
+            TreapNode? lastPopped = null;
+
+            while (stack.Count > 0 && stack[^1].Priority < node.Priority)
+            {
+                lastPopped = stack[^1];
+                stack.RemoveAt(stack.Count - 1);
+            }
+
+            node.Left = lastPopped;
+            if (stack.Count > 0)
+                stack[^1].Right = node;
+            else
+                root = node;
+
+            stack.Add(node);
+        }
+
+        PullAll(root);
+        return root;
+    }
     public void RemoveAt(int index)
     {
         Split(_root, index, out var left, out var rest);
         Split(rest, 1, out _, out var right);
+        _root = Merge(left, right);
+    }
+
+    public void RemoveRange(int index, int count)
+    {
+        if (count <= 0 || _root is null) return;
+        if (index < 0 || index >= Count) throw new ArgumentOutOfRangeException(nameof(index));
+        count = Math.Min(count, Count - index);
+
+        // 1. Split off everything before index into 'left'
+        Split(_root, index, out var left, out var rest);
+
+        // 2. Split off 'count' elements from 'rest' (discarding them in '_')
+        Split(rest, count, out _, out var right);
+
+        // 3. Merge 'left' and 'right' back together
         _root = Merge(left, right);
     }
 

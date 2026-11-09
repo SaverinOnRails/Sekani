@@ -25,7 +25,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = true;
+	private bool _useTreesitter = false;
 
 	public void SetCaretRange(Coordinate pos)
 	{

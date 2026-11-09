@@ -13,7 +13,7 @@ public sealed class LineCache
 
 	private VisualLineTree _visualLineTree = new();
 
-	internal LineCache( PieceTable pieceTable, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
+	internal LineCache(PieceTable pieceTable, int tabSize, bool wordWrap = false, int maxVisualColsPerLine = 0)
 	{
 		_tabSize = tabSize;
 		_pieceTable = pieceTable;
@@ -26,23 +26,49 @@ public sealed class LineCache
 
 	private void PieceTableLineChanged(object? sender, BufferLineChangeData e)
 	{
-		if (e.kind == BufferLineChangeKind.LineRemoved)
+		if (e.Kind == BufferLineChangeKind.LineRemoved)
 		{
-			_visualLineTree.RemoveAt(e.Line);
-			_layoutCache.RemoveAt(e.Line);
-		}
+			int startIndex = e.Range.First;
+			int count = e.Range.Last.HasValue
+				? (e.Range.Last.Value - e.Range.First + 1)
+				: 1;
 
-		if (e.kind == BufferLineChangeKind.LineAdded)
-		{
-			if (e.Line <= _visualLineTree.Count)
+			if (count > 0 && startIndex < _visualLineTree.Count)
 			{
-				_visualLineTree.Insert(e.Line, 1);
-				_layoutCache.Insert(e.Line, null);
+				int removeCount = Math.Min(count, _visualLineTree.Count - startIndex);
+				_visualLineTree.RemoveRange(startIndex, removeCount);
+				if (startIndex < _layoutCache.Count)
+				{
+					int layoutRemoveCount = Math.Min(removeCount, _layoutCache.Count - startIndex);
+					_layoutCache.RemoveRange(startIndex, layoutRemoveCount);
+				}
 			}
 		}
-		InvalidateLayout(e.Line);
-	}
+		else if (e.Kind == BufferLineChangeKind.LineAdded)
+		{
+			int startIndex = e.Range.First;
+			int count = e.Range.Last.HasValue
+				? (e.Range.Last.Value - e.Range.First + 1)
+				: 1;
 
+			if (count > 0)
+			{
+				_visualLineTree.InsertRange(startIndex, count, defaultValue: 1);
+				if (startIndex <= _layoutCache.Count)
+				{
+					_layoutCache.InsertRange(startIndex, Enumerable.Repeat<LineLayout?>(null, count));
+				}
+			}
+		}
+		else if (e.Kind == BufferLineChangeKind.LineChanged)
+		{
+			int end = e.Range.Last ?? e.Range.First;
+			for (int i = e.Range.First; i <= end; i++)
+			{
+				InvalidateLayout(i);
+			}
+		}
+	}
 	private void UpdateDocumentWidth(int width) => Width = Math.Max(Width, width);
 
 
@@ -54,7 +80,7 @@ public sealed class LineCache
 			_layoutCache.Insert(_layoutCache.Count, null);
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-		if(_layoutCache[index] != null) return _layoutCache[index];
+		if (_layoutCache[index] != null) return _layoutCache[index];
 		var lineLayout = new LineLayout(
 			_pieceTable.PrintCleanLine(index),
 			_tabSize,

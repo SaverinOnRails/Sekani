@@ -17,7 +17,8 @@ public enum BufferOperation
 	Insertion,
 	Deletion,
 }
-public record struct BufferLineChangeData(int Line, BufferLineChangeKind kind);
+public readonly record struct LineRange(int First, int? Last);
+public record struct BufferLineChangeData(LineRange Range, BufferLineChangeKind Kind);
 public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
 public readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int End, int LineFeedCount)
 {
@@ -25,8 +26,8 @@ public readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int
 }
 
 internal interface ITextEdit;
-internal record struct TextInsertionEdit(int Offset, PieceDescriptor InsertedPiece) : ITextEdit;
-internal record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
+internal readonly record struct TextInsertionEdit(int Offset, PieceDescriptor InsertedPiece) : ITextEdit;
+internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 
 internal sealed class EditTransaction(Range caretBefore)
@@ -266,15 +267,15 @@ internal class PieceTable
 			if (text.Length == 0) return;
 			int line = GetCoordinate(offset).Line;
 			var linestarts = GetLineStarts(text, 0);
-			int addedLines = linestarts.Count - 1;
+			int lineCount = linestarts.Count;
 			var bufStart = _addBuffer.Count;
 			InsertCore(text, offset);
 			var descriptor = new PieceDescriptor(PieceBuffer.Add, bufStart, bufStart + text.Length, linestarts.Count);
 			PushInsertionToActiveTransaction(offset, descriptor); //replaying history will never hit this path
-			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
-			for (int i = 0; i <= addedLines; i++)
+			RaiseBufferLineChangedEvent(new(line, null), BufferLineChangeKind.LineChanged);
+			if (lineCount > 0)
 			{
-				RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
+				RaiseBufferLineChangedEvent(new(line + 1, line + lineCount), BufferLineChangeKind.LineAdded);
 			}
 			UpdateTableMetadata();
 			RaiseBufferNetChangedEvent(offset, text.Length, null, BufferOperation.Insertion);
@@ -291,13 +292,13 @@ internal class PieceTable
 	{
 		if (pieceDescriptors.Count == 0) return;
 		int line = GetCoordinate(offset).Line;
-		int addedLines = pieceDescriptors.Sum(p => p.LineFeedCount) - 1;
+		int lineCount = pieceDescriptors.Sum(p => p.LineFeedCount);
 		int totalLength = pieceDescriptors.Sum(p => p.Length);
 		ReinsertCore(offset, pieceDescriptors);
-		RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineChanged);
-		for (int i = 0; i <= addedLines; i++)
+		RaiseBufferLineChangedEvent(new(line, null), BufferLineChangeKind.LineChanged);
+		if (lineCount > 0)
 		{
-			RaiseBufferLineChangedEvent(line, BufferLineChangeKind.LineAdded);
+			RaiseBufferLineChangedEvent(new(line + 1, line + lineCount), BufferLineChangeKind.LineAdded);
 		}
 		UpdateTableMetadata();
 		RaiseBufferNetChangedEvent(offset, totalLength, null, BufferOperation.Insertion);
@@ -362,13 +363,39 @@ internal class PieceTable
 			InsertAsSuccessor(prev, tail);
 		}
 	}
-	public void PushInsertionToActiveTransaction(int offset, PieceDescriptor insertedPieceDescriptor, bool extendedLastAddBufferPiece = false)
+	public void PushInsertionToActiveTransaction(int offset, PieceDescriptor insertedPieceDescriptor)
 	{
 		if (_activeTransaction is null) throw new InvalidOperationException("No Active Transaction To Push To");
-		var edit = new TextInsertionEdit(offset, insertedPieceDescriptor);
-		_activeTransaction!.TextEdits.Add(edit);
-		_activeTransaction.CaretAfter = new Range(offset + insertedPieceDescriptor.Length);
-		_redoStack.Clear();
+		try
+		{
+			if (_activeTransaction.TextEdits.Count > 0
+				&& _activeTransaction.TextEdits[^1] is TextInsertionEdit lastInsertion
+				&& offset == lastInsertion.Offset + lastInsertion.InsertedPiece.Length) //Ensure that the text is contiguous in the Document
+			{
+				var lastPieceDescriptor = lastInsertion.InsertedPiece;
+				var mergedPieceDescriptor = TryMergePieceDescriptors(lastPieceDescriptor, insertedPieceDescriptor);
+				if (mergedPieceDescriptor is not null)
+				{
+					_activeTransaction.TextEdits[^1] = new TextInsertionEdit(lastInsertion.Offset, mergedPieceDescriptor.Value);
+					return;
+				}
+			}
+			var edit = new TextInsertionEdit(offset, insertedPieceDescriptor);
+			_activeTransaction!.TextEdits.Add(edit);
+		}
+		finally
+		{
+			_activeTransaction.CaretAfter = new Range(offset + insertedPieceDescriptor.Length);
+			_redoStack.Clear();
+		}
+	}
+
+	private PieceDescriptor? TryMergePieceDescriptors(PieceDescriptor x, PieceDescriptor y)
+	{
+		if (x.Buffer != y.Buffer) return null;
+		if (x.Buffer != PieceBuffer.Add) return null;
+		if (x.End != y.Start) return null;
+		return new(x.Buffer, x.Start, y.End, x.LineFeedCount + y.LineFeedCount);
 	}
 
 	private void PushDeletionToActiveTransaction(int offset, IReadOnlyList<PieceDescriptor> deletedPiecesDescriptors)
@@ -379,7 +406,6 @@ internal class PieceTable
 		_activeTransaction.CaretAfter = new Range(offset);
 		_redoStack.Clear();
 	}
-
 
 	public void CommitTransaction()
 	{
@@ -509,11 +535,10 @@ internal class PieceTable
 			DeleteCore(startOffset, length, out List<PieceDescriptor> deletedPieceDescriptors);
 			if (!_replayingHistory)
 				PushDeletionToActiveTransaction(startOffset, deletedPieceDescriptors);
-			RaiseBufferLineChangedEvent(first, BufferLineChangeKind.LineChanged);
-			//TODO: This performs like shit. Should send a complete line range instead;
-			for (int i = first; i < last; i++)
+			RaiseBufferLineChangedEvent(new(first, null), BufferLineChangeKind.LineChanged);
+			if (last > first)
 			{
-				RaiseBufferLineChangedEvent(first + 1, BufferLineChangeKind.LineRemoved);
+				RaiseBufferLineChangedEvent(new(first + 1, last), BufferLineChangeKind.LineRemoved);
 			}
 			UpdateTableMetadata();
 			RaiseBufferNetChangedEvent(startOffset, length, endCoordinate, BufferOperation.Deletion);
@@ -641,9 +666,9 @@ internal class PieceTable
 		ResizeTo(piece, head, copyStart: false);
 	}
 
-	private void RaiseBufferLineChangedEvent(int line, BufferLineChangeKind kind)
+	private void RaiseBufferLineChangedEvent(LineRange range, BufferLineChangeKind kind)
 	{
-		BufferLineChangedEvent?.Invoke(this, new(line, kind));
+		BufferLineChangedEvent?.Invoke(this, new(range, kind));
 	}
 
 	private void RaiseBufferNetChangedEvent(int startOffset, int length, Coordinate? oldEndPointBeforeDelete, BufferOperation operation)
