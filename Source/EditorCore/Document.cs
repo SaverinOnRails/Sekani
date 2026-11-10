@@ -25,7 +25,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = false;
+	private bool _useTreesitter = true;
 
 	public void SetCaretRange(Coordinate pos)
 	{
@@ -68,6 +68,7 @@ public sealed class SekaniDocument
 
 	//piece table stuff;
 	private PieceTable _pieceTable;
+	private bool _holdResetTransaction = false;
 
 	public SekaniDocument()
 	{
@@ -102,7 +103,17 @@ public sealed class SekaniDocument
 
 	public void BeginTransaction(Range range)
 	{
+		if (_holdResetTransaction)
+		{
+			_holdResetTransaction = false;
+			return;
+		}
 		_pieceTable.BeginNewTransaction(range);
+	}
+
+	public void HoldResetTransaction()
+	{
+		_holdResetTransaction = true;
 	}
 
 	private void CommitTransaction()
@@ -307,6 +318,7 @@ public sealed class SekaniDocument
 
 	private void MoveCaretHorizontal(int count, int direction, bool extendSelection)
 	{
+		BeginTransaction(CaretRange);
 		while (count-- > 0)
 		{
 			var cursor = CaretRange.Cursor;
@@ -357,6 +369,7 @@ public sealed class SekaniDocument
 
 	private void MoveCaretVertical(int count, CaretVerticalDirection direction, bool extendSelection)
 	{
+		BeginTransaction(CaretRange);
 		while (count-- > 0)
 		{
 			var offset = MoveCaretVertical(direction, out bool trailVisualLine);

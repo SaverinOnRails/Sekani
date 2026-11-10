@@ -17,16 +17,18 @@ public enum BufferOperation
 	Insertion,
 	Deletion,
 }
-public readonly record struct LineRange(int First, int? Last);
-public record struct BufferLineChangeData(LineRange Range, BufferLineChangeKind Kind);
-public record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
-public readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int End, int LineFeedCount)
+internal readonly record struct LineRange(int First, int? Last);
+internal record struct BufferLineChangeData(LineRange Range, BufferLineChangeKind Kind);
+internal record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
+internal readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, int End, int LineFeedCount)
 {
 	public int Length => End - Start;
 }
 
 internal interface ITextEdit;
 internal readonly record struct TextInsertionEdit(int Offset, PieceDescriptor InsertedPiece) : ITextEdit;
+
+//The list of Pieces here MUST all be joined end to end, pointing to one contiguous slice of the text
 internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 
@@ -381,7 +383,7 @@ internal class PieceTable
 				}
 			}
 			var edit = new TextInsertionEdit(offset, insertedPieceDescriptor);
-			_activeTransaction!.TextEdits.Add(edit);
+			_activeTransaction.TextEdits.Add(edit);
 		}
 		finally
 		{
@@ -390,21 +392,59 @@ internal class PieceTable
 		}
 	}
 
-	private PieceDescriptor? TryMergePieceDescriptors(PieceDescriptor x, PieceDescriptor y)
+	private IReadOnlyList<PieceDescriptor> TryMergePieceDescriptors(IReadOnlyList<PieceDescriptor> left, IReadOnlyList<PieceDescriptor> right)
 	{
-		if (x.Buffer != y.Buffer) return null;
-		if (x.Buffer != PieceBuffer.Add) return null;
-		if (x.End != y.Start) return null;
-		return new(x.Buffer, x.Start, y.End, x.LineFeedCount + y.LineFeedCount);
+		if (left.Count == 0) return right;
+		if (right.Count == 0) return left;
+		var lastLeft = left[^1];
+		var firstRight = right[0];
+		var mergedSeam = TryMergePieceDescriptors(lastLeft, firstRight);
+		if (mergedSeam is not null)
+		{
+			var result = new List<PieceDescriptor>();
+			for (int i = 0; i < left.Count - 1; i++) result.Add(left[i]);
+			result.Add(mergedSeam.Value);
+			for (int i = 1; i < right.Count; i++) result.Add(right[i]);
+			return result;
+		}
+		else
+		{
+			var result = new List<PieceDescriptor>();
+			result.AddRange(left);
+			result.AddRange(right);
+			return result;
+		}
+	}
+	private PieceDescriptor? TryMergePieceDescriptors(PieceDescriptor left, PieceDescriptor right)
+	{
+		if (left.Buffer != right.Buffer) return null;
+		if (left.End != right.Start) return null;
+		return new(left.Buffer, left.Start, right.End, left.LineFeedCount + right.LineFeedCount);
 	}
 
 	private void PushDeletionToActiveTransaction(int offset, IReadOnlyList<PieceDescriptor> deletedPiecesDescriptors)
 	{
+		var deletedLength = deletedPiecesDescriptors.Sum(p => p.Length);
 		if (_activeTransaction is null) throw new InvalidOperationException("No Active Transaction To Push To");
-		var edit = new TextDeletionEdit(offset, deletedPiecesDescriptors);
-		_activeTransaction!.TextEdits.Add(edit);
-		_activeTransaction.CaretAfter = new Range(offset);
-		_redoStack.Clear();
+		try
+		{
+			if (_activeTransaction.TextEdits.Count > 0
+				&& _activeTransaction.TextEdits[^1] is TextDeletionEdit lastDeletion
+				&& offset + deletedLength == lastDeletion.Offset  //Ensure Deletion is contiguous
+			)
+			{
+				var mergedPieces = TryMergePieceDescriptors(deletedPiecesDescriptors, lastDeletion.DeletedPieces);
+				_activeTransaction.TextEdits[^1] = new TextDeletionEdit(offset, mergedPieces);
+				return;
+			}
+			var edit = new TextDeletionEdit(offset, deletedPiecesDescriptors);
+			_activeTransaction.TextEdits.Add(edit);
+		}
+		finally
+		{
+			_activeTransaction.CaretAfter = new Range(offset);
+			_redoStack.Clear();
+		}
 	}
 
 	public void CommitTransaction()

@@ -893,6 +893,7 @@ internal sealed class EditorView : Control
 	{
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
+		Document.BeginTransaction(Document.CaretRange);
 		Document.SetCaretRange(pos);
 		Document.UpdatePreferredVisualColumn();
 		_caretVisible = true;
@@ -1437,6 +1438,7 @@ internal sealed class EditorView : Control
 				break;
 			case "c":
 				Document.DeleteSelection(true);
+				Document.HoldResetTransaction();
 				EnterInsertMode();
 				break;
 			case "k":
@@ -1453,10 +1455,12 @@ internal sealed class EditorView : Control
 				break;
 			case "o":
 				Document.AddNewLineUnderSelection();
+				Document.HoldResetTransaction();
 				EnterInsertMode();
 				break;
 			case "O":
 				Document.AddNewLineAboveSelection();
+				Document.HoldResetTransaction();
 				EnterInsertMode();
 				break;
 			case "w":

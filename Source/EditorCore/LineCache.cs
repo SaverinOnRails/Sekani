@@ -24,7 +24,7 @@ public sealed class LineCache
 		// RecalculateWidth();
 	}
 
-	private void PieceTableLineChanged(object? sender, BufferLineChangeData e)
+	private void PieceTableLineChanged(object? _, BufferLineChangeData e)
 	{
 		if (e.Kind == BufferLineChangeKind.LineRemoved)
 		{
