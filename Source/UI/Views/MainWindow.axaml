@@ -36,7 +36,7 @@
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />
 
         <!--  Small Input  -->
-        <controls:SmallInput IsVisible="{Binding SmallInputContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
+        <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
         <!--  Bottom Bar  -->
         <StackPanel
             Grid.Row="1"

@@ -10,16 +10,16 @@ public interface IEditorContext
 
     public Clipboard Clipboard { get; }
 
-    public ISmallInputContext? SmallInputContext { get; set; }
+    public ISmallInputPromptContext? SmallInputPromptContext { get; set; }
 
     void RaisePanelClosed(object? sender);
 
     event EventHandler? PanelClosed;
 }
 
-public interface ISmallInputContext;
+public interface ISmallInputPromptContext;
 
-public class SearchSmallInputContext : ISmallInputContext
+public class SmallInputPromptSearchContext : ISmallInputPromptContext
 {
     public string? SearchTerm { get; set; }
 

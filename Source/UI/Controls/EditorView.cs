@@ -141,7 +141,7 @@ internal sealed class EditorView : Control
 
 	private void EditorInputPanelClosed(object? sender, EventArgs e)
 	{
-		if (sender is SearchSmallInputContext smallSearch)
+		if (sender is SmallInputPromptSearchContext smallSearch)
 		{
 			if (!smallSearch.CommittedSearch)
 			{
@@ -554,7 +554,7 @@ internal sealed class EditorView : Control
 		EnterNormalMode();
 		HoldCaretAndRedraw();
 		ClearMotionCountBuffer();
-		_editorContext.SmallInputContext = null;
+		_editorContext.SmallInputPromptContext = null;
 	}
 
 	private void EnterCommandMode()
@@ -1553,8 +1553,8 @@ internal sealed class EditorView : Control
 
 	private void Find()
 	{
-		var searchContext = new SearchSmallInputContext() { OriginalCaretRange = Document.CaretRange };
-		_editorContext.SmallInputContext = searchContext;
+		var searchContext = new SmallInputPromptSearchContext() { OriginalCaretRange = Document.CaretRange };
+		_editorContext.SmallInputPromptContext = searchContext;
 		searchContext.SearchTermUpdated += SearchContextSearchTermUpdated;
 	}
 

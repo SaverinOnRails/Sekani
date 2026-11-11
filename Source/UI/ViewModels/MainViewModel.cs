@@ -59,7 +59,7 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public partial string Greeting { get; set; } = "Welcome to Sekani!";
 
     [ObservableProperty]
-    private ISmallInputContext? _smallInputContext = null;
+    private ISmallInputPromptContext? _smallInputPromptContext = null;
 
 
     [ObservableProperty]

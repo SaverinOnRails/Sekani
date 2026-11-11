@@ -5,11 +5,11 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-public class SmallInput : FocusableTextInputControl
+public class SmallInputPrompt : FocusableTextInputControl
 {
 
-	public SearchSmallInputContext _searchInputContext => (Context.SmallInputContext as SearchSmallInputContext)!;
-	public SmallInput()
+	public SmallInputPromptSearchContext _searchInputContext => (Context.SmallInputPromptContext as SmallInputPromptSearchContext)!;
+	public SmallInputPrompt()
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
 		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
@@ -21,7 +21,7 @@ public class SmallInput : FocusableTextInputControl
 
 	private void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
 	{
-		var context = (SearchSmallInputContext)Context.SmallInputContext!;
+		var context = (SmallInputPromptSearchContext)Context.SmallInputPromptContext!;
 		context.SearchTerm = ((TextBox)sender!).Text;
 		context.RaiseSearchTermUpdated();
 	}
@@ -49,7 +49,7 @@ public class SmallInput : FocusableTextInputControl
 	}
 	protected override void CloseControl(object? sender)
 	{
-		base.CloseControl(Context.SmallInputContext);
-		Context.SmallInputContext = null;
+		base.CloseControl(Context.SmallInputPromptContext);
+		Context.SmallInputPromptContext = null;
 	}
 }
