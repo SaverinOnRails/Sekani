@@ -109,6 +109,8 @@ internal sealed class EditorView : Control
 	private bool _isSmoothScrolling;
 	private TimeSpan _lastSmoothScrollFrameTime;
 	private int _firstVisibleLogicalLineForResizeRestore;
+	private int _visualLineTreeVersion;
+	private bool _retryCaretVisibilityAfterMeasure;
 
 	private Rect LineNumbersSectRect =>
 	  new(
@@ -163,6 +165,7 @@ internal sealed class EditorView : Control
 		 object? _,
 		 VisualLineTreeUpdatedParams e)
 	{
+		_visualLineTreeVersion++;
 		var (firstLogicalLine, _, _) = ComputeVisibleText();
 		if (e.lineIndex >= firstLogicalLine)
 			return;
@@ -353,6 +356,7 @@ internal sealed class EditorView : Control
 	}
 	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
 	{
+		_retryCaretVisibilityAfterMeasure = true;
 		if (!_isSmoothScrolling)
 		{
 			_targetScrollYOffset = _scrollYOffset;
@@ -699,6 +703,7 @@ internal sealed class EditorView : Control
 	public override void Render(DrawingContext context)
 	{
 		base.Render(context);
+		var visualLineTreeVersion = _visualLineTreeVersion;
 		var visibleTextBounds = ComputeVisibleText();
 		DrawMainRectangle(context);
 		DrawText(context, visibleTextBounds);
@@ -708,6 +713,15 @@ internal sealed class EditorView : Control
 		DrawCaretFocusBubble(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
+
+		// Drawing creates layouts for visible lines. If that changed the visual-line
+		// prefix sums, re-check the caret against the now-measured viewport on the UI
+		// dispatcher, after this render has finished.
+		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion)
+		{
+			_retryCaretVisibilityAfterMeasure = false;
+			Dispatcher.UIThread.Post(() => EnsureCaretVisible());
+		}
 	}
 
 
