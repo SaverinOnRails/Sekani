@@ -32,9 +32,17 @@
             Document="{Binding Document}"
             Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
+        <!--  Command Dialog  -->
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />
+
+        <!--  Small Input  -->
+        <controls:SmallInput IsVisible="{Binding SmallInputContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
         <!--  Bottom Bar  -->
-        <StackPanel Grid.Row="1" Height="30" Orientation="Horizontal" Spacing="20">
+        <StackPanel
+            Grid.Row="1"
+            Height="30"
+            Orientation="Horizontal"
+            Spacing="20">
             <TextBlock Text="{Binding Mode}" />
             <TextBlock Text="{Binding MotionCountBuffer}" />
         </StackPanel>

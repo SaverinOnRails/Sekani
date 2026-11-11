@@ -27,7 +27,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = false;
+	private bool _useTreesitter = true;
 
 	public void SetCaretRange(Coordinate pos)
 	{
@@ -36,6 +36,11 @@ public sealed class SekaniDocument
 	public void SetCaret(int anchor, bool trailVisualLine = false)
 	{
 		CaretRange = new(anchor, trailVisualLine);
+	}
+
+	public void SetCaret(Range range)
+	{
+		CaretRange = range;
 	}
 
 	public void MoveHead(int pos, bool trailVisualLine = false)
@@ -392,7 +397,6 @@ public sealed class SekaniDocument
 	{
 		while (count > 0)
 		{
-			Console.WriteLine("doing time");
 			offset = NextGraphemeBoundary(offset);
 			count--;
 		}
@@ -947,10 +951,19 @@ public sealed class SekaniDocument
 
 	public void PasteAfterCursor()
 	{
+		BeginTransaction(CaretRange);
 		var offset = CaretRange.Cursor;
 		var text = _clipboard!.Paste().GetAwaiter().GetResult();
 		if (text is null) return;
 		TypeCharsCore(offset, text);
+		CommitTransaction();
+	}
+
+	public void Find(string text, int startOffset, int endOffset)
+	{
+		var hits = _pieceTable.Search(text, startOffset, endOffset);
+		if (hits.Count == 0) return;
+		SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
 	}
 }
 

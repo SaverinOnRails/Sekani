@@ -9,11 +9,8 @@ using SekaniUI.ViewModels;
 
 namespace SekaniUI.Controls;
 
-public class CommandDialog : ContentControl
+public class CommandDialog : FocusableTextInputControl
 {
-	private TextBox _textBox;
-
-	private IEditorContext Context => (DataContext as IEditorContext)!;
 
 	public CommandDialog()
 	{
@@ -30,51 +27,26 @@ public class CommandDialog : ContentControl
 		Content = MainContainer();
 	}
 
-	public Control MainContainer()
+	private Control MainContainer()
 	{
 		return _textBox;
 	}
 
-	private void ExitMode()
+	protected override void HandleKeyInput(KeyEventArgs e)
 	{
-		Context.Mode = Mode.Normal;
-	}
-
-	protected override void OnKeyDown(KeyEventArgs e)
-	{
-		base.OnKeyDown(e);
-		HandleKeyInput(e);
-	}
-
-	private void HandleKeyInput(KeyEventArgs e)
-	{
+		base.HandleKeyInput(e);
 		switch (e.Key)
 		{
-			case Key.Escape:
-				ExitMode();
-				break;
 			case Key.Enter:
 				Context.HandleCommand(_textBox.Text);
-				ExitMode();
+				CloseControl(this);
 				break;
 		}
 	}
 
-	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
+	protected override void CloseControl(object sender)
 	{
-		base.OnPropertyChanged(e);
-		if (e.Property == IsVisibleProperty)
-		{
-			var newValue = (bool)e.NewValue!;
-			if (newValue)
-			{
-				_textBox.Clear();
-				Dispatcher.UIThread.Post(() =>
-				{
-					_textBox.Focus();
-				});
-			}
-		}
+		Context.Mode = Mode.Normal;
+		base.CloseControl(this);
 	}
-
 }

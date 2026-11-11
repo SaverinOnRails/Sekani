@@ -7,6 +7,7 @@ namespace SekaniUI.ViewModels;
 public partial class MainViewModel : ViewModelBase, IEditorContext
 {
     public Sekani.EditorCore.Clipboard Clipboard { get; set; }
+    public event EventHandler? PanelClosed;
 
     [ObservableProperty]
     private SekaniDocument _document;
@@ -29,9 +30,9 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // var file = "/home/noble/longfile.text";
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        var file = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
+        // var file = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
         // var file = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
-        // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
+        var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
         // var file = "/home/noble/Documents/Hyprland/src/render/OpenGL.cpp";
         // var file = "/home/noble/Documents/sekanitestfiles/unicodetest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/chinesetest.txt";
@@ -49,8 +50,16 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         }
     }
 
+    public void RaisePanelClosed(object? sender)
+    {
+        PanelClosed?.Invoke(sender, new());
+    }
+
     [ObservableProperty]
     public partial string Greeting { get; set; } = "Welcome to Sekani!";
+
+    [ObservableProperty]
+    private ISmallInputContext? _smallInputContext = null;
 
 
     [ObservableProperty]

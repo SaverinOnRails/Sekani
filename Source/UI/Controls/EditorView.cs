@@ -18,6 +18,7 @@ internal sealed class EditorView : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
+	private IEditorContext _editorContext;
 	private Typeface _normalLineNumberFontFace = Typeface.Default;
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
 	private readonly float _fontSize = 15;
@@ -126,6 +127,30 @@ internal sealed class EditorView : Control
 			Interval = TimeSpan.FromMilliseconds(700)
 		};
 		TimeCaret();
+	}
+
+	protected override void OnDataContextChanged(EventArgs e)
+	{
+		base.OnDataContextChanged(e);
+		if (_editorContext is not null)
+			_editorContext.PanelClosed -= EditorInputPanelClosed;
+		_editorContext = (IEditorContext)DataContext!;
+		if (_editorContext is not null)
+			_editorContext.PanelClosed += EditorInputPanelClosed;
+	}
+
+	private void EditorInputPanelClosed(object? sender, EventArgs e)
+	{
+		if (sender is SearchSmallInputContext smallSearch)
+		{
+			if (!smallSearch.CommittedSearch)
+			{
+				Document.SetCaret(smallSearch.OriginalCaretRange);
+				EnsureCaretVisible();
+			}
+		}
+		Focus();
+		Redraw();
 	}
 
 	private void ClearMotionCountBuffer()
@@ -511,9 +536,8 @@ internal sealed class EditorView : Control
 		}
 		if (e.Key == Key.Escape)
 		{
-			EnterNormalMode();
-			HoldCaretAndRedraw();
-			ClearMotionCountBuffer();
+			ResetState();
+
 			return;
 		}
 
@@ -524,6 +548,15 @@ internal sealed class EditorView : Control
 			EnsureCaretVisible();
 		}
 	}
+
+	private void ResetState()
+	{
+		EnterNormalMode();
+		HoldCaretAndRedraw();
+		ClearMotionCountBuffer();
+		_editorContext.SmallInputContext = null;
+	}
+
 	private void EnterCommandMode()
 	{
 		Mode = Mode.Command;
@@ -1308,7 +1341,6 @@ internal sealed class EditorView : Control
 								baseY);
 							context.DrawText(ftglyph, glyphPoint);
 							visualCol += width;
-							context.DrawText(ftglyph, glyphPoint);
 						}
 					}
 					currentVisualLine++;
@@ -1332,7 +1364,7 @@ internal sealed class EditorView : Control
 
 	private Rect? GetCaretRect()
 	{
-		if (!_caretVisible || !IsFocused) return null;
+		if (!_caretVisible) return null;
 
 		var coord = Document.CaretPosition;
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
@@ -1507,6 +1539,9 @@ internal sealed class EditorView : Control
 			case "p":
 				Document.PasteAfterCursor();
 				break;
+			case "/":
+				Find();
+				break;
 			default:
 				return;
 		}
@@ -1514,6 +1549,21 @@ internal sealed class EditorView : Control
 		HoldCaretAndRedraw();
 		EnsureCaretVisible();
 		ClearMotionCountBuffer();
+	}
+
+	private void Find()
+	{
+		var searchContext = new SearchSmallInputContext() { OriginalCaretRange = Document.CaretRange };
+		_editorContext.SmallInputContext = searchContext;
+		searchContext.SearchTermUpdated += SearchContextSearchTermUpdated;
+	}
+
+	private void SearchContextSearchTermUpdated(object? sender, string? e)
+	{
+		if (string.IsNullOrEmpty(e)) return;
+		Document.Find(e, Document.CaretRange.Lower, Document.BufferLength);
+		EnsureCaretVisible();
+		Redraw();
 	}
 
 	private void EnterVisualMode()

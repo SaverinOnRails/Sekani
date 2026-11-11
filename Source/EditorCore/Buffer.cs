@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.VisualBasic;
 namespace Sekani.EditorCore;
 
 public enum RBColor : byte
@@ -17,6 +19,8 @@ public enum BufferOperation
 	Insertion,
 	Deletion,
 }
+
+public record struct SearchHit(int Offset, int Length);
 internal readonly record struct LineRange(int First, int? Last);
 internal record struct BufferLineChangeData(LineRange Range, BufferLineChangeKind Kind);
 internal record struct BufferNetChangeData(int StartOffset, int Length, Coordinate? OldEndPointBeforeDelete, BufferOperation Operation);
@@ -156,7 +160,8 @@ public enum PieceBuffer
 
 internal class PieceTable
 {
-	private readonly IReadOnlyList<char> _originalBuffer;
+	//This should technically be a readonly list, but using a List helps us create a span view which is convinient
+	private readonly List<char> _originalBuffer;
 	private IReadOnlyList<int> _originalBufferLineStarts = [0];
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
@@ -288,6 +293,50 @@ internal class PieceTable
 		}
 	}
 
+	//KMP search implemented by Claude Sonnet 5.5. Tbh i don't really understand how this works
+	public List<SearchHit> Search(string text, int startOffset, int endOffset, bool ignoreCase = true)
+	{
+		var hits = new List<SearchHit>();
+		int m = text.Length;
+		endOffset = Math.Min(endOffset, BufferLength);
+		if (m == 0 || BufferLength == 0 || startOffset < 0 || startOffset >= endOffset) return hits;
+
+		string pattern = ignoreCase ? text.ToUpperInvariant() : text;
+
+		// KMP failure table
+		var fail = new int[m];
+		for (int i = 1, k = 0; i < m; i++)
+		{
+			while (k > 0 && pattern[i] != pattern[k]) k = fail[k - 1];
+			if (pattern[i] == pattern[k]) k++;
+			fail[i] = k;
+		}
+
+		var pos = GetPieceByOffset(startOffset);
+		var node = pos.Piece;
+		int local = pos.LocalOffset;
+		int absolute = startOffset;
+		int matched = 0;
+
+		while (node != NULL_NODE && absolute < endOffset)
+		{
+			var span = CollectionsMarshal.AsSpan(((List<char>)GetPieceBuffer(node))[node.Start..node.End]);
+			for (int i = local; i < span.Length && absolute < endOffset; i++, absolute++)
+			{
+				char c = ignoreCase ? char.ToUpperInvariant(span[i]) : span[i];
+				while (matched > 0 && c != pattern[matched]) matched = fail[matched - 1];
+				if (c == pattern[matched]) matched++;
+				if (matched == m)
+				{
+					hits.Add(new SearchHit(absolute - m + 1, m));
+					matched = fail[matched - 1]; 
+				}
+			}
+			local = 0; 
+			node = PieceNode.Next(node);
+		}
+		return hits;
+	}
 
 	//Recreate Pieces that were recently deleted, the text they point to is already spread across _addBuffer and _originalBuffer
 	private void Reinsert(int offset, IReadOnlyList<PieceDescriptor> pieceDescriptors)
