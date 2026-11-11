@@ -1481,9 +1481,9 @@ internal sealed class EditorView : Control
 			case "B":
 				Document.SelectToWordMotion(new(MotionKind.CurrentWordStart, MotionSubKind.WORD), MotionCount, _extendSelection);
 				break;
-			case "p":
-				Document.PrintPieceTable();
-				break;
+			// case "p":
+			// 	Document.PrintPieceTable();
+			// 	break;
 			case "%":
 				Document.SelectAll();
 				break;
@@ -1500,6 +1500,12 @@ internal sealed class EditorView : Control
 				break;
 			case "U":
 				Document.Redo(MotionCount);
+				break;
+			case "y":
+				Document.YankSelection();
+				break;
+			case "p":
+				Document.PasteAfterCursor();
 				break;
 			default:
 				return;

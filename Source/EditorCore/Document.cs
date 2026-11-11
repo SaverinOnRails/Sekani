@@ -8,6 +8,8 @@ namespace Sekani.EditorCore;
 public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
+	private readonly Clipboard? _clipboard = null!;
+
 	public Coordinate CaretPosition
 	{
 		get
@@ -25,7 +27,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = true;
+	private bool _useTreesitter = false;
 
 	public void SetCaretRange(Coordinate pos)
 	{
@@ -70,9 +72,10 @@ public sealed class SekaniDocument
 	private PieceTable _pieceTable;
 	private bool _holdResetTransaction = false;
 
-	public SekaniDocument()
+	public SekaniDocument(Clipboard? clipboard = null)
 	{
 		_pieceTable = new("");
+		_clipboard = clipboard;
 		BeginTransaction(CaretRange);
 		if (_useTreesitter)
 		{
@@ -87,11 +90,12 @@ public sealed class SekaniDocument
 		_treeSitterClient.Dispose();
 	}
 
-	public SekaniDocument(string filePath)
+	public SekaniDocument(string filePath, Clipboard? clipboard = null)
 	{
 		_filePath = filePath;
 		var buffer = File.ReadAllText(filePath);
 		_pieceTable = new(buffer);
+		_clipboard = clipboard;
 		BeginTransaction(CaretRange);
 		if (_useTreesitter)
 		{
@@ -388,6 +392,7 @@ public sealed class SekaniDocument
 	{
 		while (count > 0)
 		{
+			Console.WriteLine("doing time");
 			offset = NextGraphemeBoundary(offset);
 			count--;
 		}
@@ -493,7 +498,7 @@ public sealed class SekaniDocument
 	private void TypeCharsCore(int offset, string text)
 	{
 		_pieceTable.Insert(text, offset);
-		CaretRange = new(GetPosAdvance(CaretRange.Cursor, text.Length));
+		SetCaret(CaretRange.Cursor + text.Length);
 		UpdatePreferredVisualColumn();
 	}
 
@@ -927,19 +932,26 @@ public sealed class SekaniDocument
 	{
 		var builder = new StringBuilder();
 		Console.WriteLine(_pieceTable.Print());
-		// Console.WriteLine($"Temp hard check of offset : {_pieceTable.TempHardLoopLogicalCoordinatedToOffset(CaretPosition)}");
-		// Console.WriteLine($"Log check of offset : {_pieceTable.GetOffset(CaretPosition)}");
-		// Console.WriteLine();
-		// Console.WriteLine($"True coord {CaretPosition}");
-		// Console.WriteLine($"Calculated coord {_pieceTable.GetCoordinate(_pieceTable.GetOffset(CaretPosition))}");
-		// Console.WriteLine();
-		// Console.WriteLine(_pieceTable.PrintCleanLine(CaretPosition.Line));
-		// Console.WriteLine(GetCoordinate(CaretRange.Cursor));
-		// Console.WriteLine(_pieceTable.LineCount());
-		// Console.WriteLine(_pieceTable.LineFeedCount);
 
 	}
 
+	public void YankSelection()
+	{
+		var higherend = GetHigherEnd(CaretRange);
+		int width = higherend - CaretRange.Lower;
+		var buf = new char[higherend - CaretRange.Lower];
+		var written = _pieceTable.Slice(CaretRange.Lower, width, buf.AsSpan());
+		var text = buf.AsSpan()[..written];
+		_clipboard!.Yank(text.ToString());
+	}
+
+	public void PasteAfterCursor()
+	{
+		var offset = CaretRange.Cursor;
+		var text = _clipboard!.Paste().GetAwaiter().GetResult();
+		if (text is null) return;
+		TypeCharsCore(offset, text);
+	}
 }
 
 public enum CaretVerticalDirection

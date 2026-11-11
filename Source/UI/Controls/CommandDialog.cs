@@ -12,7 +12,9 @@ namespace SekaniUI.Controls;
 public class CommandDialog : ContentControl
 {
 	private TextBox _textBox;
-	private IEditorContext _mainViewModelInstance => MainViewModel.EditorContext;
+
+	private IEditorContext Context => (DataContext as IEditorContext)!;
+
 	public CommandDialog()
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
@@ -35,7 +37,7 @@ public class CommandDialog : ContentControl
 
 	private void ExitMode()
 	{
-		_mainViewModelInstance.Mode = Mode.Normal;
+		Context.Mode = Mode.Normal;
 	}
 
 	protected override void OnKeyDown(KeyEventArgs e)
@@ -52,7 +54,7 @@ public class CommandDialog : ContentControl
 				ExitMode();
 				break;
 			case Key.Enter:
-				_mainViewModelInstance.HandleCommand(_textBox.Text);
+				Context.HandleCommand(_textBox.Text);
 				ExitMode();
 				break;
 		}
