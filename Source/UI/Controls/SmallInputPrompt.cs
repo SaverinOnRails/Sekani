@@ -42,7 +42,7 @@ public class SmallInputPrompt : FocusableTextInputControl
 		switch (e.Key)
 		{
 			case Key.Enter:
-				_searchInputContext.CommittedSearch = true;
+				_searchInputContext.Committed = true;
 				CloseControl(this);
 				break;
 		}

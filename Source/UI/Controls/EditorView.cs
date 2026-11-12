@@ -134,8 +134,6 @@ internal sealed class EditorView : Control
 	protected override void OnDataContextChanged(EventArgs e)
 	{
 		base.OnDataContextChanged(e);
-		if (_editorContext is not null)
-			_editorContext.PanelClosed -= EditorInputPanelClosed;
 		_editorContext = (IEditorContext)DataContext!;
 		if (_editorContext is not null)
 			_editorContext.PanelClosed += EditorInputPanelClosed;
@@ -145,7 +143,7 @@ internal sealed class EditorView : Control
 	{
 		if (sender is SmallInputPromptSearchContext smallSearch)
 		{
-			if (!smallSearch.CommittedSearch)
+			if (!smallSearch.Committed)
 			{
 				Document.SetCaret(smallSearch.OriginalCaretRange);
 				EnsureCaretVisible();
@@ -226,6 +224,8 @@ internal sealed class EditorView : Control
 		["diff.minus"] = Brush.Parse("#c6372a"),              // error
 		["diff.delta"] = Brush.Parse("#89b4fa")               // delta
 	};
+	private bool _didMoveScrollBar;
+
 	private IBrush? TryGetHighlight(string capture)
 	{
 		var lookup = _highlightBrushes.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -270,7 +270,9 @@ internal sealed class EditorView : Control
 	private bool IsCaretVisibleVertical(
 	  double offset,
 	  out bool caretAboveViewport,
-	  out double correctiveDistance)
+	  out double correctiveDistance,
+	 bool shaveOffVerticallyFromBottom = false
+)
 	{
 		caretAboveViewport = false;
 		correctiveDistance = 0;
@@ -296,7 +298,9 @@ internal sealed class EditorView : Control
 		  caretY + _editorMetrics.LineHeight;
 
 		double viewportTop = offset;
-		double viewportBottom = offset + EditorArea.Height;
+		double viewportBottom = offset + (shaveOffVerticallyFromBottom
+			? EditorArea.Height - _editorMetrics.LineHeight * 2
+			: EditorArea.Height);
 
 		// Caret is completely above the viewport.
 		if (caretY < viewportTop)
@@ -354,7 +358,7 @@ internal sealed class EditorView : Control
 
 		return true;
 	}
-	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true)
+	private void EnsureCaretVisible(bool ensureVertical = true, bool ensureHorizontal = true, bool verticalScrollToCenterOfPage = false)
 	{
 		_retryCaretVisibilityAfterMeasure = true;
 		if (!_isSmoothScrolling)
@@ -364,8 +368,14 @@ internal sealed class EditorView : Control
 		if (!IsCaretVisibleVertical(
 			_targetScrollYOffset,
 			out bool caretAboveViewport,
-			out double correctiveDistance) && ensureVertical)
+			out double correctiveDistance,
+			verticalScrollToCenterOfPage
+			) && ensureVertical)
 		{
+			if (verticalScrollToCenterOfPage)
+			{
+				correctiveDistance += EditorArea.Height / 2;
+			}
 			if (caretAboveViewport)
 				_targetScrollYOffset -= correctiveDistance;
 			else
@@ -717,11 +727,13 @@ internal sealed class EditorView : Control
 		// Drawing creates layouts for visible lines. If that changed the visual-line
 		// prefix sums, re-check the caret against the now-measured viewport on the UI
 		// dispatcher, after this render has finished.
-		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion)
+		// should not do this when moving the scroll bar manually
+		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion && _didMoveScrollBar == false)
 		{
 			_retryCaretVisibilityAfterMeasure = false;
 			Dispatcher.UIThread.Post(() => EnsureCaretVisible());
 		}
+		_didMoveScrollBar = false;
 	}
 
 
@@ -982,7 +994,11 @@ internal sealed class EditorView : Control
 	{
 		base.OnPointerMoved(e);
 		TryMoveScrollbars(e, out bool didMoveScrollBars);
-		if (didMoveScrollBars) return;
+		if (didMoveScrollBars)
+		{
+			_didMoveScrollBar = true;
+		}
+		;
 		TryDoDragSelection(e);
 		TryDoAutoScrollForDragSelection(e);
 	}
@@ -1576,7 +1592,7 @@ internal sealed class EditorView : Control
 	{
 		if (string.IsNullOrEmpty(e)) return;
 		Document.Find(e, Document.CaretRange.Lower, Document.BufferLength);
-		EnsureCaretVisible();
+		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 		Redraw();
 	}
 

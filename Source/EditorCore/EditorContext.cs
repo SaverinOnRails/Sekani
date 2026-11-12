@@ -29,7 +29,7 @@ public class SmallInputPromptSearchContext : ISmallInputPromptContext
 
     public Range OriginalCaretRange { get; set; }
 
-    public bool CommittedSearch { get; set; } = false;
+    public bool Committed { get; set; } = false;
 
 }
 
