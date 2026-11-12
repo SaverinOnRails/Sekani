@@ -31,6 +31,8 @@ internal readonly record struct PieceDescriptor(PieceBuffer Buffer, int Start, i
 
 internal interface ITextEdit;
 internal readonly record struct TextInsertionEdit(int Offset, PieceDescriptor InsertedPiece) : ITextEdit;
+
+//The list of Pieces here MUST all be joined end to end, pointing to one contiguous slice of the text
 internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 

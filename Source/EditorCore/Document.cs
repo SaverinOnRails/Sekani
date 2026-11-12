@@ -959,11 +959,12 @@ public sealed class SekaniDocument
 		CommitTransaction();
 	}
 
-	public void Find(string text, int startOffset, int endOffset)
+	public List<SearchHit> Find(string text, int startOffset, int endOffset)
 	{
 		var hits = _pieceTable.Search(text, startOffset, endOffset);
-		if (hits.Count == 0) return;
+		if (hits.Count == 0) return [];
 		SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
+		return hits;
 	}
 }
 

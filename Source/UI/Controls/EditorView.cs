@@ -21,6 +21,8 @@ internal sealed class EditorView : Control
 	private IEditorContext _editorContext;
 	private Typeface _normalLineNumberFontFace = Typeface.Default;
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
+	private IReadOnlyList<SearchHit> _searchHits = [];
+	private int _searchHintActiveIndex = 0;
 	private readonly float _fontSize = 15;
 	private LineCache _lineCache = null!;
 	private
@@ -143,7 +145,12 @@ internal sealed class EditorView : Control
 	{
 		if (sender is SmallInputPromptSearchContext smallSearch)
 		{
-			if (!smallSearch.Committed)
+			if (smallSearch.Committed)
+			{
+				_searchHits = smallSearch.SearchHits;
+				_searchHintActiveIndex = 0;
+			}
+			else
 			{
 				Document.SetCaret(smallSearch.OriginalCaretRange);
 				EnsureCaretVisible();
@@ -551,7 +558,6 @@ internal sealed class EditorView : Control
 		if (e.Key == Key.Escape)
 		{
 			ResetState();
-
 			return;
 		}
 
@@ -1572,6 +1578,12 @@ internal sealed class EditorView : Control
 			case "/":
 				Find();
 				break;
+			case "n":
+				NextSearchHit();
+				break;
+			case "N":
+				PrevSearchHit();
+				break;
 			default:
 				return;
 		}
@@ -1580,6 +1592,28 @@ internal sealed class EditorView : Control
 		EnsureCaretVisible();
 		ClearMotionCountBuffer();
 	}
+
+	private void NavigateSearchHit(int direction)
+	{
+		if (_searchHits.Count == 0) return;
+
+		_searchHintActiveIndex =
+			(_searchHintActiveIndex + direction + _searchHits.Count)
+			% _searchHits.Count;
+
+		var hit = _searchHits[_searchHintActiveIndex];
+
+		Document.SetAnchorAndHead(
+			hit.Offset,
+			hit.Offset + hit.Length - 1);
+
+		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
+		Redraw();
+	}
+
+	private void NextSearchHit() => NavigateSearchHit(1);
+
+	private void PrevSearchHit() => NavigateSearchHit(-1);
 
 	private void Find()
 	{
@@ -1590,8 +1624,10 @@ internal sealed class EditorView : Control
 
 	private void SearchContextSearchTermUpdated(object? sender, string? e)
 	{
+		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		Document.Find(e, Document.CaretRange.Lower, Document.BufferLength);
+		var hits = Document.Find(e, Document.CaretRange.Lower, Document.BufferLength);
+		context.SearchHits = hits;
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 		Redraw();
 	}

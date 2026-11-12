@@ -29,8 +29,8 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // var file = "/home/noble/jquery.min.js.js";
         // var file = "/home/noble/longfile.text";
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
-        var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        // var file = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
+        // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
+        var file = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
         // var file = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
         // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
         // var file = "/home/noble/Documents/Hyprland/src/render/OpenGL.cpp";
