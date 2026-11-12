@@ -148,7 +148,7 @@ internal sealed class EditorView : Control
 			if (smallSearch.Committed)
 			{
 				_searchHits = smallSearch.SearchHits;
-				_searchHintActiveIndex = 0;
+				_searchHintActiveIndex = smallSearch.SearchHitOriginalIndex;
 			}
 			else
 			{
@@ -1626,8 +1626,9 @@ internal sealed class EditorView : Control
 	{
 		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		var hits = Document.Find(e, Document.CaretRange.Lower, Document.BufferLength);
+		var hits = Document.FindInDocument(e, Document.CaretRange.Lower, out int targetIndex);
 		context.SearchHits = hits;
+		context.SearchHitOriginalIndex = targetIndex;
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 		Redraw();
 	}

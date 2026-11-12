@@ -32,6 +32,8 @@ public class SmallInputPromptSearchContext : ISmallInputPromptContext
     public bool Committed { get; set; } = false;
 
     public List<SearchHit> SearchHits { get; set; } = [];
+
+    public int SearchHitOriginalIndex { get; set; }
 }
 
 

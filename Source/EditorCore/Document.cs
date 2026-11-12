@@ -966,6 +966,24 @@ public sealed class SekaniDocument
 		SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
 		return hits;
 	}
+
+	//Search the whole document for the query
+	public List<SearchHit> FindInDocument(string text, int offset, out int targetIndex)
+	{
+		var hits = _pieceTable.Search(text, 0, BufferLength);
+		targetIndex = 0;
+		if (hits.Count == 0) return [];
+
+		targetIndex = hits.FindIndex(p => p.Offset >= offset);
+		if (targetIndex == -1) targetIndex = 0;
+		var targetHit = hits[targetIndex];
+
+		SetAnchorAndHead(
+			targetHit.Offset,
+			targetHit.Offset + targetHit.Length - 1);
+
+		return hits;
+	}
 }
 
 public enum CaretVerticalDirection
