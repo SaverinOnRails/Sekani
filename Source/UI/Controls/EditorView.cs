@@ -1635,13 +1635,13 @@ internal sealed class EditorView : Control
 		searchContext.SearchTermUpdated += SearchContextSearchTermUpdated;
 	}
 
-	private void SearchContextSearchTermUpdated(object? sender, string? e)
+	private async void SearchContextSearchTermUpdated(object? sender, string? e)
 	{
 		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		var hits = Document.FindInDocument(e, Document.PrimaryCursorRange.Lower, out int targetIndex);
-		context.SearchHits = hits;
-		context.SearchHitOriginalIndex = targetIndex;
+		var (Hits, TargetIndex) = await Document.FindInDocumentAsync(e, Document.PrimaryCursorRange.Lower);
+		context.SearchHits = Hits;
+		context.SearchHitOriginalIndex = TargetIndex;
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 		Redraw();
 	}

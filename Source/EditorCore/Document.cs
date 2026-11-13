@@ -8,6 +8,7 @@ namespace Sekani.EditorCore;
 public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
+	private CancellationTokenSource _searchCancellationToken = new();
 	private readonly Clipboard? _clipboard = null!;
 
 	public Coordinate PrimaryCursorPosition
@@ -962,32 +963,47 @@ public sealed class SekaniDocument
 		CommitTransaction();
 	}
 
-	public List<SearchHit> Find(string text, int startOffset, int endOffset)
-	{
-		var hits = _pieceTable.Search(text, startOffset, endOffset);
-		if (hits.Count == 0) return [];
-		SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
-		return hits;
-	}
+	//UNUSED
+	// public List<SearchHit> Find(string text, int startOffset, int endOffset)
+	// {
+	// 	var hits = _pieceTable.Search(text, startOffset, endOffset, _searchCancellationToken);
+	// 	if (hits.Count == 0) return [];
+	// 	SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
+	// 	return hits;
+	// }
 
 	//Search the whole document for the query
-	public List<SearchHit> FindInDocument(string text, int offset, out int targetIndex)
+	public async Task<(List<SearchHit> Hits, int TargetIndex)> FindInDocumentAsync(
+		string text,
+		int offset)
 	{
-		var hits = _pieceTable.Search(text, 0, BufferLength);
-		targetIndex = 0;
-		if (hits.Count == 0) return [];
+		_searchCancellationToken.Cancel();
+		_searchCancellationToken = new();
+		try
+		{
+			var hits = await _pieceTable.SearchAsync(
+				text, 0, BufferLength, _searchCancellationToken.Token);
 
-		targetIndex = hits.FindIndex(p => p.Offset >= offset);
-		if (targetIndex == -1) targetIndex = 0;
-		var targetHit = hits[targetIndex];
+			if (hits.Count == 0)
+				return ([], 0);
 
-		SetAnchorAndHead(
-			targetHit.Offset,
-			targetHit.Offset + targetHit.Length - 1);
+			int targetIndex = hits.FindIndex(p => p.Offset >= offset);
+			if (targetIndex == -1)
+				targetIndex = 0;
 
-		return hits;
+			var targetHit = hits[targetIndex];
+
+			SetAnchorAndHead(
+				targetHit.Offset,
+				targetHit.Offset + targetHit.Length - 1);
+
+			return (hits, targetIndex);
+		}
+		catch (OperationCanceledException)
+		{
+			return ([], 0);
+		}
 	}
-
 	public void DuplicatePrimaryCursor()
 	{
 		var primary = PrimaryCursorRange;

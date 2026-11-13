@@ -294,48 +294,54 @@ internal class PieceTable
 	}
 
 	//KMP search implemented by Claude Sonnet 5.5. Tbh i don't really understand how this works
-	public List<SearchHit> Search(string text, int startOffset, int endOffset, bool ignoreCase = true)
+	public async Task<List<SearchHit>> SearchAsync(string text, int startOffset, int endOffset, CancellationToken ctx, bool ignoreCase = true)
 	{
-		var hits = new List<SearchHit>();
-		int m = text.Length;
-		endOffset = Math.Min(endOffset, BufferLength);
-		if (m == 0 || BufferLength == 0 || startOffset < 0 || startOffset >= endOffset) return hits;
-
-		string pattern = ignoreCase ? text.ToUpperInvariant() : text;
-
-		// KMP failure table
-		var fail = new int[m];
-		for (int i = 1, k = 0; i < m; i++)
+		return await Task.Run(() =>
 		{
-			while (k > 0 && pattern[i] != pattern[k]) k = fail[k - 1];
-			if (pattern[i] == pattern[k]) k++;
-			fail[i] = k;
-		}
+			var hits = new List<SearchHit>();
+			int m = text.Length;
+			endOffset = Math.Min(endOffset, BufferLength);
+			if (m == 0 || BufferLength == 0 || startOffset < 0 || startOffset >= endOffset) return hits;
 
-		var pos = GetPieceByOffset(startOffset);
-		var node = pos.Piece;
-		int local = pos.LocalOffset;
-		int absolute = startOffset;
-		int matched = 0;
+			string pattern = ignoreCase ? text.ToUpperInvariant() : text;
 
-		while (node != NULL_NODE && absolute < endOffset)
-		{
-			var span = CollectionsMarshal.AsSpan(((List<char>)GetPieceBuffer(node))[node.Start..node.End]);
-			for (int i = local; i < span.Length && absolute < endOffset; i++, absolute++)
+			// KMP failure table
+			var fail = new int[m];
+			for (int i = 1, k = 0; i < m; i++)
 			{
-				char c = ignoreCase ? char.ToUpperInvariant(span[i]) : span[i];
-				while (matched > 0 && c != pattern[matched]) matched = fail[matched - 1];
-				if (c == pattern[matched]) matched++;
-				if (matched == m)
-				{
-					hits.Add(new SearchHit(absolute - m + 1, m));
-					matched = fail[matched - 1]; 
-				}
+				while (k > 0 && pattern[i] != pattern[k]) k = fail[k - 1];
+				if (pattern[i] == pattern[k]) k++;
+				fail[i] = k;
+				ctx.ThrowIfCancellationRequested();
 			}
-			local = 0; 
-			node = PieceNode.Next(node);
-		}
-		return hits;
+
+			var pos = GetPieceByOffset(startOffset);
+			var node = pos.Piece;
+			int local = pos.LocalOffset;
+			int absolute = startOffset;
+			int matched = 0;
+
+			while (node != NULL_NODE && absolute < endOffset)
+			{
+				var span = CollectionsMarshal.AsSpan(((List<char>)GetPieceBuffer(node))[node.Start..node.End]);
+				for (int i = local; i < span.Length && absolute < endOffset; i++, absolute++)
+				{
+					char c = ignoreCase ? char.ToUpperInvariant(span[i]) : span[i];
+					while (matched > 0 && c != pattern[matched]) matched = fail[matched - 1];
+					if (c == pattern[matched]) matched++;
+					if (matched == m)
+					{
+						hits.Add(new SearchHit(absolute - m + 1, m));
+						matched = fail[matched - 1];
+					}
+					ctx.ThrowIfCancellationRequested();
+				}
+				local = 0;
+				node = PieceNode.Next(node);
+				ctx.ThrowIfCancellationRequested();
+			}
+			return hits;
+		}, ctx);
 	}
 
 	//Recreate Pieces that were recently deleted, the text they point to is already spread across _addBuffer and _originalBuffer
