@@ -23,7 +23,7 @@ internal sealed class EditorView : Control
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
 	private IReadOnlyList<SearchHit> _searchHits = [];
 	private int _searchHintActiveIndex = 0;
-	private readonly float _fontSize = 15;
+	private readonly double _fontSize = 16.5F;
 	private LineCache _lineCache = null!;
 	private
 	const float _baseLineNumberWidth = 20;
@@ -39,6 +39,7 @@ internal sealed class EditorView : Control
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
 	private double _scrollXOffset = 0;
 	private double _scrollYOffset = 0;
+	private bool _didScrollWithWheel;
 	private double _targetScrollYOffset = 0;
 	private CursorStyle _cursorStyle
 	{
@@ -109,6 +110,7 @@ internal sealed class EditorView : Control
 	private readonly Stopwatch _caretFocusBubbleStopwatch = new();
 	private const double CaretFocusBubbleDurationMs = 360;
 	private bool _isSmoothScrolling;
+	private double _originalSmoothScrollDistance = 0;
 	private TimeSpan _lastSmoothScrollFrameTime;
 	private int _firstVisibleLogicalLineForResizeRestore;
 	private int _visualLineTreeVersion;
@@ -191,45 +193,45 @@ internal sealed class EditorView : Control
 
 	private Dictionary<string, IBrush> _highlightBrushes = new()
 	{
-		["attribute"] = Brush.Parse("#c69f2a"),               // primary
-		["type"] = Brush.Parse("#c69f2a"),                    // primary
-		["type.enum.variant"] = Brush.Parse("#48a8a0"),       // secondary
-		["constructor"] = Brush.Parse("#c03054"),             // tertiary
-		["constant"] = Brush.Parse("#48a8a0"),                // secondary
-		["constant.character"] = Brush.Parse("#143936"),      // secondaryContainer
-		["constant.character.escape"] = Brush.Parse("#3f0d1a"), // tertiaryContainer
-		["string"] = Brush.Parse("#c03054"),                  // tertiary
-		["string.regexp"] = Brush.Parse("#3f0d1a"),           // tertiaryContainer
-		["string.special"] = Brush.Parse("#c03054"),          // tertiary
-		["string.special.symbol"] = Brush.Parse("#c03054"),   // tertiary
-		["string.special.path"] = Brush.Parse("#48a8a0"),     // secondary
-		["path"] = Brush.Parse("#48a8a0"),                    // secondary
-		["comment"] = Brush.Parse("#79685a"),                 // outline
-		["variable"] = Brush.Parse("#d8cebc"),                // onSurface
-		["variable.builtin"] = Brush.Parse("#48a8a0"),        // secondary
-		["variable.parameter"] = Brush.Parse("#f5edd8"),      // onSurfaceVariant
-		["variable.other.member"] = Brush.Parse("#c69f2a"),   // primary
-		["label"] = Brush.Parse("#48a8a0"),                   // secondary
-		["punctuation"] = Brush.Parse("#79685a"),             // outline
-		["keyword"] = Brush.Parse("#c69f2a"),                 // primary
-		["keyword.control.conditional"] = Brush.Parse("#c03054"), // tertiary
-		["operator"] = Brush.Parse("#48a8a0"),                // secondary
-		["function"] = Brush.Parse("#c03054"),                // tertiary
-		["function.macro"] = Brush.Parse("#c03054"),          // tertiary
-		["tag"] = Brush.Parse("#48a8a0"),                     // secondary
-		["namespace"] = Brush.Parse("#48a8a0"),               // secondary
-		["special"] = Brush.Parse("#48a8a0"),                 // secondary
-		["markup.heading"] = Brush.Parse("#c69f2a"),          // primary
-		["markup.list"] = Brush.Parse("#d8cebc"),             // onSurface
-		["markup.bold"] = Brush.Parse("#48a8a0"),             // secondary
-		["markup.italic"] = Brush.Parse("#48a8a0"),           // secondary
-		["markup.link.url"] = Brush.Parse("#48a8a0"),         // secondary
-		["markup.link.label"] = Brush.Parse("#c69f2a"),       // primary
-		["markup.raw"] = Brush.Parse("#d8cebc"),              // onSurface
-		["markup.quote"] = Brush.Parse("#48a8a0"),            // secondary
-		["diff.plus"] = Brush.Parse("#a6e3a1"),               // plus
-		["diff.minus"] = Brush.Parse("#c6372a"),              // error
-		["diff.delta"] = Brush.Parse("#89b4fa")               // delta
+		["attribute"] = Brush.Parse("#f9e2af"),                 // yellow
+		["type"] = Brush.Parse("#f9e2af"),                      // yellow
+		["type.enum.variant"] = Brush.Parse("#94e2d5"),         // teal
+		["constructor"] = Brush.Parse("#74c7ec"),             // sapphire
+		["constant"] = Brush.Parse("#fab387"),                  // peach
+		["constant.character"] = Brush.Parse("#94e2d5"),        // teal
+		["constant.character.escape"] = Brush.Parse("#f5c2e7"), // pink
+		["string"] = Brush.Parse("#a6e3a1"),                  // green
+		["string.regexp"] = Brush.Parse("#f5c2e7"),             // pink
+		["string.special"] = Brush.Parse("#89b4fa"),            // blue
+		["string.special.symbol"] = Brush.Parse("#f38ba8"),     // red
+		["string.special.path"] = Brush.Parse("#89b4fa"),       // blue
+		["path"] = Brush.Parse("#89b4fa"),                      // blue
+		["comment"] = Brush.Parse("#9399b2"),                   // overlay2
+		["variable"] = Brush.Parse("#cdd6f4"),                  // text
+		["variable.builtin"] = Brush.Parse("#f38ba8"),          // red
+		["variable.parameter"] = Brush.Parse("#eba0ac"),        // maroon
+		["variable.other.member"] = Brush.Parse("#89b4fa"),     // blue
+		["label"] = Brush.Parse("#74c7ec"),                     // sapphire
+		["punctuation"] = Brush.Parse("#9399b2"),               // overlay2
+		["keyword"] = Brush.Parse("#cba6f7"),                   // mauve
+		["keyword.control.conditional"] = Brush.Parse("#cba6f7"), // mauve
+		["operator"] = Brush.Parse("#89dceb"),                  // sky
+		["function"] = Brush.Parse("#89b4fa"),                  // blue
+		["function.macro"] = Brush.Parse("#f5e0dc"),            // rosewater
+		["tag"] = Brush.Parse("#89b4fa"),                       // blue
+		["namespace"] = Brush.Parse("#f9e2af"),                 // yellow
+		["special"] = Brush.Parse("#89b4fa"),                   // blue
+		["markup.heading"] = Brush.Parse("#f38ba8"),            // red
+		["markup.list"] = Brush.Parse("#94e2d5"),               // teal
+		["markup.bold"] = Brush.Parse("#f38ba8"),               // red
+		["markup.italic"] = Brush.Parse("#f38ba8"),             // red
+		["markup.link.url"] = Brush.Parse("#89b4fa"),           // blue
+		["markup.link.label"] = Brush.Parse("#74c7ec"),         // sapphire
+		["markup.raw"] = Brush.Parse("#a6e3a1"),                // green
+		["markup.quote"] = Brush.Parse("#f5c2e7"),              // pink
+		["diff.plus"] = Brush.Parse("#a6e3a1"),                 // green
+		["diff.minus"] = Brush.Parse("#f38ba8"),                // red
+		["diff.delta"] = Brush.Parse("#89b4fa")                 // blue
 	};
 	private bool _didMoveScrollBar;
 
@@ -278,13 +280,13 @@ internal sealed class EditorView : Control
 	  double offset,
 	  out bool caretAboveViewport,
 	  out double correctiveDistance,
-	 bool shaveOffVerticallyFromBottom = false
+	  bool shaveOffVerticallyFromBottom = false
 )
 	{
 		caretAboveViewport = false;
 		correctiveDistance = 0;
 
-		var coord = Document.CaretPosition;
+		var coord = Document.PrimaryCursorPosition;
 		var lineLayout = _lineCache.GetOrCreate(coord.Line);
 		if (lineLayout is null)
 			return false;
@@ -305,6 +307,8 @@ internal sealed class EditorView : Control
 		  caretY + _editorMetrics.LineHeight;
 
 		double viewportTop = offset;
+
+		//Scroll the target line into the middle of the page when we are searching
 		double viewportBottom = offset + (shaveOffVerticallyFromBottom
 			? EditorArea.Height - _editorMetrics.LineHeight * 2
 			: EditorArea.Height);
@@ -334,7 +338,7 @@ internal sealed class EditorView : Control
 		caretLeftOfViewport = false;
 		correctiveDistance = 0;
 
-		var coord = Document.CaretPosition;
+		var coord = Document.PrimaryCursorPosition;
 		var layout = _lineCache.GetOrCreate(coord.Line);
 		if (layout is null) return false;
 		var visualCol = layout.GetVisualCoordinate(coord, _useWideCursor).VisualCol;
@@ -420,14 +424,15 @@ internal sealed class EditorView : Control
 		_isSmoothScrolling = true;
 		_lastSmoothScrollFrameTime = TimeSpan.Zero;
 		var diff = Math.Abs(_targetScrollYOffset - _scrollYOffset);
-		if (diff >= EditorArea.Height / 2)
-		{
-			_scrollYOffset = _targetScrollYOffset;
-			CorrectScrollBarOffset();
-			StopSmoothScroll();
-			Redraw();
-			return;
-		}
+		_originalSmoothScrollDistance = diff;
+		// if (diff >= EditorArea.Height / 2)
+		// {
+		// 	_scrollYOffset = _targetScrollYOffset;
+		// 	CorrectScrollBarOffset();
+		// 	StopSmoothScroll();
+		// 	Redraw();
+		// 	return;
+		// }
 		RequestSmoothScrollFrame();
 	}
 
@@ -460,7 +465,7 @@ internal sealed class EditorView : Control
 			Redraw();
 			return;
 		}
-		const double smoothing = 14.0;
+		double smoothing = _originalSmoothScrollDistance >= EditorArea.Height / 2 ? 45.0 : 14;
 		double t = 1.0 - Math.Exp(-smoothing * dt);
 		_scrollYOffset += distance * t;
 		Redraw();
@@ -470,6 +475,7 @@ internal sealed class EditorView : Control
 	private void StopSmoothScroll()
 	{
 		_isSmoothScrolling = false;
+		_originalSmoothScrollDistance = 0;
 	}
 
 	private void StartDrawCaretFocusBubble()
@@ -550,7 +556,7 @@ internal sealed class EditorView : Control
 					break;
 
 				case Key.Back:
-					Document.BackSpace(Document.CaretPosition);
+					Document.BackSpace(Document.PrimaryCursorPosition);
 					handled = true;
 					break;
 			}
@@ -627,7 +633,7 @@ internal sealed class EditorView : Control
 		{
 			var oldValue = (Mode)e.OldValue!;
 			var newValue = (Mode)e.NewValue!;
-			Document.BeginTransaction(Document.CaretRange);
+			Document.BeginTransaction(Document.PrimaryCursorRange);
 			if (oldValue == Mode.Command && newValue == Mode.Normal)
 			{
 				Focus();
@@ -670,7 +676,7 @@ internal sealed class EditorView : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Jetbrains Mono");
+		_editorFontFace = new Typeface("Cascadia Mono", FontStyle.Italic);
 		_normalLineNumberFontFace = new Typeface(
 		_editorFontFace.FontFamily,
 		_editorFontFace.Style,
@@ -730,16 +736,19 @@ internal sealed class EditorView : Control
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
 
+		// This is a hack to fix the weird bug where EnsureCaretVisible() undershoots for long distances because of newly measured lines
 		// Drawing creates layouts for visible lines. If that changed the visual-line
 		// prefix sums, re-check the caret against the now-measured viewport on the UI
 		// dispatcher, after this render has finished.
-		// should not do this when moving the scroll bar manually
-		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion && _didMoveScrollBar == false)
+		// should not do this when moving the scroll bar manually or scrolling with the wheel
+
+		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion && (_didMoveScrollBar == false && _didScrollWithWheel == false))
 		{
 			_retryCaretVisibilityAfterMeasure = false;
 			Dispatcher.UIThread.Post(() => EnsureCaretVisible());
 		}
 		_didMoveScrollBar = false;
+		_didScrollWithWheel = false;
 	}
 
 
@@ -790,7 +799,7 @@ internal sealed class EditorView : Control
 	{
 		using
 		var clip = context.PushClip(EditorArea);
-		var range = Document.CaretRange;
+		var range = Document.PrimaryCursorRange;
 		if (Mode == Mode.Insert && !range.HasActiveSelection) return;
 		var higher = Document.GetCoordinate(Document.GetHigherEnd(range));
 		var lower = Document.GetCoordinate(range.Lower);
@@ -872,7 +881,7 @@ internal sealed class EditorView : Control
 			var lineLayout = _lineCache.GetOrCreate(i);
 			if (lineLayout is null)
 				continue;
-			var caretLine = Document.CaretPosition.Line;
+			var caretLine = Document.PrimaryCursorPosition.Line;
 			var number = _useRelativeLineNumber
 				? (i == caretLine ? i + 1 : Math.Abs(i - caretLine))
 				: i + 1;
@@ -880,9 +889,9 @@ internal sealed class EditorView : Control
 			  number.ToString(),
 			  CultureInfo.InvariantCulture,
 			  FlowDirection.LeftToRight,
-			  i == Document.CaretPosition.Line ? _focusedLineNumberTypeFace : _normalLineNumberFontFace,
+			  i == Document.PrimaryCursorPosition.Line ? _focusedLineNumberTypeFace : _normalLineNumberFontFace,
 			  _fontSize,
-			  i == Document.CaretPosition.Line ? _focusedLineNumberBrush : _lineNumberBrush
+			  i == Document.PrimaryCursorPosition.Line ? _focusedLineNumberBrush : _lineNumberBrush
 			);
 			var x = LineNumberSectWidth - ft.Width - 5;
 			var point = new Point(
@@ -908,7 +917,7 @@ internal sealed class EditorView : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#100e0c"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#1e1e2e"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -958,7 +967,7 @@ internal sealed class EditorView : Control
 	{
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
-		Document.BeginTransaction(Document.CaretRange);
+		Document.BeginTransaction(Document.PrimaryCursorRange);
 		Document.SetCaretRange(pos);
 		Document.UpdatePreferredVisualColumn();
 		_caretVisible = true;
@@ -1038,9 +1047,9 @@ internal sealed class EditorView : Control
 			if (point.Y < EditorArea.Top + _autoScrollMargin)
 			{
 				//this is rough but just check if we can move the caret up vertically
-				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
+				var layout = _lineCache.GetOrCreate(Document.PrimaryCursorPosition.Line);
 				if (layout is null) return;
-				var posInLine = layout.GetVisualCoordinate(Document.CaretPosition);
+				var posInLine = layout.GetVisualCoordinate(Document.PrimaryCursorPosition);
 
 				if (layout.VisualLines.Count > 1)
 				{
@@ -1051,7 +1060,7 @@ internal sealed class EditorView : Control
 						  posInLine.VisualLine - 1);
 
 						var newLogicalCol = layout.GetLogicalColumn(newVisualCoord);
-						var offset = Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line));
+						var offset = Document.GetOffset(new(newLogicalCol, Document.PrimaryCursorPosition.Line));
 						Document.MoveHead(offset);
 						EnsureCaretVisible();
 						Redraw();
@@ -1059,10 +1068,10 @@ internal sealed class EditorView : Control
 					}
 				}
 
-				if (Document.CaretPosition.Line == 0) return;
+				if (Document.PrimaryCursorPosition.Line == 0) return;
 
 				var layoutOfPrevLine = _lineCache.GetOrCreate(
-				  Document.CaretPosition.Line - 1);
+				  Document.PrimaryCursorPosition.Line - 1);
 
 				if (layoutOfPrevLine is null) return;
 
@@ -1077,17 +1086,17 @@ internal sealed class EditorView : Control
 				  layoutOfPrevLine.GetLogicalColumn(
 					newVisualCoordOfLastLine);
 
-				Document.MoveHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.CaretPosition.Line - 1)));
+				Document.MoveHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.PrimaryCursorPosition.Line - 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
 
 			if (point.Y > EditorArea.Bottom - _autoScrollMargin)
 			{
-				var layout = _lineCache.GetOrCreate(Document.CaretPosition.Line);
+				var layout = _lineCache.GetOrCreate(Document.PrimaryCursorPosition.Line);
 				if (layout is null) return;
 
-				var posInLine = layout.GetVisualCoordinate(Document.CaretPosition);
+				var posInLine = layout.GetVisualCoordinate(Document.PrimaryCursorPosition);
 
 				if (layout.VisualLines.Count > 1)
 				{
@@ -1099,18 +1108,18 @@ internal sealed class EditorView : Control
 
 						var newLogicalCol = layout.GetLogicalColumn(
 						  newVisualCoord);
-						Document.MoveHead(Document.GetOffset(new(newLogicalCol, Document.CaretPosition.Line)));
+						Document.MoveHead(Document.GetOffset(new(newLogicalCol, Document.PrimaryCursorPosition.Line)));
 						EnsureCaretVisible();
 						Redraw();
 						return;
 					}
 				}
 
-				if (Document.CaretPosition.Line >= Document.LineCount - 1)
+				if (Document.PrimaryCursorPosition.Line >= Document.LineCount - 1)
 					return;
 
 				var layoutOfNextLine = _lineCache.GetOrCreate(
-				  Document.CaretPosition.Line + 1);
+				  Document.PrimaryCursorPosition.Line + 1);
 
 				if (layoutOfNextLine is null) return;
 
@@ -1121,7 +1130,7 @@ internal sealed class EditorView : Control
 				var newLogicalColOfFirstLine =
 				  layoutOfNextLine.GetLogicalColumn(
 					newVisualCoordOfFirstLine);
-				Document.MoveHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.CaretPosition.Line + 1)));
+				Document.MoveHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.PrimaryCursorPosition.Line + 1)));
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -1139,7 +1148,7 @@ internal sealed class EditorView : Control
 		Document.MoveHead(Document.GetOffset(pos));
 		var layout = _lineCache.GetOrCreate(pos.Line);
 		if (layout is null) return;
-		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.CaretPosition).VisualCol;
+		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.PrimaryCursorPosition).VisualCol;
 		Redraw();
 	}
 
@@ -1238,6 +1247,7 @@ internal sealed class EditorView : Control
 		  _scrollYOffset - (e.Delta.Y * scrollAmount),
 		  0,
 		  maxScrollOffset);
+		_didScrollWithWheel = true;
 
 		Redraw();
 
@@ -1273,7 +1283,7 @@ internal sealed class EditorView : Control
 		int currentVisualLine = 0;
 		int logicalLineToBeginCount = visibleTextBounds.firstLogicalLine;
 		var lastLogicalLine = visibleTextBounds.lastPossibleLogicalLine + 5;
-		var caretPos = Document.CaretPosition;
+		var caretPos = Document.PrimaryCursorPosition;
 		var relativeCaretVisualLine = _lineCache.GetOrCreate(caretPos.Line)?.GetVisualCoordinate(caretPos).VisualLine;
 		Rect? hintRectangle = null;
 		using (var clip = context.PushClip(EditorArea))
@@ -1402,7 +1412,7 @@ internal sealed class EditorView : Control
 	{
 		if (!_caretVisible) return null;
 
-		var coord = Document.CaretPosition;
+		var coord = Document.PrimaryCursorPosition;
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
 		if (coord.Line < firstLogicalLine || coord.Line > lastLogicalLine)
 			return null;
@@ -1584,6 +1594,9 @@ internal sealed class EditorView : Control
 			case "N":
 				PrevSearchHit();
 				break;
+			case "C":
+				Document.DuplicatePrimaryCursor();
+				break;
 			default:
 				return;
 		}
@@ -1617,7 +1630,7 @@ internal sealed class EditorView : Control
 
 	private void Find()
 	{
-		var searchContext = new SmallInputPromptSearchContext() { OriginalCaretRange = Document.CaretRange };
+		var searchContext = new SmallInputPromptSearchContext() { OriginalCaretRange = Document.PrimaryCursorRange };
 		_editorContext.SmallInputPromptContext = searchContext;
 		searchContext.SearchTermUpdated += SearchContextSearchTermUpdated;
 	}
@@ -1626,7 +1639,7 @@ internal sealed class EditorView : Control
 	{
 		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		var hits = Document.FindInDocument(e, Document.CaretRange.Lower, out int targetIndex);
+		var hits = Document.FindInDocument(e, Document.PrimaryCursorRange.Lower, out int targetIndex);
 		context.SearchHits = hits;
 		context.SearchHitOriginalIndex = targetIndex;
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
