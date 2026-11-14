@@ -5,6 +5,7 @@ using Sekani.Integrations.TreeSitter;
 
 namespace Sekani.EditorCore;
 
+
 public sealed class SekaniDocument
 {
 	public bool IsReadOnly { get; set; } = false;
@@ -15,7 +16,7 @@ public sealed class SekaniDocument
 	{
 		get
 		{
-			var position = _pieceTable.GetCoordinate(PrimaryCursorRange.Cursor);
+			var position = _pieceTable.GetCoordinate(PrimaryCursorRange.Head);
 			position.TrailVisualLine = PrimaryCursorRange.TrailVisualLine;
 			return position;
 		}
@@ -49,23 +50,14 @@ public sealed class SekaniDocument
 
 	public void MoveHead(int pos, bool trailVisualLine = false)
 	{
-		var r = PrimaryCursorRange;
-		int anchor = r.Anchor;
-		bool forward = r.Head > anchor;
-		if (forward && pos < anchor)
-		{
-			anchor = GetPosAdvance(anchor, 1);
-		}
-		else if (!forward && pos >= anchor - 1)
-		{
-			anchor = GetPosAdvance(anchor, -1);
-		}
-		int head = pos < anchor ? pos : GetPosAdvance(pos, 1);
-		Selections.Ranges[Selections.PrimaryIndex] = new Range(anchor, head, pos, trailVisualLine);
+		Selections.Ranges[Selections.PrimaryIndex] =
+			Selections.Ranges[Selections.PrimaryIndex].MoveHead(pos, GetPosAdvance, trailVisualLine);
+		var range = Selections.Ranges[Selections.PrimaryIndex];
 	}
+
 	public void SetAnchorAndHead(int anchor, int head, bool trailVisualLine = false)
 	{
-		Selections.Ranges[Selections.PrimaryIndex] = new(anchor, head, head, trailVisualLine);
+		Selections.Ranges[Selections.PrimaryIndex] = new(anchor, head, trailVisualLine);
 	}
 
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
@@ -208,14 +200,14 @@ public sealed class SekaniDocument
 
 	public void TypeChars(string text, bool invokePieceTable = true)
 	{
-		TypeCharsCore(PrimaryCursorRange.Cursor, text);
+		TypeCharsCore(PrimaryCursorRange.Head, text);
 	}
 
 	public void UpdatePreferredVisualColumn()
 	{
 		if (_lineCache is null)
 			return;
-		var pos = _pieceTable.GetCoordinate(PrimaryCursorRange.Cursor);
+		var pos = _pieceTable.GetCoordinate(PrimaryCursorRange.Head);
 		var layout = _lineCache.GetOrCreate(pos.Line);
 
 		if (layout is null)
@@ -342,7 +334,7 @@ public sealed class SekaniDocument
 		BeginTransaction(PrimaryCursorRange);
 		while (count-- > 0)
 		{
-			var cursor = PrimaryCursorRange.Cursor;
+			var cursor = PrimaryCursorRange.Head;
 
 			if (direction > 0 ? cursor >= _pieceTable.BufferLength : cursor <= 0)
 				break;
@@ -360,20 +352,19 @@ public sealed class SekaniDocument
 	public void DeleteSelection(bool noHistoryCommit = false)
 	{
 		BeginTransaction(PrimaryCursorRange);
-		var lower = PrimaryCursorRange.Lower;
-		var sethigh = GetHigherEnd(PrimaryCursorRange);
-		//clamp sethigh
-		sethigh = Math.Min(sethigh, _pieceTable.BufferLength);
-		var delta = sethigh - lower;
-		_pieceTable.Delete(lower, delta);
-		Selections.Ranges[Selections.PrimaryIndex] = new(lower);
+		var textspan = PrimaryCursorRange.GetTextSpan(GetPosAdvance);
+		var start = textspan.Start;
+		var end = Math.Min(textspan.End, BufferLength);
+		var delta = end - start;
+		_pieceTable.Delete(start, delta);
+		Selections.Ranges[Selections.PrimaryIndex] = new(start);
 		if (!noHistoryCommit)
 			CommitTransaction();
 	}
 
 	public void BackSpace(Coordinate pos)
 	{
-		var offset = PrimaryCursorRange.Cursor;
+		var offset = PrimaryCursorRange.Head;
 		if (offset == 0) return;
 		var startOffset = PrevGraphemeBoundary(offset);
 		var diff = offset - startOffset;
@@ -405,7 +396,7 @@ public sealed class SekaniDocument
 			}
 		}
 	}
-	private int GetPosAdvance(int offset, int count)
+	public int GetPosAdvance(int offset, int count)
 	{
 		while (count > 0)
 		{
@@ -462,7 +453,7 @@ public sealed class SekaniDocument
 	{
 		while (count > 0)
 		{
-			var offset = PrimaryCursorRange.Cursor;
+			var offset = PrimaryCursorRange.Head;
 			var wordFinder = GetWordFinderForMotion(motion);
 			var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
 			if (next is not null && anchor is not null)
@@ -501,7 +492,7 @@ public sealed class SekaniDocument
 	public void AddNewLineUnderSelection()
 	{
 		BeginTransaction(PrimaryCursorRange);
-		var offset = PrimaryCursorRange.Width > 1 ? PrimaryCursorRange.Higher : PrimaryCursorRange.Lower;
+		var offset = PrimaryCursorRange.Width > 1 ? PrimaryCursorRange.To : PrimaryCursorRange.From;
 		var pos = GetCoordinate(offset);
 		var text = _pieceTable.PrintCleanLine(pos.Line);
 		var insertpos = new Coordinate(text.Length, pos.Line);
@@ -514,7 +505,7 @@ public sealed class SekaniDocument
 	private void TypeCharsCore(int offset, string text)
 	{
 		_pieceTable.Insert(text, offset);
-		SetCaret(PrimaryCursorRange.Cursor + text.Length);
+		SetCaret(PrimaryCursorRange.Head + text.Length);
 		UpdatePreferredVisualColumn();
 	}
 
@@ -549,10 +540,10 @@ public sealed class SekaniDocument
 
 	public void PlaceCursorBeforeSelection()
 	{
-		var lower = PrimaryCursorRange.Lower;
-		var higher = PrimaryCursorRange.Higher;
+		var lower = PrimaryCursorRange.From;
+		var higher = PrimaryCursorRange.To;
 		if (!PrimaryCursorRange.HasActiveSelection) return;
-		Selections.Ranges[Selections.PrimaryIndex] = new(higher, lower, lower);
+		Selections.Ranges[Selections.PrimaryIndex] = new(higher, lower);
 	}
 
 	public void PlaceCursorAfterSelection()
@@ -586,12 +577,12 @@ public sealed class SekaniDocument
 		while (count > 0)
 		{
 			var range = PrimaryCursorRange;
-			var pos = GetCoordinate(range.Cursor);
+			var pos = GetCoordinate(range.Head);
 			var layout = _lineCache!.GetOrCreate(pos.Line);
 			var linestart = GetOffset(new(0, pos.Line));
 			var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
 
-			if (PrimaryCursorRange.Lower <= linestart && PrimaryCursorRange.Cursor == lineend)
+			if (PrimaryCursorRange.From <= linestart && PrimaryCursorRange.Head == lineend)
 			{
 				var nextline = pos.Line + 1;
 				layout = _lineCache.GetOrCreate(nextline);
@@ -601,7 +592,7 @@ public sealed class SekaniDocument
 			}
 			else
 			{
-				if (PrimaryCursorRange.Lower <= linestart)
+				if (PrimaryCursorRange.From <= linestart)
 				{
 					MoveHead(lineend);
 				}
@@ -626,23 +617,20 @@ public sealed class SekaniDocument
 			SetCaret(offset);
 	}
 
-	public int GetHigherEnd(Range range)
-	{
-		var lower = PrimaryCursorRange.Lower;
-		var higher = PrimaryCursorRange.Higher;
-		if (higher == lower + 1)
-		{
-			higher = NextGraphemeBoundary(lower);
-		}
-		var sethigh = higher == PrimaryCursorRange.Cursor ? higher + 1 : higher;
-		return sethigh;
-	}
+	// public int GetHigherEnd(Range range)
+	// {
+	// 	if (!range.HasActiveSelection || range.Head == range.To)
+	// 	{
+	// 		return NextGraphemeBoundary(range.To);
+	// 	}
+	// 	return range.To;
+	// }
 
 
 	public void AddNewLineAboveSelection()
 	{
 		BeginTransaction(PrimaryCursorRange);
-		var lower = PrimaryCursorRange.Lower;
+		var lower = PrimaryCursorRange.From;
 		var pos = GetCoordinate(lower);
 		var insertpos = new Coordinate(0, pos.Line);
 		TypeCharsCore(GetOffset(insertpos), Environment.NewLine);
@@ -953,10 +941,10 @@ public sealed class SekaniDocument
 
 	public void YankSelection()
 	{
-		var higherend = GetHigherEnd(PrimaryCursorRange);
-		int width = higherend - PrimaryCursorRange.Lower;
-		var buf = new char[higherend - PrimaryCursorRange.Lower];
-		var written = _pieceTable.Slice(PrimaryCursorRange.Lower, width, buf.AsSpan());
+		var textspanend = PrimaryCursorRange.GetTextSpan(GetPosAdvance).End;
+		int width = textspanend - PrimaryCursorRange.From;
+		var buf = new char[textspanend - PrimaryCursorRange.From];
+		var written = _pieceTable.Slice(PrimaryCursorRange.From, width, buf.AsSpan());
 		var text = buf.AsSpan()[..written];
 		_clipboard!.Yank(text.ToString());
 	}
@@ -964,7 +952,7 @@ public sealed class SekaniDocument
 	public void PasteAfterCursor()
 	{
 		BeginTransaction(PrimaryCursorRange);
-		var offset = PrimaryCursorRange.Cursor;
+		var offset = PrimaryCursorRange.Head;
 		var text = _clipboard!.Paste().GetAwaiter().GetResult();
 		if (text is null) return;
 		TypeCharsCore(offset, text);
@@ -1017,7 +1005,7 @@ public sealed class SekaniDocument
 	{
 		if (_lineCache is null) return;
 		List<Range> range = new();
-		
+
 
 	}
 }

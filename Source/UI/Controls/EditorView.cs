@@ -807,8 +807,8 @@ internal sealed class EditorView : Control
 		using
 		var clip = context.PushClip(EditorArea);
 		if (Mode == Mode.Insert && !range.HasActiveSelection) return;
-		var higher = Document.GetCoordinate(Document.GetHigherEnd(range));
-		var lower = Document.GetCoordinate(range.Lower);
+		var higher = Document.GetCoordinate(range.GetTextSpan(Document.GetPosAdvance).End);
+		var lower = Document.GetCoordinate(range.From);
 
 		var firstLine = lower.Line;
 		var lastLine = higher.Line;
@@ -1418,7 +1418,7 @@ internal sealed class EditorView : Control
 	{
 		if (!_caretVisible) return null;
 
-		var coord = Document.GetCoordinate(cursor.Cursor);
+		var coord = Document.GetCoordinate(cursor.Head);
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
 		if (coord.Line < firstLogicalLine || coord.Line > lastLogicalLine)
 			return null;
@@ -1649,7 +1649,7 @@ internal sealed class EditorView : Control
 	{
 		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		var (Hits, TargetIndex) = await Document.FindInDocumentAsync(e, Document.PrimaryCursorRange.Lower);
+		var (Hits, TargetIndex) = await Document.FindInDocumentAsync(e, Document.PrimaryCursorRange.From);
 		context.SearchHits = Hits;
 		context.SearchHitOriginalIndex = TargetIndex;
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);

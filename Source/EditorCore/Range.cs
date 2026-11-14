@@ -1,44 +1,66 @@
-
 namespace Sekani.EditorCore;
+
+public delegate int GetPosAdvanceDelegate(int offset, int count);
+public readonly record struct TextSpan(int Start, int End);
 
 public readonly struct Range
 {
 	public int Anchor { get; }
-	private readonly int? _head;
 
-	public int Cursor { get; }
 	public bool TrailVisualLine { get; } = false;
 
-	public int Head
-	{
-		get => _head ?? Anchor + 1;
-	}
+	public int Head { get; }
 
-	public bool HasActiveSelection => _head is not null;
+	public bool HasActiveSelection => Anchor != Head;
 
-	public Range(int cursor, bool trailVisualLine = false)
+	public Range(int anchor, bool trailVisualLine = false)
 	{
-		Anchor = cursor;
-		Cursor = cursor;
-		_head = null;
+		Anchor = anchor;
+		Head = anchor;
 		TrailVisualLine = trailVisualLine;
 	}
 
 	public Range(
 		int anchor,
 		int head,
-		int cursor,
 		bool trailVisualLine = false)
 	{
 		Anchor = anchor;
-		_head = head;
-		Cursor = cursor;
+		Head = head;
 		TrailVisualLine = trailVisualLine;
 	}
 
-	public int Lower => Math.Min(Anchor, Head);
-	public int Higher => Math.Max(Anchor, Head);
-	public int Width => Higher - Lower;
+	public Range MoveHead(int newHead, GetPosAdvanceDelegate advanceFunc, bool trailVisualLine = false)
+	{
+		int anchor = Anchor;
+		if (Head >= Anchor)
+		{
+			if (newHead < Anchor)
+			{
+				anchor = advanceFunc(Anchor, 1);
+			}
+		}
+		else
+		{
+			int origin = advanceFunc(Anchor, -1);
+			if (newHead >= origin)
+			{
+				anchor = origin;
+			}
+		}
+		return new Range(anchor, newHead, trailVisualLine);
+	}
+	public TextSpan GetTextSpan(GetPosAdvanceDelegate advanceFunc)
+	{
+		if (!HasActiveSelection || Head == To)
+		{
+			return new(From, advanceFunc(To, 1));
+		}
+		return new(From, To);
+	}
+	public int From => Math.Min(Anchor, Head);
+	public int To => Math.Max(Anchor, Head);
+	public int Width => To - From;
 }
 
 public readonly record struct SelectionSet
