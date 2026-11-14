@@ -40,3 +40,25 @@ public readonly struct Range
 	public int Higher => Math.Max(Anchor, Head);
 	public int Width => Higher - Lower;
 }
+
+public readonly record struct SelectionSet
+{
+	public List<Range> Ranges { get; }
+	public int PrimaryIndex { get; }
+
+	public SelectionSet(List<Range> ranges, int primaryIndex = 0)
+	{
+		Ranges = ranges ?? throw new ArgumentNullException(nameof(ranges));
+
+		if (ranges.Count > 0 && (primaryIndex < 0 || primaryIndex >= ranges.Count))
+			throw new ArgumentOutOfRangeException(nameof(primaryIndex));
+
+		PrimaryIndex = primaryIndex;
+		// Ranges = Normalize(ranges);
+	}
+
+	// private List<Range> Normalize(List<Range> range)
+	// {
+
+	// }
+}

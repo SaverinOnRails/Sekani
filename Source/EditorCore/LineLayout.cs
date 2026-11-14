@@ -144,6 +144,7 @@ public record LineLayout
 
 	}
 
+
 	private int AlignColumn(int col)
 	{
 		int index = _graphemeBoundaries.BinarySearch(col);

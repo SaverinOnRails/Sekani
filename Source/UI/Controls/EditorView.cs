@@ -731,7 +731,7 @@ internal sealed class EditorView : Control
 		DrawText(context, visibleTextBounds);
 		DrawLineNumbers(context, visibleTextBounds);
 		DrawSelection(context);
-		DrawCaret(context);
+		DrawCursor(context);
 		DrawCaretFocusBubble(context);
 		DrawHorizontalScrollbar(context);
 		DrawVerticalScrollbar(context);
@@ -741,7 +741,6 @@ internal sealed class EditorView : Control
 		// prefix sums, re-check the caret against the now-measured viewport on the UI
 		// dispatcher, after this render has finished.
 		// should not do this when moving the scroll bar manually or scrolling with the wheel
-
 		if (_retryCaretVisibilityAfterMeasure && visualLineTreeVersion != _visualLineTreeVersion && (_didMoveScrollBar == false && _didScrollWithWheel == false))
 		{
 			_retryCaretVisibilityAfterMeasure = false;
@@ -757,7 +756,7 @@ internal sealed class EditorView : Control
 		if (!_shouldDrawCaretFocusBubble)
 			return;
 
-		var caretRect = GetCaretRect();
+		var caretRect = GetCursorRect(Document.PrimaryCursorRange);
 		if (caretRect is null)
 			return;
 
@@ -797,9 +796,16 @@ internal sealed class EditorView : Control
 	}
 	private void DrawSelection(DrawingContext context)
 	{
+		for (int i = 0; i < Document.Selections.Ranges.Count; i++)
+		{
+			var cursor = Document.Selections.Ranges[i];
+			DrawSelectionCore(context, cursor);
+		}
+	}
+	private void DrawSelectionCore(DrawingContext context, Sekani.EditorCore.Range range)
+	{
 		using
 		var clip = context.PushClip(EditorArea);
-		var range = Document.PrimaryCursorRange;
 		if (Mode == Mode.Insert && !range.HasActiveSelection) return;
 		var higher = Document.GetCoordinate(Document.GetHigherEnd(range));
 		var lower = Document.GetCoordinate(range.Lower);
@@ -1408,11 +1414,11 @@ internal sealed class EditorView : Control
 	}
 
 
-	private Rect? GetCaretRect()
+	private Rect? GetCursorRect(Sekani.EditorCore.Range cursor)
 	{
 		if (!_caretVisible) return null;
 
-		var coord = Document.PrimaryCursorPosition;
+		var coord = Document.GetCoordinate(cursor.Cursor);
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
 		if (coord.Line < firstLogicalLine || coord.Line > lastLogicalLine)
 			return null;
@@ -1452,13 +1458,17 @@ internal sealed class EditorView : Control
 		return new Rect(point, new Size(caretWidth, caretHeight));
 	}
 
-	private void DrawCaret(DrawingContext context)
+	private void DrawCursor(DrawingContext context)
 	{
 		using
 		var clip = context.PushClip(EditorArea);
-		var caretRect = GetCaretRect();
-		if (caretRect is null) return;
-		context.FillRectangle(new SolidColorBrush(Colors.White, _useWideCursor ? 0.5 : 1), caretRect.Value);
+		for (int i = 0; i < Document.Selections.Ranges.Count; i++)
+		{
+			var cursor = Document.Selections.Ranges[i];
+			var caretRect = GetCursorRect(cursor);
+			if (caretRect is null) continue;
+			context.FillRectangle(new SolidColorBrush(Colors.White, _useWideCursor ? 0.5 : 1), caretRect.Value);
+		}
 	}
 
 	private Point VisualToUI(VisualCoordinate visualCoord)
@@ -1595,7 +1605,7 @@ internal sealed class EditorView : Control
 				PrevSearchHit();
 				break;
 			case "C":
-				Document.DuplicatePrimaryCursor();
+				Document.DuplicateRanges();
 				break;
 			default:
 				return;
