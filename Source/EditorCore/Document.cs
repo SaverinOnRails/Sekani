@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text;
 using Sekani.Integrations.TreeSitter;
 
@@ -22,6 +23,7 @@ public sealed class SekaniDocument
 		}
 	}
 	private LineCache? _lineCache;
+	private LineCache? _nonWrappingLineCache;
 	private TreeSitterClient _treeSitterClient;
 
 	public SelectionSet Selections { get; private set; }
@@ -469,6 +471,7 @@ public sealed class SekaniDocument
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
 		_lineCache = new LineCache(_pieceTable, tabSize, wordWrap, maxVisualColsPerLine);
+		_nonWrappingLineCache = new LineCache(_pieceTable, tabSize, false, 0);
 		return _lineCache;
 	}
 
@@ -1001,12 +1004,138 @@ public sealed class SekaniDocument
 		}
 	}
 
+
 	public void DuplicateRanges(int count = 1, CaretVerticalDirection direction = CaretVerticalDirection.Down)
 	{
-		if (_lineCache is null) return;
-		List<Range> range = new();
+		if (_lineCache is null || _nonWrappingLineCache is null || count <= 0) return;
 
+		List<Range> ranges = [];
+		int primaryIndex = Selections.PrimaryIndex;
 
+		for (int i = 0; i < Selections.Count; i++)
+		{
+			var range = Selections[i];
+			bool isPrimary = i == Selections.PrimaryIndex;
+
+			if (isPrimary)
+			{
+				primaryIndex = ranges.Count;
+			}
+			ranges.Add(range);
+
+			var headCoord = GetCoordinate(range.Head);
+			var anchorCoord = GetCoordinate(range.Anchor);
+
+			int minLine = Math.Min(headCoord.Line, anchorCoord.Line);
+			int maxLine = Math.Max(headCoord.Line, anchorCoord.Line);
+			int height = maxLine - minLine + 1;
+
+			int sels = 0;
+			int step = 1;
+
+			while (sels < count)
+			{
+				int lineDelta = step * height;
+
+				int targetAnchorLine = direction == CaretVerticalDirection.Down
+					? anchorCoord.Line + lineDelta
+					: anchorCoord.Line - lineDelta;
+
+				int targetHeadLine = direction == CaretVerticalDirection.Down
+					? headCoord.Line + lineDelta
+					: headCoord.Line - lineDelta;
+
+				if (targetAnchorLine < 0 || targetHeadLine < 0 ||
+					targetAnchorLine >= LineCount || targetHeadLine >= LineCount)
+				{
+					break;
+				}
+
+				if (!range.HasActiveSelection)
+				{
+					if (CanAlign(headCoord, new(0, targetHeadLine), out int alignedHeadCol))
+					{
+						var newPos = new Coordinate(alignedHeadCol, targetHeadLine);
+						if (isPrimary)
+						{
+							primaryIndex = ranges.Count;
+						}
+						ranges.Add(new Range(GetOffset(newPos), range.TrailVisualLine));
+						sels++;
+					}
+				}
+				else
+				{
+					if (CanAlign(anchorCoord, new(0, targetAnchorLine), out int alignedAnchorCol) &&
+						CanAlign(headCoord, new(0, targetHeadLine), out int alignedHeadCol))
+					{
+						var newAnchor = new Coordinate(alignedAnchorCol, targetAnchorLine);
+						var newHead = new Coordinate(alignedHeadCol, targetHeadLine);
+
+						if (isPrimary)
+						{
+							primaryIndex = ranges.Count;
+						}
+						ranges.Add(new Range(GetOffset(newAnchor), GetOffset(newHead), range.TrailVisualLine));
+						sels++;
+					}
+				}
+
+				if (direction == CaretVerticalDirection.Up &&
+					targetAnchorLine == 0 && targetHeadLine == 0)
+				{
+					break;
+				}
+
+				step++;
+			}
+		}
+		// Selections = new(ranges, primaryIndex);
+		Selections = new(ranges, 0);
+	}
+
+	// Checks if two raw buffer coordinates align vertically
+	// This is probably slow, but the easiest way to do this is just to layout the lines without wrapping and then we can trivially compare the visual columns
+	private bool CanAlign(Coordinate root, Coordinate other, out int alignedLogicalColumnInOther)
+	{
+		alignedLogicalColumnInOther = -1;
+		if (_nonWrappingLineCache is null) return false;
+		var rootLayout = _nonWrappingLineCache.GetOrCreate(root.Line);
+		var otherLayout = _nonWrappingLineCache.GetOrCreate(other.Line);
+		var rootVisualCol = rootLayout!.GetVisualCoordinate(root).VisualCol;
+
+		//Binary search for a logical offset with the same root visual col
+		int low = 0;
+		int high = otherLayout!.GraphemeBoundaries.Count - 1;
+		while (low <= high)
+		{
+			int mid = low + (high - low) / 2;
+			var visualCol = otherLayout
+				.GetVisualCoordinate(new(mid, other.Line)).VisualCol;
+
+			if (visualCol == rootVisualCol)
+			{
+				alignedLogicalColumnInOther = mid;
+				return true;
+			}
+			if (visualCol < rootVisualCol)
+				low = mid + 1;
+			else
+				high = mid - 1;
+		}
+		return false;
+	}
+
+	public void CollapseCursors()
+	{
+		List<Range> ranges = [];
+		for (int i = 0; i < Selections.Count; i++)
+		{
+			var range = Selections[i];
+			if (i != Selections.PrimaryIndex) continue;
+			ranges.Add(range);
+		}
+		Selections = new(ranges);
 	}
 }
 

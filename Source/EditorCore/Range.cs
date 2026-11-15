@@ -7,6 +7,7 @@ public readonly struct Range
 {
 	public int Anchor { get; }
 
+	//This is entirely for rendering and should not be here tbh. Does not affect any buffer or cursor operations
 	public bool TrailVisualLine { get; } = false;
 
 	public int Head { get; }
@@ -29,6 +30,9 @@ public readonly struct Range
 		Head = head;
 		TrailVisualLine = trailVisualLine;
 	}
+
+	//Not sure if this required the actual textspan
+	public bool Intersects(Range other) => From <= other.To && other.From <= To;
 
 	public Range MoveHead(int newHead, GetPosAdvanceDelegate advanceFunc, bool trailVisualLine = false)
 	{
@@ -75,12 +79,30 @@ public readonly record struct SelectionSet
 		if (ranges.Count > 0 && (primaryIndex < 0 || primaryIndex >= ranges.Count))
 			throw new ArgumentOutOfRangeException(nameof(primaryIndex));
 
-		PrimaryIndex = primaryIndex;
-		// Ranges = Normalize(ranges);
+		// PrimaryIndex = primaryIndex;
+		Ranges = Normalize(ranges);
+		 
+		//TODO: This is technically not correct but just force the primary to the bottom for now
+		PrimaryIndex = Ranges.Count() - 1;
 	}
+	public Range this[int index] => Ranges[index];
+	public int Count => Ranges.Count;
 
-	// private List<Range> Normalize(List<Range> range)
-	// {
+	private List<Range> Normalize(List<Range> ranges)
+	{
+		var sorted = ranges.OrderBy(p => p.From).ToList();
+		List<Range> finalRanges = [sorted[0]];
+		for (int i = 1; i < sorted.Count; i++)
+		{
+			var lastAccepted = finalRanges[^1];
+			var current = sorted[i];
 
-	// }
+			//I'm still deciding the correct behavious to adapt here, for now we start simple and delete the other intersecting range
+			if (!lastAccepted.Intersects(current))
+			{
+				finalRanges.Add(current);
+			}
+		}
+		return finalRanges;
+	}
 }

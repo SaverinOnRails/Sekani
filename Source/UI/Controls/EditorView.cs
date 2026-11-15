@@ -139,8 +139,7 @@ internal sealed class EditorView : Control
 	{
 		base.OnDataContextChanged(e);
 		_editorContext = (IEditorContext)DataContext!;
-		if (_editorContext is not null)
-			_editorContext.PanelClosed += EditorInputPanelClosed;
+		_editorContext?.PanelClosed += EditorInputPanelClosed;
 	}
 
 	private void EditorInputPanelClosed(object? sender, EventArgs e)
@@ -155,7 +154,7 @@ internal sealed class EditorView : Control
 			else
 			{
 				Document.SetCaret(smallSearch.OriginalCaretRange);
-				EnsureCaretVisible();
+				EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 			}
 		}
 		Focus();
@@ -676,7 +675,7 @@ internal sealed class EditorView : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Mono", FontStyle.Italic);
+		_editorFontFace = new Typeface("Cascadia Mono");
 		_normalLineNumberFontFace = new Typeface(
 		_editorFontFace.FontFamily,
 		_editorFontFace.Style,
@@ -796,9 +795,9 @@ internal sealed class EditorView : Control
 	}
 	private void DrawSelection(DrawingContext context)
 	{
-		for (int i = 0; i < Document.Selections.Ranges.Count; i++)
+		for (int i = 0; i < Document.Selections.Count; i++)
 		{
-			var cursor = Document.Selections.Ranges[i];
+			var cursor = Document.Selections[i];
 			DrawSelectionCore(context, cursor);
 		}
 	}
@@ -1462,9 +1461,9 @@ internal sealed class EditorView : Control
 	{
 		using
 		var clip = context.PushClip(EditorArea);
-		for (int i = 0; i < Document.Selections.Ranges.Count; i++)
+		for (int i = 0; i < Document.Selections.Count; i++)
 		{
-			var cursor = Document.Selections.Ranges[i];
+			var cursor = Document.Selections[i];
 			var caretRect = GetCursorRect(cursor);
 			if (caretRect is null) continue;
 			context.FillRectangle(new SolidColorBrush(Colors.White, _useWideCursor ? 0.5 : 1), caretRect.Value);
@@ -1605,7 +1604,10 @@ internal sealed class EditorView : Control
 				PrevSearchHit();
 				break;
 			case "C":
-				Document.DuplicateRanges();
+				Document.DuplicateRanges(MotionCount);
+				break;
+			case ",":
+				Document.CollapseCursors();
 				break;
 			default:
 				return;

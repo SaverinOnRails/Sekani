@@ -1,7 +1,6 @@
 using System.Globalization;
 using Wcwidth;
 using System.Text;
-using System.Diagnostics;
 namespace Sekani.EditorCore;
 
 public record LineLayout
@@ -35,6 +34,7 @@ public record LineLayout
 		return Math.Max(1, width); //UnicodeCalculator returns -1 for graphemes it does not recognise.
 	}
 
+	//TODO: I need to rewrite this shit god
 	private void DoLayout(string text)
 	{
 		_logicalText = text;

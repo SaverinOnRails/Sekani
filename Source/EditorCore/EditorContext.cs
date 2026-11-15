@@ -17,7 +17,11 @@ public interface IEditorContext
     event EventHandler? PanelClosed;
 }
 
-public interface ISmallInputPromptContext;
+public interface ISmallInputPromptContext
+{
+    public void Commit();
+
+}
 
 public class SmallInputPromptSearchContext : ISmallInputPromptContext
 {
@@ -27,9 +31,14 @@ public class SmallInputPromptSearchContext : ISmallInputPromptContext
 
     public void RaiseSearchTermUpdated() => SearchTermUpdated?.Invoke(this, SearchTerm);
 
+    public void Commit()
+    {
+        Committed = true;
+    }
+
     public Range OriginalCaretRange { get; set; }
 
-    public bool Committed { get; set; } = false;
+    public bool Committed { get; private set; } = false;
 
     public List<SearchHit> SearchHits { get; set; } = [];
 
