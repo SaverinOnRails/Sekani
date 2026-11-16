@@ -220,13 +220,15 @@ public sealed class SekaniDocument
 		_preferredVisualColumn = visual.VisualCol;
 	}
 
-	private int? MoveCaretVertical(CaretVerticalDirection direction, out bool trailVisualLine)
+	private int? MoveCaretVertical(int index, CaretVerticalDirection direction, out bool trailVisualLine)
 	{
 		trailVisualLine = false;
 		if (_lineCache is null)
 			throw new InvalidOperationException();
 
-		var pos = PrimaryCursorPosition;
+		var range = Selections[index];
+		var pos = _pieceTable.GetCoordinate(range.Head);
+		pos.TrailVisualLine = range.TrailVisualLine;
 		var layout = _lineCache.GetOrCreate(pos.Line);
 
 		if (layout is null)
@@ -235,7 +237,7 @@ public sealed class SekaniDocument
 		if (layout.VisualLines.Count > 1)
 		{
 			var visualLineIndex =
-				layout.GetVisualCoordinate(PrimaryCursorPosition).VisualLine;
+				layout.GetVisualCoordinate(pos).VisualLine;
 			if (direction == CaretVerticalDirection.Down &&
 				visualLineIndex < layout.VisualLines.Count - 1)
 			{
@@ -244,8 +246,8 @@ public sealed class SekaniDocument
 					visualLineIndex + 1);
 				Coordinate newpos = new(
 					layout.GetLogicalColumn(targetVisualPos),
-					PrimaryCursorPosition.Line);
-				if (newpos != PrimaryCursorPosition)
+					pos.Line);
+				if (newpos != pos)
 				{
 					var offset = _pieceTable.GetOffset(newpos);
 
@@ -264,7 +266,7 @@ public sealed class SekaniDocument
 
 				Coordinate newpos = new(
 					layout.GetLogicalColumn(targetVisualPos),
-					PrimaryCursorPosition.Line)
+					pos.Line)
 				{
 					TrailVisualLine = _preferredVisualColumn == 0
 				};
@@ -291,7 +293,7 @@ public sealed class SekaniDocument
 
 			Coordinate newpos = new(
 				targetLineLayout.GetLogicalColumn(targetVisual),
-				PrimaryCursorPosition.Line - 1)
+				pos.Line - 1)
 			{
 				TrailVisualLine = _preferredVisualColumn == 0
 			};
@@ -317,7 +319,7 @@ public sealed class SekaniDocument
 
 			Coordinate newpos = new(
 				targetLineLayout.GetLogicalColumn(targetVisual),
-				PrimaryCursorPosition.Line + 1);
+				pos.Line + 1);
 			if (newpos.Line >= _pieceTable.LineFeedCount) return null;
 			var offset = _pieceTable.GetOffset(newpos);
 			// CaretRange = new Range(offset);
@@ -388,19 +390,22 @@ public sealed class SekaniDocument
 	private void MoveCaretVertical(int count, CaretVerticalDirection direction, bool extendSelection)
 	{
 		BeginTransaction(PrimaryCursorRange);
-		while (count-- > 0)
+		ForEachCursor((index) =>
 		{
-			var offset = MoveCaretVertical(direction, out bool trailVisualLine);
-			if (offset is null) break;
-			if (extendSelection)
+			for (int step = 0; step < count; step++)
 			{
-				MoveHead(offset.Value, Selections.PrimaryIndex, trailVisualLine);
+				var offset = MoveCaretVertical(index, direction, out bool trailVisualLine);
+				if (offset is null) break;
+				if (extendSelection)
+				{
+					MoveHead(offset.Value, index, trailVisualLine);
+				}
+				else
+				{
+					SetCaret(offset.Value, index, trailVisualLine);
+				}
 			}
-			else
-			{
-				SetCaret(offset.Value, Selections.PrimaryIndex, trailVisualLine);
-			}
-		}
+		});
 	}
 	public int GetPosAdvance(int offset, int count)
 	{
@@ -457,20 +462,22 @@ public sealed class SekaniDocument
 	//TODO: Yes, this entire word selection implmentation is profoundly shitty and illegible and entirely based on trial and error. I will fix it someday maybe.
 	public void SelectToWordMotion(WordSelectMotion motion, int count, bool extendSelection)
 	{
-		while (count > 0)
+		ForEachCursor((index) =>
 		{
-			var offset = PrimaryCursorRange.Head;
-			var wordFinder = GetWordFinderForMotion(motion);
-			var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
-			if (next is not null && anchor is not null)
+			for (int step = 0; step < count; step++)
 			{
-				if (!extendSelection)
-					SetAnchorAndHead(anchor.Value, next.Value);
-				else
-					MoveHead(next.Value, Selections.PrimaryIndex);
+				var offset = Selections[index].Head;
+				var wordFinder = GetWordFinderForMotion(motion);
+				var next = wordFinder(offset, out int? anchor, motion.motionSubKind);
+				if (next is not null && anchor is not null)
+				{
+					if (!extendSelection)
+						Selections.Ranges[index] = new(anchor.Value, next.Value);
+					else
+						MoveHead(next.Value, index);
+				}
 			}
-			count--;
-		}
+		});
 	}
 	public LineCache CreateLineCache(int tabSize, bool wordWrap, int maxVisualColsPerLine)
 	{
@@ -575,66 +582,73 @@ public sealed class SekaniDocument
 
 	public void PlaceCursorAtLineStart(bool extendSelection)
 	{
-		var line = PrimaryCursorPosition.Line;
-		var text = _pieceTable.PrintCleanLine(line);
-		int firstNonWhiteSpace = 0;
-
-		for (int i = 0; i < text.Length; i++)
+		ForEachCursor((index) =>
 		{
-			if (!char.IsWhiteSpace(text[i])) break;
-			firstNonWhiteSpace++;
-		}
-		var pos = new Coordinate(firstNonWhiteSpace, line);
-		var offset = GetOffset(pos);
-		if (extendSelection)
-			MoveHead(offset, Selections.PrimaryIndex);
-		else
-			SetCaret(offset, Selections.PrimaryIndex);
+			var line = GetCoordinate(Selections[index].Head).Line;
+			var text = _pieceTable.PrintCleanLine(line);
+			int firstNonWhiteSpace = 0;
+
+			for (int i = 0; i < text.Length; i++)
+			{
+				if (!char.IsWhiteSpace(text[i])) break;
+				firstNonWhiteSpace++;
+			}
+			var offset = GetOffset(new Coordinate(firstNonWhiteSpace, line));
+			if (extendSelection)
+				MoveHead(offset, index);
+			else
+				SetCaret(offset, index);
+		});
 	}
 
 	public void SelectLine(int count)
 	{
-		while (count > 0)
+		ForEachCursor((index) =>
 		{
-			var range = PrimaryCursorRange;
-			var pos = GetCoordinate(range.Head);
-			var layout = _lineCache!.GetOrCreate(pos.Line);
-			var linestart = GetOffset(new(0, pos.Line));
-			var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
+			for (int step = 0; step < count; step++)
+			{
+				var range = Selections[index];
+				var pos = GetCoordinate(range.Head);
+				var layout = _lineCache!.GetOrCreate(pos.Line);
+				var linestart = GetOffset(new(0, pos.Line));
+				var lineend = GetOffset(new(layout.GraphemeBoundaries.LastOrDefault(), pos.Line));
 
-			if (PrimaryCursorRange.From <= linestart && PrimaryCursorRange.Head == lineend)
-			{
-				var nextline = pos.Line + 1;
-				layout = _lineCache.GetOrCreate(nextline);
-				if (layout is null) return;
-				var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
-				MoveHead(GetOffset(new(nextlineend, nextline)), Selections.PrimaryIndex);
-			}
-			else
-			{
-				if (PrimaryCursorRange.From <= linestart)
+				if (range.From <= linestart && range.Head == lineend)
 				{
-					MoveHead(lineend, Selections.PrimaryIndex);
+					var nextline = pos.Line + 1;
+					layout = _lineCache.GetOrCreate(nextline);
+					if (layout is null) return;
+					var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
+					MoveHead(GetOffset(new(nextlineend, nextline)), index);
 				}
 				else
 				{
-					SetAnchorAndHead(linestart, lineend);
+					if (range.From <= linestart)
+					{
+						MoveHead(lineend, index);
+					}
+					else
+					{
+						Selections.Ranges[index] = new(linestart, lineend);
+					}
 				}
 			}
-			count--;
-		}
+		});
 	}
 	public void PlaceCursorAtLineEnd(bool extendSelection)
 	{
-		var line = PrimaryCursorPosition.Line;
-		var layout = _lineCache!.GetOrCreate(line);
-		if (layout is null) return;
-		var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
-		var offset = GetOffset(new Coordinate(lastBoundary, line));
-		if (extendSelection)
-			MoveHead(offset, Selections.PrimaryIndex);
-		else
-			SetCaret(offset, Selections.PrimaryIndex);
+		ForEachCursor((index) =>
+		{
+			var line = GetCoordinate(Selections[index].Head).Line;
+			var layout = _lineCache!.GetOrCreate(line);
+			if (layout is null) return;
+			var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
+			var offset = GetOffset(new Coordinate(lastBoundary, line));
+			if (extendSelection)
+				MoveHead(offset, index);
+			else
+				SetCaret(offset, index);
+		});
 	}
 
 	// public int GetHigherEnd(Range range)
