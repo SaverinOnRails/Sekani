@@ -40,9 +40,9 @@ public sealed class SekaniDocument
 	{
 		Selections.Ranges[Selections.PrimaryIndex] = new(_pieceTable.GetOffset(pos));
 	}
-	public void SetCaret(int anchor, bool trailVisualLine = false)
+	public void SetCaret(int anchor, int index, bool trailVisualLine = false)
 	{
-		Selections.Ranges[Selections.PrimaryIndex] = new(anchor, trailVisualLine);
+		Selections.Ranges[index] = new(anchor, trailVisualLine);
 	}
 
 	public void SetCaret(Range range)
@@ -50,11 +50,11 @@ public sealed class SekaniDocument
 		Selections.Ranges[Selections.PrimaryIndex] = range;
 	}
 
-	public void MoveHead(int pos, bool trailVisualLine = false)
+	public void MoveHead(int pos, int index, bool trailVisualLine = false)
 	{
-		Selections.Ranges[Selections.PrimaryIndex] =
-			Selections.Ranges[Selections.PrimaryIndex].MoveHead(pos, GetPosAdvance, trailVisualLine);
-		var range = Selections.Ranges[Selections.PrimaryIndex];
+		Selections.Ranges[index] =
+			Selections.Ranges[index].MoveHead(pos, GetPosAdvance, trailVisualLine);
+		// var range = Selections.Ranges[Selections.PrimaryIndex];
 	}
 
 	public void SetAnchorAndHead(int anchor, int head, bool trailVisualLine = false)
@@ -334,22 +334,26 @@ public sealed class SekaniDocument
 	private void MoveCaretHorizontal(int count, int direction, bool extendSelection)
 	{
 		BeginTransaction(PrimaryCursorRange);
-		while (count-- > 0)
+		ForEachCursor((index) =>
 		{
-			var cursor = PrimaryCursorRange.Head;
+			for (int step = 0; step < count; step++)
+			{
+				var cursor = Selections[index];
+				var head = cursor.Head;
 
-			if (direction > 0 ? cursor >= _pieceTable.BufferLength : cursor <= 0)
-				break;
+				if (direction > 0 ? head >= _pieceTable.BufferLength : head <= 0)
+					break;
 
-			var offset = GetPosAdvance(cursor, direction);
+				var offset = GetPosAdvance(head, direction);
 
-			if (extendSelection)
-				MoveHead(offset);
-			else
-				SetCaret(offset);
+				if (extendSelection)
+					MoveHead(offset, index);
+				else
+					SetCaret(offset, index);
+			}
+		});
 
-			UpdatePreferredVisualColumn();
-		}
+		UpdatePreferredVisualColumn();
 	}
 	public void DeleteSelection(bool noHistoryCommit = false)
 	{
@@ -390,11 +394,11 @@ public sealed class SekaniDocument
 			if (offset is null) break;
 			if (extendSelection)
 			{
-				MoveHead(offset.Value, trailVisualLine);
+				MoveHead(offset.Value, Selections.PrimaryIndex, trailVisualLine);
 			}
 			else
 			{
-				SetCaret(offset.Value, trailVisualLine);
+				SetCaret(offset.Value, Selections.PrimaryIndex, trailVisualLine);
 			}
 		}
 	}
@@ -463,7 +467,7 @@ public sealed class SekaniDocument
 				if (!extendSelection)
 					SetAnchorAndHead(anchor.Value, next.Value);
 				else
-					MoveHead(next.Value);
+					MoveHead(next.Value, Selections.PrimaryIndex);
 			}
 			count--;
 		}
@@ -508,7 +512,7 @@ public sealed class SekaniDocument
 	private void TypeCharsCore(int offset, string text)
 	{
 		_pieceTable.Insert(text, offset);
-		SetCaret(PrimaryCursorRange.Head + text.Length);
+		SetCaret(PrimaryCursorRange.Head + text.Length, Selections.PrimaryIndex);
 		UpdatePreferredVisualColumn();
 	}
 
@@ -543,10 +547,23 @@ public sealed class SekaniDocument
 
 	public void PlaceCursorBeforeSelection()
 	{
-		var lower = PrimaryCursorRange.From;
-		var higher = PrimaryCursorRange.To;
-		if (!PrimaryCursorRange.HasActiveSelection) return;
-		Selections.Ranges[Selections.PrimaryIndex] = new(higher, lower);
+		ForEachCursor((index) =>
+		{
+			var cursor = Selections.Ranges[index];
+			var lower = cursor.From;
+			var higher = cursor.To;
+			if (!cursor.HasActiveSelection) return;
+			Selections.Ranges[index] = new(higher, lower);
+		});
+	}
+
+	private void ForEachCursor(Action<int> action)
+	{
+		for (int i = 0; i < Selections.Count; i++)
+		{
+			action(i);
+		}
+		Selections = new(Selections.Ranges);
 	}
 
 	public void PlaceCursorAfterSelection()
@@ -570,9 +587,9 @@ public sealed class SekaniDocument
 		var pos = new Coordinate(firstNonWhiteSpace, line);
 		var offset = GetOffset(pos);
 		if (extendSelection)
-			MoveHead(offset);
+			MoveHead(offset, Selections.PrimaryIndex);
 		else
-			SetCaret(offset);
+			SetCaret(offset, Selections.PrimaryIndex);
 	}
 
 	public void SelectLine(int count)
@@ -591,13 +608,13 @@ public sealed class SekaniDocument
 				layout = _lineCache.GetOrCreate(nextline);
 				if (layout is null) return;
 				var nextlineend = layout.GraphemeBoundaries.LastOrDefault();
-				MoveHead(GetOffset(new(nextlineend, nextline)));
+				MoveHead(GetOffset(new(nextlineend, nextline)), Selections.PrimaryIndex);
 			}
 			else
 			{
 				if (PrimaryCursorRange.From <= linestart)
 				{
-					MoveHead(lineend);
+					MoveHead(lineend, Selections.PrimaryIndex);
 				}
 				else
 				{
@@ -615,9 +632,9 @@ public sealed class SekaniDocument
 		var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
 		var offset = GetOffset(new Coordinate(lastBoundary, line));
 		if (extendSelection)
-			MoveHead(offset);
+			MoveHead(offset, Selections.PrimaryIndex);
 		else
-			SetCaret(offset);
+			SetCaret(offset, Selections.PrimaryIndex);
 	}
 
 	// public int GetHigherEnd(Range range)
@@ -956,6 +973,7 @@ public sealed class SekaniDocument
 	{
 		BeginTransaction(PrimaryCursorRange);
 		var offset = PrimaryCursorRange.Head;
+		//TODO:fix this deadlock
 		var text = _clipboard!.Paste().GetAwaiter().GetResult();
 		if (text is null) return;
 		TypeCharsCore(offset, text);

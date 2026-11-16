@@ -54,6 +54,27 @@ public readonly struct Range
 		}
 		return new Range(anchor, newHead, trailVisualLine);
 	}
+
+	public Range Merge(Range other)
+	{
+		var newFrom = Math.Min(From, other.From);
+		var newTo = Math.Max(To, other.To);
+
+		int newAnchor, newHead;
+		if (Head >= other.Head)
+		{
+			newAnchor = Anchor <= Head ? newFrom : newTo;
+			newHead = Anchor <= Head ? newTo : newFrom;
+		}
+		else
+		{
+			newAnchor = other.Anchor <= other.Head ? newFrom : newTo;
+			newHead = other.Anchor <= other.Head ? newTo : newFrom;
+		}
+		bool trailVisualLine = TrailVisualLine || other.TrailVisualLine;
+		return new Range(newAnchor, newHead, trailVisualLine);
+	}
+
 	public TextSpan GetTextSpan(GetPosAdvanceDelegate advanceFunc)
 	{
 		if (!HasActiveSelection || Head == To)
@@ -81,7 +102,7 @@ public readonly record struct SelectionSet
 
 		// PrimaryIndex = primaryIndex;
 		Ranges = Normalize(ranges);
-		 
+
 		//TODO: This is technically not correct but just force the primary to the bottom for now
 		PrimaryIndex = Ranges.Count() - 1;
 	}
@@ -97,8 +118,12 @@ public readonly record struct SelectionSet
 			var lastAccepted = finalRanges[^1];
 			var current = sorted[i];
 
-			//I'm still deciding the correct behavious to adapt here, for now we start simple and delete the other intersecting range
-			if (!lastAccepted.Intersects(current))
+			if (lastAccepted.Intersects(current))
+			{
+				var merged = lastAccepted.Merge(current);
+				finalRanges[^1] = merged;
+			}
+			else
 			{
 				finalRanges.Add(current);
 			}

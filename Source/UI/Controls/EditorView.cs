@@ -187,7 +187,7 @@ internal sealed class EditorView : Control
 	{
 		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
 		_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
-		Document.SetCaret(0);
+		// Document.SetCaret(0);
 	}
 
 	private Dictionary<string, IBrush> _highlightBrushes = new()
@@ -825,7 +825,9 @@ internal sealed class EditorView : Control
 			for (int j = 0; j < _lineCache.VisualLineCountAt(i); j++)
 			{
 				var startAtPixels = EditorArea.Left;
-				var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
+				// var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
+				//Get the visual col for the last logical offset on this visual line
+				var endOfVisualLine = lineLayout.GetVisualCoordinate(new(lineLayout.VisualLines[j].LogicalOffset + lineLayout.VisualLines[j].LogicalLength, i)).VisualCol;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
 				if (i == lower.Line)
 				{
@@ -973,6 +975,7 @@ internal sealed class EditorView : Control
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
 		Document.BeginTransaction(Document.PrimaryCursorRange);
+		CollapseCursors();
 		Document.SetCaretRange(pos);
 		Document.UpdatePreferredVisualColumn();
 		_caretVisible = true;
@@ -1049,6 +1052,7 @@ internal sealed class EditorView : Control
 
 		_autoDragScrollTimer.Tick += (_, _) =>
 		{
+			CollapseCursors();
 			if (point.Y < EditorArea.Top + _autoScrollMargin)
 			{
 				//this is rough but just check if we can move the caret up vertically
@@ -1066,7 +1070,7 @@ internal sealed class EditorView : Control
 
 						var newLogicalCol = layout.GetLogicalColumn(newVisualCoord);
 						var offset = Document.GetOffset(new(newLogicalCol, Document.PrimaryCursorPosition.Line));
-						Document.MoveHead(offset);
+						Document.MoveHead(offset, Document.Selections.PrimaryIndex);
 						EnsureCaretVisible();
 						Redraw();
 						return;
@@ -1091,7 +1095,7 @@ internal sealed class EditorView : Control
 				  layoutOfPrevLine.GetLogicalColumn(
 					newVisualCoordOfLastLine);
 
-				Document.MoveHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.PrimaryCursorPosition.Line - 1)));
+				Document.MoveHead(Document.GetOffset(new(newLogicalColOfLastLine, Document.PrimaryCursorPosition.Line - 1)), Document.Selections.PrimaryIndex);
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -1113,7 +1117,7 @@ internal sealed class EditorView : Control
 
 						var newLogicalCol = layout.GetLogicalColumn(
 						  newVisualCoord);
-						Document.MoveHead(Document.GetOffset(new(newLogicalCol, Document.PrimaryCursorPosition.Line)));
+						Document.MoveHead(Document.GetOffset(new(newLogicalCol, Document.PrimaryCursorPosition.Line)), Document.Selections.PrimaryIndex);
 						EnsureCaretVisible();
 						Redraw();
 						return;
@@ -1135,7 +1139,7 @@ internal sealed class EditorView : Control
 				var newLogicalColOfFirstLine =
 				  layoutOfNextLine.GetLogicalColumn(
 					newVisualCoordOfFirstLine);
-				Document.MoveHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.PrimaryCursorPosition.Line + 1)));
+				Document.MoveHead(Document.GetOffset(new(newLogicalColOfFirstLine, Document.PrimaryCursorPosition.Line + 1)), Document.Selections.PrimaryIndex);
 				EnsureCaretVisible();
 				Redraw();
 			}
@@ -1150,7 +1154,7 @@ internal sealed class EditorView : Control
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
 
-		Document.MoveHead(Document.GetOffset(pos));
+		Document.MoveHead(Document.GetOffset(pos), Document.Selections.PrimaryIndex);
 		var layout = _lineCache.GetOrCreate(pos.Line);
 		if (layout is null) return;
 		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.PrimaryCursorPosition).VisualCol;
@@ -1361,9 +1365,32 @@ internal sealed class EditorView : Control
 						}
 						context.DrawText(ft, point);
 					}
+
 					else
 					{
-						//TODO: Do highlighting for this
+						var lineLogicalStart = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
+						var lineLogicalEnd = lineLogicalStart + visualLine.LogicalLength;
+						var charBrushes = new IBrush[visualLine.LogicalLength];
+						Array.Fill(charBrushes, _mainTextBrush);
+
+						if (Document.TreeSitterClientActive)
+						{
+							var highlights = Document.GetHighlights(lineLogicalStart, lineLogicalEnd);
+							foreach (var span in highlights)
+							{
+								var highlightBrush = TryGetHighlight(span.Capture);
+								if (highlightBrush is not null)
+								{
+									int spanRelStart = Math.Max(0, span.Start - lineLogicalStart);
+									int spanRelEnd = Math.Min(visualLine.LogicalLength, span.End - lineLogicalStart);
+
+									for (int c = spanRelStart; c < spanRelEnd; c++)
+									{
+										charBrushes[c] = highlightBrush;
+									}
+								}
+							}
+						}
 						var graphemeBoundaries = lineLayout.GraphemeBoundaries;
 						var visualLineOffset = visualLine.LogicalOffset;
 						var startIndex = lineLayout.GraphemeBoundaryIndexOf(visualLineOffset);
@@ -1372,26 +1399,32 @@ internal sealed class EditorView : Control
 						Point basePoint = VisualToUI(new VisualCoordinate(0, currentVisualLine));
 						double baseY = basePoint.Y - visibleTextBounds.pixelOffset;
 						double baseX = basePoint.X - _scrollXOffset;
+
 						for (int k = startIndex; k < graphemeBoundaries.Count - 1; k++)
 						{
 							var offset = graphemeBoundaries[k];
 							if (offset >= end) break;
 							var next = graphemeBoundaries[k + 1];
 							var grapheme = lineLayout.LogicalText.AsSpan(offset, next - offset);
-							var width = lineLayout.GraphemeWidth(grapheme, visualCol);
+
+							int relCharIndex = offset - visualLine.LogicalOffset;
+							var glyphBrush = (relCharIndex >= 0 && relCharIndex < charBrushes.Length)
+								? charBrushes[relCharIndex]
+								: _mainTextBrush;
+
 							var ftglyph = new FormattedText(
-							  grapheme.ToString(),
-							  CultureInfo.InvariantCulture,
-							  FlowDirection.LeftToRight,
-							  _editorFontFace,
-							  _fontSize,
-							  _mainTextBrush);
+								grapheme.ToString(),
+								CultureInfo.InvariantCulture,
+								FlowDirection.LeftToRight,
+								_editorFontFace,
+								_fontSize,
+								glyphBrush);
 
 							var glyphPoint = new Point(
 								baseX + visualCol * _editorMetrics.CharAdvance,
 								baseY);
 							context.DrawText(ftglyph, glyphPoint);
-							visualCol += width;
+							visualCol += lineLayout.GraphemeWidth(grapheme, visualCol);
 						}
 					}
 					currentVisualLine++;
@@ -1607,7 +1640,7 @@ internal sealed class EditorView : Control
 				Document.DuplicateRanges(MotionCount);
 				break;
 			case ",":
-				Document.CollapseCursors();
+				CollapseCursors();
 				break;
 			default:
 				return;
@@ -1617,6 +1650,8 @@ internal sealed class EditorView : Control
 		EnsureCaretVisible();
 		ClearMotionCountBuffer();
 	}
+
+	private void CollapseCursors() => Document.CollapseCursors();
 
 	private void NavigateSearchHit(int direction)
 	{
