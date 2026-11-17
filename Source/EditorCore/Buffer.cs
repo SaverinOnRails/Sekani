@@ -1596,3 +1596,4 @@ internal class PieceTable
 		return _addBufferLineStarts;
 	}
 }
+

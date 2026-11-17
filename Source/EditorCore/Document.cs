@@ -28,6 +28,8 @@ public sealed class SekaniDocument
 
 	public SelectionSet Selections { get; private set; }
 
+	private List<Range> _selectionSnapshot = [];
+
 	public Range PrimaryCursorRange => Selections.Ranges[Selections.PrimaryIndex];
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
@@ -488,7 +490,7 @@ public sealed class SekaniDocument
 
 	public void SelectAll()
 	{
-		var head = BufferLength - 1;
+		var head = BufferLength;
 		SetAnchorAndHead(0, head);
 	}
 
@@ -576,7 +578,6 @@ public sealed class SekaniDocument
 	private void ForEachCursorSortedInverted(Action<int, List<Range>> action)
 	{
 		var ranges = Selections.Ranges.OrderBy(p => p.Head).Reverse();
-		
 	}
 
 	public void PlaceCursorAfterSelection()
@@ -649,6 +650,8 @@ public sealed class SekaniDocument
 			var layout = _lineCache!.GetOrCreate(line);
 			if (layout is null) return;
 			var lastBoundary = layout.GraphemeBoundaries.LastOrDefault();
+			Console.WriteLine(layout.GraphemeBoundaries.Count);
+			Console.WriteLine(lastBoundary);
 			var offset = GetOffset(new Coordinate(lastBoundary, line));
 			if (extendSelection)
 				MoveHead(offset, index);

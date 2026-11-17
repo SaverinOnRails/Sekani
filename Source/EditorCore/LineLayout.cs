@@ -95,6 +95,7 @@ public record LineLayout
 			visualCol += width;
 		}
 		//if this line does not end with a line break(last line in buffer), still add an offset for it at the next utf18 offset to grapheme boundaries so the cursor can visit it
+		// TODO: this causes an out of bounds bug when we try to move to last grapheme on an emtpy line and perform any buffer operations
 		if (_logicalText.LastOrDefault() != '\n')
 		{
 			_graphemeBoundaries.Add(index + 1);
