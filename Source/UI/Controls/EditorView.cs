@@ -153,7 +153,7 @@ internal sealed class EditorView : Control
 			}
 			else
 			{
-				Document.SetCaret(smallSearch.OriginalCaretRange);
+				Document.SetCursor(smallSearch.OriginalCaretRange);
 				EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 			}
 		}
@@ -827,7 +827,6 @@ internal sealed class EditorView : Control
 				var startAtPixels = EditorArea.Left;
 				// var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
 				//Get the visual col for the last logical offset on this visual line, adding one since the selection has to consume the column
-				// var endOfVisualLine = lineLayout.GetVisualCoordinate(new(lineLayout.VisualLines[j].LogicalOffset + lineLayout.VisualLines[j].LogicalLength, i)).VisualCol ;
 				var endOfVisualLine = lineLayout.VisualLines[j].CellCount;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
 				if (i == lower.Line)
@@ -977,7 +976,7 @@ internal sealed class EditorView : Control
 		if (pos is null) return;
 		Document.BeginTransaction(Document.PrimaryCursorRange);
 		CollapseCursors();
-		Document.SetCaretRange(pos);
+		Document.SetCursor(pos);
 		Document.UpdatePreferredVisualColumn();
 		_caretVisible = true;
 		_pointerPressedOnCoordinate = true;

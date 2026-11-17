@@ -47,7 +47,7 @@ public sealed class SekaniDocumentTests
 			var previousRange = Document.PrimaryCursorRange;
 			Document.SelectAll();
 			Document.YankSelection();
-			Document.SetCaret(previousRange);
+			Document.SetCursor(previousRange);
 			return ClipboardText ?? "";
 		}
 	}
@@ -79,7 +79,7 @@ public sealed class SekaniDocumentTests
 		Assert.AreEqual(new Range(7), document.PrimaryCursorRange);
 		Assert.AreEqual(new Coordinate(3, 1), document.PrimaryCursorPosition);
 
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 		document.TypeChars("X");
 
 		Assert.AreEqual("oXne\ntwo", fixture.ReadText());
@@ -104,7 +104,7 @@ public sealed class SekaniDocumentTests
 	public void CaretRightAndLeft_MoveByGraphemeBoundaries()
 	{
 		var document = CreateDocument("A😀B").Document;
-		document.SetCaret(0, 0);
+		document.SetCursor(0, 0);
 
 		document.CaretRight(1, extendSelection: false);
 		Assert.AreEqual(new Range(1), document.PrimaryCursorRange);
@@ -131,7 +131,7 @@ public sealed class SekaniDocumentTests
 		foreach (var (text, boundaries) in cases)
 		{
 			var document = CreateDocument(text).Document;
-			document.SetCaret(0, 0);
+			document.SetCursor(0, 0);
 			Assert.AreEqual(boundaries[0], document.PrimaryCursorRange.Head);
 
 			for (var i = 1; i < boundaries.Length; i++)
@@ -154,7 +154,7 @@ public sealed class SekaniDocumentTests
 	public void CaretRight_WithSelectionExtension_SelectsWholeCombiningGrapheme()
 	{
 		var document = CreateDocument("e\u0301x").Document;
-		document.SetCaret(0, 0);
+		document.SetCursor(0, 0);
 
 		document.CaretRight(1, extendSelection: true);
 
@@ -166,7 +166,7 @@ public sealed class SekaniDocumentTests
 	public void CaretMovement_CanExtendSelectionInBothDirections()
 	{
 		var document = CreateDocument("abcd").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 
 		document.CaretRight(2, extendSelection: true);
 		Assert.AreEqual(new Range(1, 3), document.PrimaryCursorRange);
@@ -179,7 +179,7 @@ public sealed class SekaniDocumentTests
 	public void CaretVerticalMovement_PreservesPreferredVisualColumnAcrossShortLine()
 	{
 		var document = CreateDocument("abcd\nx\nabcd").Document;
-		document.SetCaret(0, 0);
+		document.SetCursor(0, 0);
 		document.CaretRight(3, extendSelection: false);
 
 		document.CaretDown(1, extendSelection: false);
@@ -197,7 +197,7 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument("A😀B");
 		var document = fixture.Document;
-		document.SetCaret(3, 0);
+		document.SetCursor(3, 0);
 
 		document.BackSpace(new Coordinate(0, 0));
 
@@ -210,7 +210,7 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument("a\nb");
 		var document = fixture.Document;
-		document.SetCaret(2, 0);
+		document.SetCursor(2, 0);
 
 		document.BackSpace(new Coordinate(0, 1));
 
@@ -249,7 +249,7 @@ public sealed class SekaniDocumentTests
 	public void PlaceCursorAtLineStartAndEnd_UsesLogicalLineBoundaries()
 	{
 		var document = CreateDocument("  alpha\nbeta").Document;
-		document.SetCaret(5, 0);
+		document.SetCursor(5, 0);
 
 		document.PlaceCursorAtLineStart(extendSelection: false);
 		Assert.AreEqual(2, document.PrimaryCursorRange.Head);
@@ -275,7 +275,7 @@ public sealed class SekaniDocumentTests
 	public void SelectLine_SelectsCurrentLineAndCanExtendAcrossNextLine()
 	{
 		var document = CreateDocument("abc\ndef").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 
 		document.SelectLine(1);
 		Assert.AreEqual(new Range(0, 3), document.PrimaryCursorRange);
@@ -289,7 +289,7 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument($"one{Environment.NewLine}two");
 		var document = fixture.Document;
-		document.SetCaret(document.GetOffset(new Coordinate(1, 1)), 0);
+		document.SetCursor(document.GetOffset(new Coordinate(1, 1)), 0);
 
 		document.AddNewLineAboveSelection();
 
@@ -302,7 +302,7 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument($"one{Environment.NewLine}two");
 		var document = fixture.Document;
-		document.SetCaret(document.GetOffset(new Coordinate(1, 0)), 0);
+		document.SetCursor(document.GetOffset(new Coordinate(1, 0)), 0);
 
 		document.AddNewLineUnderSelection();
 
@@ -379,7 +379,7 @@ public sealed class SekaniDocumentTests
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
 		fixture.ClipboardText = "XY";
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 
 		document.PasteAfterCursor();
 
@@ -393,7 +393,7 @@ public sealed class SekaniDocumentTests
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
 		fixture.ClipboardText = null;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 
 		document.PasteAfterCursor();
 
@@ -405,7 +405,7 @@ public sealed class SekaniDocumentTests
 	public void DuplicateRanges_CreatesAlignedCursorsOnFollowingLines()
 	{
 		var document = CreateDocument("abc\nabc\nabc").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 
 		document.DuplicateRanges(count: 2, direction: CaretVerticalDirection.Down);
 
@@ -420,7 +420,7 @@ public sealed class SekaniDocumentTests
 	public void HorizontalCaretMovement_MovesEveryCursorByTheSameGraphemeCount()
 	{
 		var document = CreateDocument("abcd\nabcd\nabcd").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 		document.DuplicateRanges(count: 1, direction: CaretVerticalDirection.Down);
 		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges);
 
@@ -435,7 +435,7 @@ public sealed class SekaniDocumentTests
 	public void VerticalCaretMovement_MovesEveryCursorAndPreservesColumn()
 	{
 		var document = CreateDocument("abcd\nabcd\nabcd\nabcd").Document;
-		document.SetCaret(0, 0);
+		document.SetCursor(0, 0);
 		document.CaretRight(1, extendSelection: false);
 		document.DuplicateRanges(count: 1, direction: CaretVerticalDirection.Down);
 		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges);
@@ -451,7 +451,7 @@ public sealed class SekaniDocumentTests
 	public void HorizontalMovementWithExtension_ExtendsEveryCursorSelection()
 	{
 		var document = CreateDocument("abcd\nabcd\nabcd").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 		document.DuplicateRanges(count: 1, direction: CaretVerticalDirection.Down);
 
 		document.CaretRight(2, extendSelection: true);
@@ -470,7 +470,7 @@ public sealed class SekaniDocumentTests
 	public void CollapseCursors_KeepsOnlyPrimaryCursor()
 	{
 		var document = CreateDocument("abc\nabc\nabc").Document;
-		document.SetCaret(1, 0);
+		document.SetCursor(1, 0);
 		document.DuplicateRanges(count: 2, direction: CaretVerticalDirection.Down);
 		var primary = document.PrimaryCursorRange;
 

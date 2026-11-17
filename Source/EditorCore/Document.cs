@@ -36,16 +36,16 @@ public sealed class SekaniDocument
 	private bool _useTreesitter = true;
 
 
-	public void SetCaretRange(Coordinate pos)
+	public void SetCursor(Coordinate pos)
 	{
 		Selections.Ranges[Selections.PrimaryIndex] = new(_pieceTable.GetOffset(pos));
 	}
-	public void SetCaret(int anchor, int index, bool trailVisualLine = false)
+	public void SetCursor(int anchor, int index, bool trailVisualLine = false)
 	{
 		Selections.Ranges[index] = new(anchor, trailVisualLine);
 	}
 
-	public void SetCaret(Range range)
+	public void SetCursor(Range range)
 	{
 		Selections.Ranges[Selections.PrimaryIndex] = range;
 	}
@@ -351,7 +351,7 @@ public sealed class SekaniDocument
 				if (extendSelection)
 					MoveHead(offset, index);
 				else
-					SetCaret(offset, index);
+					SetCursor(offset, index);
 			}
 		});
 
@@ -402,7 +402,7 @@ public sealed class SekaniDocument
 				}
 				else
 				{
-					SetCaret(offset.Value, index, trailVisualLine);
+					SetCursor(offset.Value, index, trailVisualLine);
 				}
 			}
 		});
@@ -519,7 +519,7 @@ public sealed class SekaniDocument
 	private void TypeCharsCore(int offset, string text)
 	{
 		_pieceTable.Insert(text, offset);
-		SetCaret(PrimaryCursorRange.Head + text.Length, Selections.PrimaryIndex);
+		SetCursor(PrimaryCursorRange.Head + text.Length, Selections.PrimaryIndex);
 		UpdatePreferredVisualColumn();
 	}
 
@@ -575,12 +575,8 @@ public sealed class SekaniDocument
 
 	private void ForEachCursorSortedInverted(Action<int, List<Range>> action)
 	{
-		var ranges = Selections.Ranges.OrderBy(p => p.Head).Reverse().ToList();
-		for (int i = 0; i < ranges.Count; i++)
-		{
-			action(i, ranges);
-		}
-		Selections = new(Selections.Ranges);
+		var ranges = Selections.Ranges.OrderBy(p => p.Head).Reverse();
+		
 	}
 
 	public void PlaceCursorAfterSelection()
@@ -607,7 +603,7 @@ public sealed class SekaniDocument
 			if (extendSelection)
 				MoveHead(offset, index);
 			else
-				SetCaret(offset, index);
+				SetCursor(offset, index);
 		});
 	}
 
@@ -657,7 +653,7 @@ public sealed class SekaniDocument
 			if (extendSelection)
 				MoveHead(offset, index);
 			else
-				SetCaret(offset, index);
+				SetCursor(offset, index);
 		});
 	}
 
