@@ -63,7 +63,8 @@ public record LineLayout
 						LogicalOffset: logicalLineStartOffset,
 						LogicalLength: index - logicalLineStartOffset,
 						VisualOffset: visualLineStartOffset,
-						VisualLength: builder.Length - visualLineStartOffset,
+						VisualStringLength: builder.Length - visualLineStartOffset,
+						CellCount: visualCol,
 						ArenaStartIndex: chunkStartIndex,
 						ArenaLength: chunkLength
 					));
@@ -103,8 +104,9 @@ public record LineLayout
 				LogicalOffset: logicalLineStartOffset,
 				LogicalLength: text.Length - logicalLineStartOffset,
 				VisualOffset: visualLineStartOffset,
-				VisualLength: builder.Length - visualLineStartOffset,
+				VisualStringLength: builder.Length - visualLineStartOffset,
 				ArenaStartIndex: chunkStartIndex,
+				CellCount: visualCol,
 				ArenaLength: _logicalOffsetToVisualOffsetArena.Count - chunkStartIndex
 			));
 
@@ -136,7 +138,7 @@ public record LineLayout
 			var g = GraphemeAt(offset);
 			visualCol += GraphemeWidth(g, visualCol);
 		}
-		if ((coord.TrailVisualLine || forceTrailVisualLine) && visualCol == targetVisualLine.Value.VisualLength && targetVlineIndex + 1 < _visualLines.Count)
+		if ((coord.TrailVisualLine || forceTrailVisualLine) && visualCol == targetVisualLine.Value.VisualStringLength && targetVlineIndex + 1 < _visualLines.Count)
 		{
 			return new(0, targetVlineIndex + 1);
 		}
@@ -248,7 +250,8 @@ public readonly record struct VisualLine(
 	int LogicalOffset,
 	int LogicalLength,
 	int VisualOffset,
-	int VisualLength,
+	int VisualStringLength,
+	int CellCount,
 	int ArenaStartIndex,
 	int ArenaLength
 );

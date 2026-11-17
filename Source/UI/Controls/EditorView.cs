@@ -826,8 +826,9 @@ internal sealed class EditorView : Control
 			{
 				var startAtPixels = EditorArea.Left;
 				// var endOfVisualLine = lineLayout.VisualLines[j].VisualLength;
-				//Get the visual col for the last logical offset on this visual line
-				var endOfVisualLine = lineLayout.GetVisualCoordinate(new(lineLayout.VisualLines[j].LogicalOffset + lineLayout.VisualLines[j].LogicalLength, i)).VisualCol;
+				//Get the visual col for the last logical offset on this visual line, adding one since the selection has to consume the column
+				// var endOfVisualLine = lineLayout.GetVisualCoordinate(new(lineLayout.VisualLines[j].LogicalOffset + lineLayout.VisualLines[j].LogicalLength, i)).VisualCol ;
+				var endOfVisualLine = lineLayout.VisualLines[j].CellCount;
 				var endAtPixels = endOfVisualLine * _editorMetrics.CharAdvance + EditorArea.Left;
 				if (i == lower.Line)
 				{
@@ -1312,7 +1313,7 @@ internal sealed class EditorView : Control
 					var visualLine = lineLayout.VisualLines[j];
 					var text = lineLayout.VisualText.AsSpan(
 					  visualLine.VisualOffset,
-					  visualLine.VisualLength);
+					  visualLine.VisualStringLength);
 					var ft = new FormattedText(
 					  text.ToString(),
 					  CultureInfo.InvariantCulture,
@@ -1321,7 +1322,7 @@ internal sealed class EditorView : Control
 					  _fontSize,
 					  _mainTextBrush);
 
-					var expectedPixelWidth = _editorMetrics.CharAdvance * visualLine.VisualLength;
+					var expectedPixelWidth = _editorMetrics.CharAdvance * visualLine.VisualStringLength;
 					var actualPixelWidth = ft.WidthIncludingTrailingWhitespace;
 					if (text.Contains('\n'))
 					{

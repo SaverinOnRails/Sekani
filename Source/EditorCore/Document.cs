@@ -573,6 +573,16 @@ public sealed class SekaniDocument
 		Selections = new(Selections.Ranges);
 	}
 
+	private void ForEachCursorSortedInverted(Action<int, List<Range>> action)
+	{
+		var ranges = Selections.Ranges.OrderBy(p => p.Head).Reverse().ToList();
+		for (int i = 0; i < ranges.Count; i++)
+		{
+			action(i, ranges);
+		}
+		Selections = new(Selections.Ranges);
+	}
+
 	public void PlaceCursorAfterSelection()
 	{
 		// var lower = CaretRange.Lower;
