@@ -28,14 +28,13 @@ public sealed class SekaniDocument
 
 	public SelectionSet Selections { get; private set; }
 
-	private List<Range> _selectionSnapshot = [];
 
 	public Range PrimaryCursorRange => Selections.Ranges[Selections.PrimaryIndex];
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = true;
+	private bool _useTreesitter = false;
 
 
 	public void SetCursor(Coordinate pos)
@@ -363,27 +362,63 @@ public sealed class SekaniDocument
 
 		UpdatePreferredVisualColumn();
 	}
+
+	private void DeleteCharsCore(int cursorIndex, int startOffset, int length, ref int delta)
+	{
+		var deletePos = startOffset - delta;
+		if (length > 0)
+		{
+			_pieceTable.Delete(deletePos, length);
+			SetCursor(deletePos, cursorIndex);
+			delta += length;
+		}
+	}
 	public void DeleteSelection(bool noHistoryCommit = false)
 	{
 		BeginTransaction(PrimaryCursorRange);
-		var textspan = PrimaryCursorRange.GetTextSpan(GetPosAdvance);
-		var start = textspan.Start;
-		var end = Math.Min(textspan.End, BufferLength);
-		var delta = end - start;
-		_pieceTable.Delete(start, delta);
-		Selections.Ranges[Selections.PrimaryIndex] = new(start);
+		var spans = new (int Start, int Length)[Selections.Count];
+		for (int i = 0; i < Selections.Count; i++)
+		{
+			var textspan = Selections[i].GetTextSpan(GetPosAdvance);
+			var start = textspan.Start;
+			var end = Math.Min(textspan.End, BufferLength);
+			spans[i] = (start, Math.Max(0, end - start));
+		}
+		int delta = 0;
+		ForEachCursor((index) =>
+		{
+			var (start, length) = spans[index];
+			DeleteCharsCore(index, start, length, ref delta);
+		});
 		if (!noHistoryCommit)
 			CommitTransaction();
 	}
 
 	public void BackSpace(Coordinate pos)
 	{
-		var offset = PrimaryCursorRange.Head;
-		if (offset == 0) return;
-		var startOffset = PrevGraphemeBoundary(offset);
-		var diff = offset - startOffset;
-		_pieceTable.Delete(startOffset, diff);
-		Selections.Ranges[Selections.PrimaryIndex] = new(startOffset);
+		int delta = 0;
+		var spans = new (int Start, int Length)[Selections.Count];
+		for (int i = 0; i < Selections.Count; i++)
+		{
+			var head = Selections[i].Head;
+			if (head == 0)
+			{
+				spans[i] = (-1, -1);
+				continue;
+			}
+			var start = PrevGraphemeBoundary(head);
+			var length = head - start;
+			spans[i] = (start, length);
+
+		}
+		ForEachCursor((index) =>
+		{
+			var (start, length) = spans[index];
+			if (start != -1)
+			{
+				DeleteCharsCore(index, start, length, ref delta);
+			}
+		});
 		UpdatePreferredVisualColumn();
 	}
 
@@ -495,7 +530,7 @@ public sealed class SekaniDocument
 	public void SelectAll()
 	{
 		var head = BufferLength;
-		SetAnchorAndHead(0, head);
+		Selections = new([new(0, head)]);
 	}
 
 	public void Undo(int motionCount)
@@ -589,6 +624,7 @@ public sealed class SekaniDocument
 
 	private void ForEachCursor(Action<int> action)
 	{
+		//Cursors are already sorted
 		for (int i = 0; i < Selections.Count; i++)
 		{
 			action(i);
@@ -596,16 +632,6 @@ public sealed class SekaniDocument
 		Selections = new(Selections.Ranges);
 	}
 
-	//Anybody who calls this is trying to mutate the buffer
-	private void ForEachCursorSortedInverted(Action<int> action)
-	{
-		//Cursors are already sorted and merged. Just move through backwards
-		for (int i = Selections.Count - 1; i >= 0; i--)
-		{
-			action(i);
-		}
-		Selections = new(Selections.Ranges);
-	}
 
 	public void PlaceCursorAfterSelection()
 	{
@@ -1031,13 +1057,16 @@ public sealed class SekaniDocument
 
 	public void PasteAfterCursor()
 	{
-		// BeginTransaction(PrimaryCursorRange);
-		// var offset = PrimaryCursorRange.Head;
-		// //TODO:fix this deadlock
-		// var text = _clipboard!.Paste().GetAwaiter().GetResult();
-		// if (text is null) return;
-		// TypeCharsCore(offset, text);
-		// CommitTransaction();
+		BeginTransaction(PrimaryCursorRange);
+		//TODO:fix this deadlock
+		var text = _clipboard!.Paste().GetAwaiter().GetResult();
+		if (text is null) return;
+		int delta = 0;
+		ForEachCursor((index) =>
+		{
+			TypeCharsCore(index, text, ref delta);
+		});
+		CommitTransaction();
 	}
 
 	//UNUSED
