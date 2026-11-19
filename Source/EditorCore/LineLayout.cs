@@ -34,6 +34,12 @@ public record LineLayout
 		return Math.Max(1, width); //UnicodeCalculator returns -1 for graphemes it does not recognise.
 	}
 
+	public int LastGraphemeOffset()
+	{
+		if (_logicalText.Count() == 0) return 0;
+		return _graphemeBoundaries.Last();
+	}
+
 	//TODO: I need to rewrite this shit god
 	private void DoLayout(string text)
 	{
@@ -95,7 +101,6 @@ public record LineLayout
 			visualCol += width;
 		}
 		//if this line does not end with a line break(last line in buffer), still add an offset for it at the next utf18 offset to grapheme boundaries so the cursor can visit it
-		// TODO: this causes an out of bounds bug when we try to move to last grapheme on an emtpy line and perform any buffer operations
 		if (_logicalText.LastOrDefault() != '\n')
 		{
 			_graphemeBoundaries.Add(index + 1);
