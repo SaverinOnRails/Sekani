@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using Sekani.EditorCore;
 using Range = Sekani.EditorCore.Range;
 
@@ -40,17 +41,40 @@ public sealed class SekaniDocumentTests
 				Document.TypeChars(initialText);
 		}
 
+		// Reads the whole buffer through the clipboard. SelectAll replaces the entire selection set,
+		// so the full set (every cursor, plus the primary index) is restored afterwards rather than
+		// only the primary range. Otherwise reading the text would collapse multiple cursors.
 		public string ReadText()
 		{
 			if (Document.BufferLength == 0)
 				return "";
 
-			var previousRange = Document.PrimaryCursorRange;
+			var previousSelections = Document.Selections;
 			Document.SelectAll();
 			Document.YankSelection();
-			Document.SetCursor(previousRange);
+			SetSelectionSet(previousSelections);
 			return ClipboardText ?? "";
 		}
+
+		// Places one cursor/selection per range. The set is built with the public SelectionSet
+		// constructor so it goes through the same normalization (sorting, merging, primary = last)
+		// the editor applies after every multi-cursor operation.
+		public void SetSelections(params Range[] ranges) => SetSelectionSet(new SelectionSet([.. ranges]));
+
+		// Selections has a private setter, and the only public way to create multiple cursors is
+		// DuplicateRanges, which can't place cursors on the same line or at unaligned columns.
+		private void SetSelectionSet(SelectionSet selections) => SelectionsProperty.SetValue(Document, selections);
+
+		private static readonly PropertyInfo SelectionsProperty =
+			typeof(SekaniDocument).GetProperty(nameof(SekaniDocument.Selections))
+			?? throw new InvalidOperationException("SekaniDocument.Selections not found");
+	}
+
+	private static void AssertSelections(SekaniDocument document, params Range[] expected)
+	{
+		CollectionAssert.AreEqual(expected, document.Selections.Ranges,
+			$"Expected [{string.Join(" | ", expected)}] but was [{string.Join(" | ", document.Selections.Ranges)}]");
+		Assert.AreEqual(expected[^1], document.PrimaryCursorRange, "Primary cursor should be the last range");
 	}
 
 	private static DocumentFixture CreateDocument(string initialText = "", bool wrap = false, int maxVisualColsPerLine = 0)
@@ -316,7 +340,6 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
-
 		document.CommitTransaction();
 
 		document.Undo(1);
@@ -481,5 +504,346 @@ public sealed class SekaniDocumentTests
 
 		Assert.AreEqual(1, document.Selections.Count);
 		Assert.AreEqual(primary, document.PrimaryCursorRange);
+	}
+
+	// ---------------------------------------------------------------------------------------
+	// Multi-cursor buffer operations
+	//
+	// Every edit is applied cursor by cursor in ascending order, with a running delta shifting
+	// later cursors by the length already inserted/removed. These tests pin that bookkeeping down
+	// for each operation, plus the selection normalization (sorting/merging) and undo/redo.
+	// ---------------------------------------------------------------------------------------
+
+	[TestMethod]
+	public void MultiCursor_SetSelectionsHelper_ProducesNormalizedSetWithPrimaryLast()
+	{
+		var fixture = CreateDocument("abc\nabc\nabc");
+		var document = fixture.Document;
+
+		fixture.SetSelections(new Range(9), new Range(1), new Range(5));
+
+		AssertSelections(document, new Range(1), new Range(5), new Range(9));
+		Assert.AreEqual("abc\nabc\nabc", fixture.ReadText());
+		AssertSelections(document, new Range(1), new Range(5), new Range(9)); // ReadText must not disturb cursors
+	}
+
+	[TestMethod]
+	public void MultiCursor_TypeChars_InsertsAtEveryCursorOnSeparateLines()
+	{
+		var fixture = CreateDocument("abc\nabc\nabc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(5), new Range(9));
+
+		document.TypeChars("X");
+
+		AssertSelections(document, new Range(2), new Range(7), new Range(12));
+		Assert.AreEqual("aXbc\naXbc\naXbc", fixture.ReadText());
+		Assert.AreEqual(14, document.BufferLength);
+	}
+
+	[TestMethod]
+	public void MultiCursor_TypeChars_ShiftsLaterCursorsOnTheSameLine()
+	{
+		var fixture = CreateDocument("abcdef");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(3), new Range(5));
+
+		document.TypeChars("--");
+
+		AssertSelections(document, new Range(3), new Range(7), new Range(11));
+		Assert.AreEqual("a--bc--de--f", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_TypeChars_RepeatedTypingKeepsCursorsInSync()
+	{
+		var fixture = CreateDocument("ab\nab");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(4));
+
+		foreach (var c in "xyz")
+			document.TypeChars(c.ToString());
+
+		AssertSelections(document, new Range(4), new Range(10));
+		Assert.AreEqual("axyzb\naxyzb", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_TypeChars_NewLineSplitsEveryLineAndUpdatesLineCount()
+	{
+		var fixture = CreateDocument("ab\nab");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(4));
+
+		document.TypeChars("\n");
+
+		AssertSelections(document, new Range(2), new Range(6));
+		Assert.AreEqual("a\nb\na\nb", fixture.ReadText());
+		Assert.AreEqual(4, document.LineCount);
+		Assert.AreEqual(new Coordinate(0, 3), document.GetCoordinate(document.Selections[1].Head));
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_RemovesPreviousGraphemeAtEveryCursor()
+	{
+		var fixture = CreateDocument("abc\nabc\nabc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(2), new Range(6), new Range(10));
+
+		document.BackSpace(document.PrimaryCursorPosition);
+
+		AssertSelections(document, new Range(1), new Range(4), new Range(7));
+		Assert.AreEqual("ac\nac\nac", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_RemovesWholeGraphemesWithDifferentLengths()
+	{
+		// The deltas differ per cursor: 2 UTF-16 units for the emoji, 1 for the plain char.
+		var fixture = CreateDocument("😀a\nba");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(2), new Range(5));
+
+		document.BackSpace(document.PrimaryCursorPosition);
+
+		AssertSelections(document, new Range(0), new Range(2));
+		Assert.AreEqual("a\na", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_CursorAtDocumentStartIsSkippedWhileOthersDelete()
+	{
+		var fixture = CreateDocument("ab\nab");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(0), new Range(4));
+
+		document.BackSpace(document.PrimaryCursorPosition);
+
+		AssertSelections(document, new Range(0), new Range(3));
+		Assert.AreEqual("ab\nb", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_AtLineStartsJoinsLines()
+	{
+		var fixture = CreateDocument("a\nb\nc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(2), new Range(4));
+
+		document.BackSpace(document.PrimaryCursorPosition);
+
+		AssertSelections(document, new Range(1), new Range(2));
+		Assert.AreEqual("abc", fixture.ReadText());
+		Assert.AreEqual(1, document.LineCount);
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_AdjacentCursorsCollapseIntoOne()
+	{
+		var fixture = CreateDocument("abcd");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(2));
+
+		document.BackSpace(document.PrimaryCursorPosition);
+
+		Assert.AreEqual("cd", fixture.ReadText());
+		AssertSelections(document, new Range(0));
+	}
+
+	[TestMethod]
+	public void MultiCursor_DeleteSelection_DeletesEverySelectionOnTheSameLine()
+	{
+		var fixture = CreateDocument("abcdefgh");
+		var document = fixture.Document;
+		// Selections are inclusive of the head: (1,2) covers "bc", (5,6) covers "fg".
+		fixture.SetSelections(new Range(1, 2), new Range(5, 6));
+
+		document.DeleteSelection();
+
+		AssertSelections(document, new Range(1), new Range(3));
+		Assert.AreEqual("adeh", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_DeleteSelection_HandlesSelectionsAndBareCursorsAcrossLines()
+	{
+		var fixture = CreateDocument("abc\nabc");
+		var document = fixture.Document;
+		// A selection covering "ab" on line 0, and a bare cursor on the 'b' of line 1.
+		fixture.SetSelections(new Range(0, 1), new Range(5));
+
+		document.DeleteSelection();
+
+		AssertSelections(document, new Range(0), new Range(3));
+		Assert.AreEqual("c\nac", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_DeleteSelection_IsUndoneAndRedoneAsOneStep()
+	{
+		var fixture = CreateDocument("abcdef\nabcdef");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1, 2), new Range(8, 9));
+
+		document.DeleteSelection();
+		Assert.AreEqual("adef\nadef", fixture.ReadText());
+		AssertSelections(document, new Range(1), new Range(6));
+
+		document.Undo(1);
+		Assert.AreEqual("abcdef\nabcdef", fixture.ReadText());
+		AssertSelections(document, new Range(1, 2), new Range(8, 9));
+
+		document.Redo(1);
+		Assert.AreEqual("adef\nadef", fixture.ReadText());
+		AssertSelections(document, new Range(1), new Range(6));
+	}
+
+	[TestMethod]
+	public void MultiCursor_TypeChars_IsUndoneAndRedoneAsOneStep()
+	{
+		var fixture = CreateDocument("abc\nabc\nabc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(5), new Range(9));
+
+		document.BeginTransaction();
+		document.TypeChars("X");
+		document.CommitTransaction();
+
+		document.Undo(1);
+		Assert.AreEqual("abc\nabc\nabc", fixture.ReadText());
+		AssertSelections(document, new Range(1), new Range(5), new Range(9));
+
+		document.Redo(1);
+		Assert.AreEqual("aXbc\naXbc\naXbc", fixture.ReadText());
+		AssertSelections(document, new Range(2), new Range(7), new Range(12));
+	}
+
+	[TestMethod]
+	public void MultiCursor_BackSpace_IsUndoneAndRedoneAsOneStep()
+	{
+		var fixture = CreateDocument("abc\nabc\nabc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(2), new Range(6), new Range(10));
+
+		document.BeginTransaction();
+		document.BackSpace(document.PrimaryCursorPosition);
+		document.CommitTransaction();
+
+		document.Undo(1);
+		Assert.AreEqual("abc\nabc\nabc", fixture.ReadText());
+		AssertSelections(document, new Range(2), new Range(6), new Range(10));
+
+		document.Redo(1);
+		Assert.AreEqual("ac\nac\nac", fixture.ReadText());
+		AssertSelections(document, new Range(1), new Range(4), new Range(7));
+	}
+
+	[TestMethod]
+	public void MultiCursor_PasteAfterCursor_InsertsClipboardAtEveryCursor()
+	{
+		var fixture = CreateDocument("abc\nabc");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(1), new Range(5));
+		fixture.ClipboardText = "XY";
+
+		document.PasteAfterCursor();
+
+		AssertSelections(document, new Range(3), new Range(9));
+		Assert.AreEqual("aXYbc\naXYbc", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_AddNewLineUnderSelection_InsertsBlankLineBelowEveryCursorLine()
+	{
+		var nl = Environment.NewLine;
+		var fixture = CreateDocument($"one{nl}two");
+		var document = fixture.Document;
+		fixture.SetSelections(
+			new Range(document.GetOffset(new Coordinate(0, 0))),
+			new Range(document.GetOffset(new Coordinate(1, 1))));
+
+		document.AddNewLineUnderSelection();
+
+		Assert.AreEqual(2, document.Selections.Count);
+		Assert.AreEqual(new Coordinate(0, 1), document.GetCoordinate(document.Selections[0].Head));
+		Assert.AreEqual(new Coordinate(0, 3), document.GetCoordinate(document.Selections[1].Head));
+		Assert.AreEqual(4, document.LineCount);
+		Assert.AreEqual($"one{nl}{nl}two{nl}", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_AddNewLineAboveSelection_InsertsBlankLineAboveEveryCursorLine()
+	{
+		var nl = Environment.NewLine;
+		var fixture = CreateDocument($"one{nl}two");
+		var document = fixture.Document;
+		fixture.SetSelections(
+			new Range(document.GetOffset(new Coordinate(1, 0))),
+			new Range(document.GetOffset(new Coordinate(1, 1))));
+
+		document.AddNewLineAboveSelection();
+
+		Assert.AreEqual(2, document.Selections.Count);
+		Assert.AreEqual(new Coordinate(0, 0), document.GetCoordinate(document.Selections[0].Head));
+		Assert.AreEqual(new Coordinate(0, 2), document.GetCoordinate(document.Selections[1].Head));
+		Assert.AreEqual(4, document.LineCount);
+		Assert.AreEqual($"{nl}one{nl}{nl}two", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_CaretMovementOntoSamePosition_MergesCursors()
+	{
+		var fixture = CreateDocument("ab");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(0), new Range(1));
+
+		// The first cursor is already at the start of the buffer and stays put.
+		document.CaretLeft(1, extendSelection: false);
+
+		AssertSelections(document, new Range(0));
+		Assert.AreEqual("ab", fixture.ReadText());
+	}
+
+	[TestMethod]
+	public void MultiCursor_ExtendingSelectionsUntilTheyTouch_MergesThem()
+	{
+		var fixture = CreateDocument("abcdefgh");
+		var document = fixture.Document;
+		fixture.SetSelections(new Range(0, 1), new Range(3, 4));
+
+		document.CaretRight(2, extendSelection: true); // (0,3) and (3,6) now share offset 3
+
+		AssertSelections(document, new Range(0, 6));
+	}
+
+	[TestMethod]
+	public void MultiCursor_ManyDuplicatedCursors_TypeAndUndoAcrossEveryLine()
+	{
+		const int lineCount = 50;
+		var original = string.Join("\n", Enumerable.Repeat("x", lineCount));
+		var fixture = CreateDocument(original);
+		var document = fixture.Document;
+		document.SetCursor(0, 0);
+		document.DuplicateRanges(count: lineCount - 1, direction: CaretVerticalDirection.Down);
+		Assert.AreEqual(lineCount, document.Selections.Count);
+
+		document.BeginTransaction();
+		document.TypeChars("// ");
+		document.CommitTransaction();
+
+		Assert.AreEqual(string.Join("\n", Enumerable.Repeat("// x", lineCount)), fixture.ReadText());
+		Assert.AreEqual(lineCount, document.Selections.Count);
+		for (var line = 0; line < lineCount; line++)
+		{
+			Assert.AreEqual(new Coordinate(3, line), document.GetCoordinate(document.Selections[line].Head),
+				$"Cursor {line} ended up in the wrong place");
+		}
+
+		document.Undo(1);
+
+		Assert.AreEqual(original, fixture.ReadText());
+		Assert.AreEqual(lineCount, document.Selections.Count);
+		for (var line = 0; line < lineCount; line++)
+			Assert.AreEqual(new Range(line * 2), document.Selections[line]);
 	}
 }
