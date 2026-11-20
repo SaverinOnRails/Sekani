@@ -34,7 +34,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = false;
+	private bool _useTreesitter = true;
 
 
 	public void SetCursor(Coordinate pos)
@@ -86,7 +86,7 @@ public sealed class SekaniDocument
 		_pieceTable = new("");
 		_clipboard = clipboard;
 		InitialSelection();
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		if (_useTreesitter)
 		{
 			_treeSitterClient = new(_pieceTable.Slice);
@@ -108,7 +108,7 @@ public sealed class SekaniDocument
 		InitialSelection();
 		_pieceTable = new(buffer);
 		_clipboard = clipboard;
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		if (_useTreesitter)
 		{
 			_treeSitterClient = new(_pieceTable.Slice);
@@ -117,14 +117,14 @@ public sealed class SekaniDocument
 		SubscribeToEvents();
 	}
 
-	public void BeginTransaction(Range range)
+	public void BeginTransaction()
 	{
 		if (_holdResetTransaction)
 		{
 			_holdResetTransaction = false;
 			return;
 		}
-		_pieceTable.BeginNewTransaction(range);
+		_pieceTable.BeginNewTransaction(Selections.Ranges);
 	}
 
 	public void HoldResetTransaction()
@@ -134,7 +134,7 @@ public sealed class SekaniDocument
 
 	private void CommitTransaction()
 	{
-		_pieceTable.CommitTransaction();
+		_pieceTable.CommitTransaction(Selections.Ranges);
 	}
 
 	private void SubscribeToEvents()
@@ -340,7 +340,7 @@ public sealed class SekaniDocument
 
 	private void MoveCaretHorizontal(int count, int direction, bool extendSelection)
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		ForEachCursor((index) =>
 		{
 			for (int step = 0; step < count; step++)
@@ -375,7 +375,7 @@ public sealed class SekaniDocument
 	}
 	public void DeleteSelection(bool noHistoryCommit = false)
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		var spans = new (int Start, int Length)[Selections.Count];
 		for (int i = 0; i < Selections.Count; i++)
 		{
@@ -430,7 +430,7 @@ public sealed class SekaniDocument
 
 	private void MoveCaretVertical(int count, CaretVerticalDirection direction, bool extendSelection)
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		ForEachCursor((index) =>
 		{
 			for (int step = 0; step < count; step++)
@@ -535,18 +535,20 @@ public sealed class SekaniDocument
 
 	public void Undo(int motionCount)
 	{
-		_pieceTable.DoUndo(out Range? range);
-		if (range is not null) Selections.Ranges[Selections.PrimaryIndex] = range.Value;
+		_pieceTable.DoUndo(out List<Range>? ranges);
+		if (ranges is not null) {
+			 Selections = new(ranges);
+		}
 	}
 
 	public void Redo(int motionCount)
 	{
-		_pieceTable.DoRedo(out Range? range);
-		if (range is not null) Selections.Ranges[Selections.PrimaryIndex] = range.Value;
+		_pieceTable.DoRedo(out List<Range>? ranges);
+		if (ranges is not null) Selections = new(ranges);
 	}
 	public void AddNewLineUnderSelection()
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		var insertionOffsets = new int[Selections.Count];
 		var text = Environment.NewLine;
 		for (int i = 0; i < Selections.Count; i++)
@@ -725,7 +727,7 @@ public sealed class SekaniDocument
 
 	public void AddNewLineAboveSelection()
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		var insertionOffsets = new int[Selections.Count];
 		var text = Environment.NewLine;
 		for (int i = 0; i < Selections.Count; i++)
@@ -1057,7 +1059,7 @@ public sealed class SekaniDocument
 
 	public void PasteAfterCursor()
 	{
-		BeginTransaction(PrimaryCursorRange);
+		BeginTransaction();
 		//TODO:fix this deadlock
 		var text = _clipboard!.Paste().GetAwaiter().GetResult();
 		if (text is null) return;

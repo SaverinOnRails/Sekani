@@ -36,11 +36,11 @@ internal readonly record struct TextInsertionEdit(int Offset, PieceDescriptor In
 internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 
-internal sealed class EditTransaction(Range caretBefore)
+internal sealed class EditTransaction(List<Range> caretBefore)
 {
 	public List<ITextEdit> TextEdits { get; } = [];
-	public Range CaretBefore => caretBefore;
-	public Range CaretAfter { get; set; } = caretBefore;
+	public List<Range> CursorsBefore = [.. caretBefore];
+	public List<Range> CursorsAfter { get; set; } = [.. caretBefore];
 
 }
 
@@ -442,7 +442,7 @@ internal class PieceTable
 		}
 		finally
 		{
-			_activeTransaction.CaretAfter = new Range(offset + insertedPieceDescriptor.Length);
+			// _activeTransaction.CursorsAfter = new Range(offset + insertedPieceDescriptor.Length);
 			_redoStack.Clear();
 		}
 	}
@@ -497,21 +497,23 @@ internal class PieceTable
 		}
 		finally
 		{
-			_activeTransaction.CaretAfter = new Range(offset);
+			// _activeTransaction.CursorsAfter = new Range(offset);
 			_redoStack.Clear();
 		}
 	}
 
-	public void CommitTransaction()
+	public void CommitTransaction(List<Range>? cursorsAfter)
 	{
 		if (_activeTransaction is null) return;
+		if(cursorsAfter is not null)
+			_activeTransaction.CursorsAfter = [.. cursorsAfter];
 		if (_activeTransaction.TextEdits.Count > 0) _undoStack.Push(_activeTransaction);
 		_activeTransaction = null;
 	}
 
 	private EditTransaction? PopUndo()
 	{
-		CommitTransaction();
+		CommitTransaction(null);
 		if (_undoStack.Count == 0) return null;
 		var transaction = _undoStack.Pop();
 		_redoStack.Push(transaction);
@@ -520,14 +522,14 @@ internal class PieceTable
 
 	private EditTransaction? PopRedo()
 	{
-		CommitTransaction();
+		CommitTransaction(null);
 		if (_redoStack.Count == 0) return null;
 		var transaction = _redoStack.Pop();
 		_undoStack.Push(transaction);
 		return transaction;
 	}
 
-	public void DoUndo(out Range? range)
+	public void DoUndo(out List<Range>? range)
 	{
 		_replayingHistory = true;
 		range = null;
@@ -544,7 +546,7 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Reinsert(deletion.Offset, deletion.DeletedPieces);
 			}
-			range = transaction.CaretBefore;
+			range = transaction.CursorsBefore;
 		}
 		finally
 		{
@@ -552,7 +554,7 @@ internal class PieceTable
 		}
 	}
 
-	public void DoRedo(out Range? range)
+	public void DoRedo(out List<Range>? range)
 	{
 		range = null;
 		var transaction = PopRedo();
@@ -569,17 +571,17 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Delete(deletion.Offset, deletion.DeletedPieces.Sum(p => p.Length));
 			}
-			range = transaction.CaretAfter;
+			range = transaction.CursorsAfter;
 		}
 		finally
 		{
 			_replayingHistory = false;
 		}
 	}
-	public void BeginNewTransaction(Range CaretRange)
+	public void BeginNewTransaction(List<Range> caretRange)
 	{
-		CommitTransaction();
-		_activeTransaction ??= new(CaretRange);
+		CommitTransaction(caretRange);
+		_activeTransaction ??= new(caretRange);
 	}
 
 	private void InsertCore(string text, int offset)

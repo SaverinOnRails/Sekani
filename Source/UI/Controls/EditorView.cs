@@ -632,7 +632,7 @@ internal sealed class EditorView : Control
 		{
 			var oldValue = (Mode)e.OldValue!;
 			var newValue = (Mode)e.NewValue!;
-			Document.BeginTransaction(Document.PrimaryCursorRange);
+			Document.BeginTransaction();
 			if (oldValue == Mode.Command && newValue == Mode.Normal)
 			{
 				Focus();
@@ -974,7 +974,7 @@ internal sealed class EditorView : Control
 	{
 		var pos = MousePosToCursor(e.GetPosition(this));
 		if (pos is null) return;
-		Document.BeginTransaction(Document.PrimaryCursorRange);
+		Document.BeginTransaction();
 		CollapseCursors();
 		Document.SetCursor(pos);
 		Document.UpdatePreferredVisualColumn();
