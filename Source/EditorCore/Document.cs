@@ -198,7 +198,7 @@ public sealed class SekaniDocument
 				new_end_point = new_end_point
 			};
 		}
-		_treeSitterClient.DoEdit(edit);
+		_treeSitterClient.ApplyEdit(edit);
 	}
 
 	public void TypeChars(string text, bool invokePieceTable = true)

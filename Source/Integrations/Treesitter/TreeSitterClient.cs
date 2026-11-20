@@ -23,8 +23,9 @@ public class TreeSitterClient : IDisposable
 	private readonly Func<int, int, Span<char>, int> _getBufferSlice;
 	private char[] _tsReadBuffer = Array.Empty<char>();
 	private nint _tsReadPtr;
+    private bool _needsReparse;
 
-	public TreeSitterClient(Func<int, int, Span<char>, int> getBufferSlice)
+    public TreeSitterClient(Func<int, int, Span<char>, int> getBufferSlice)
 	{
 		LoadNative();
 		_tsInputRead = TsInputRead;
@@ -65,10 +66,18 @@ public class TreeSitterClient : IDisposable
 		_tsTree = _tsParser.parse_string(null, buf);
 	}
 
-	public void DoEdit(TSInputEdit edit)
+	public void ApplyEdit(TSInputEdit edit)
 	{
 		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return;
 		_tsTree.edit(edit);
+		_needsReparse = true;
+	}
+
+	public void MaybeReparse()
+	{
+		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return;
+		if(_needsReparse == false) return; 
+		_needsReparse = false;
 		TSInput input = new()
 		{
 			Payload = nint.Zero,
@@ -101,6 +110,7 @@ public class TreeSitterClient : IDisposable
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
 	{
 		if (Active == false || _tsTree == null || _tsHighlightQuery is null) throw new InvalidOperationException();
+		MaybeReparse();
 		using var cursor = new TSQueryCursor();
 		var root = _tsTree!.root_node();
 		cursor.set_range((uint)start, (uint)end);
@@ -176,7 +186,7 @@ public class TreeSitterClient : IDisposable
 		}
 		else if (predicate.Matches("match?", "not-match?", "any-match?", "any-not-match?"))
 		{
-		if (predicate.Args.Length != 2) return;
+			if (predicate.Args.Length != 2) return;
 			var capture_idx = predicate.Args[0];
 			if (capture_idx.type != TSQueryPredicateStepType.TSQueryPredicateStepTypeCapture) return;
 			if (predicate.Args[1].type != TSQueryPredicateStepType.TSQueryPredicateStepTypeString) return;
