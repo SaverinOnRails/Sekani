@@ -86,6 +86,10 @@ public readonly struct Range
 	public int From => Math.Min(Anchor, Head);
 	public int To => Math.Max(Anchor, Head);
 	public int Width => To - From;
+	public override string ToString()
+	{
+		return $"Anchor: {Anchor} , Head : {Head}";
+	}
 }
 
 public readonly record struct SelectionSet
@@ -130,4 +134,5 @@ public readonly record struct SelectionSet
 		}
 		return finalRanges;
 	}
+
 }

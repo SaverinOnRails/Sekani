@@ -132,7 +132,7 @@ public sealed class SekaniDocument
 		_holdResetTransaction = true;
 	}
 
-	private void CommitTransaction()
+	public void CommitTransaction()
 	{
 		_pieceTable.CommitTransaction(Selections.Ranges);
 	}

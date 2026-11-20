@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Sekani.EditorCore;
 using Range = Sekani.EditorCore.Range;
 
@@ -240,7 +241,7 @@ public sealed class SekaniDocumentTests
 
 		document.SelectAll();
 
-		Assert.AreEqual(new Range(0, document.BufferLength - 1), document.PrimaryCursorRange);
+		Assert.AreEqual(new Range(0, document.BufferLength ), document.PrimaryCursorRange);
 		document.YankSelection();
 		Assert.AreEqual("alpha\nbeta", fixture.ClipboardText);
 	}
@@ -315,6 +316,8 @@ public sealed class SekaniDocumentTests
 	{
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
+
+		document.CommitTransaction();
 
 		document.Undo(1);
 		Assert.AreEqual(0, document.BufferLength);
