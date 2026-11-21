@@ -26,7 +26,7 @@ public sealed class SekaniDocument
 	private LineCache? _nonWrappingLineCache;
 	private TreeSitterClient _treeSitterClient;
 
-	public SelectionSet Selections { get; private set; }
+	public SelectionSet Selections { get; set; }
 
 
 	public Range PrimaryCursorRange => Selections.Ranges[Selections.PrimaryIndex];
@@ -124,7 +124,7 @@ public sealed class SekaniDocument
 			_holdResetTransaction = false;
 			return;
 		}
-		_pieceTable.BeginNewTransaction(Selections.Ranges);
+		_pieceTable.BeginNewTransaction(Selections);
 	}
 
 	public void HoldResetTransaction()
@@ -134,7 +134,7 @@ public sealed class SekaniDocument
 
 	public void CommitTransaction()
 	{
-		_pieceTable.CommitTransaction(Selections.Ranges);
+		_pieceTable.CommitTransaction(Selections);
 	}
 
 	private void SubscribeToEvents()
@@ -535,16 +535,20 @@ public sealed class SekaniDocument
 
 	public void Undo(int motionCount)
 	{
-		_pieceTable.DoUndo(out List<Range>? ranges);
-		if (ranges is not null) {
-			 Selections = new(ranges);
+		_pieceTable.DoUndo(out SelectionSet? selectionSet);
+		if (selectionSet is not null)
+		{
+			Selections = new(selectionSet.Value);
 		}
 	}
 
 	public void Redo(int motionCount)
 	{
-		_pieceTable.DoRedo(out List<Range>? ranges);
-		if (ranges is not null) Selections = new(ranges);
+		_pieceTable.DoRedo(out SelectionSet? selectionSet);
+		if (selectionSet is not null)
+		{
+			Selections = new(selectionSet.Value);
+		}
 	}
 	public void AddNewLineUnderSelection()
 	{
@@ -631,7 +635,7 @@ public sealed class SekaniDocument
 		{
 			action(i);
 		}
-		Selections = new(Selections.Ranges);
+		Selections = new(Selections.Ranges, Selections.PrimaryIndex);
 	}
 
 
@@ -1040,11 +1044,10 @@ public sealed class SekaniDocument
 				return SelectionTokenKind.Unknown;
 		}
 	}
-	public void PrintPieceTable()
+	//For tests
+	internal string Print()
 	{
-		var builder = new StringBuilder();
-		Console.WriteLine(_pieceTable.Print());
-
+		return _pieceTable.Print();
 	}
 
 	public void YankSelection()
@@ -1071,15 +1074,46 @@ public sealed class SekaniDocument
 		CommitTransaction();
 	}
 
-	//UNUSED
-	// public List<SearchHit> Find(string text, int startOffset, int endOffset)
-	// {
-	// 	var hits = _pieceTable.Search(text, startOffset, endOffset, _searchCancellationToken);
-	// 	if (hits.Count == 0) return [];
-	// 	SetAnchorAndHead(hits[0].Offset, hits[0].Offset + hits[0].Length - 1);
-	// 	return hits;
-	// }
+	public async Task<List<SearchHit>> FindInSelection(string text, SelectionSet originalSelectionSet)
+	{
+		_searchCancellationToken.Cancel();
+		_searchCancellationToken.Dispose();
+		_searchCancellationToken = new CancellationTokenSource();
+		var token = _searchCancellationToken.Token;
+		try
+		{
+			var searchTasks = new List<Task<List<SearchHit>>>(originalSelectionSet.Count);
+			for (int i = 0; i < originalSelectionSet.Count; i++)
+			{
+				var cursor = originalSelectionSet[i];
+				var textspan = cursor.GetTextSpan(GetPosAdvance);
+				searchTasks.Add(_pieceTable.SearchAsync(text, textspan.Start, textspan.End, token));
+			}
+			IEnumerable<SearchHit>[] results = await Task.WhenAll(searchTasks);
+			var searchHits = new List<SearchHit>();
+			foreach (var hits in results)
+			{
+				searchHits.AddRange(hits);
+			}
 
+			// Create a selection for each result
+			var newranges = new List<Range>(searchHits.Count);
+			foreach (var p in searchHits)
+			{
+				var prev = PrevGraphemeBoundary(p.Offset + p.Length);
+				newranges.Add(new Range(p.Offset, prev));
+			}
+			if (newranges.Count > 0)
+			{
+				Selections = new(newranges);
+			}
+			return searchHits;
+		}
+		catch (OperationCanceledException)
+		{
+			return [];
+		}
+	}
 	//Search the whole document for the query
 	public async Task<(List<SearchHit> Hits, int TargetIndex)> FindInDocumentAsync(
 		string text,
@@ -1100,10 +1134,10 @@ public sealed class SekaniDocument
 				targetIndex = 0;
 
 			var targetHit = hits[targetIndex];
-
+			var prev = PrevGraphemeBoundary(targetHit.Offset + targetHit.Length);
 			SetAnchorAndHead(
 				targetHit.Offset,
-				targetHit.Offset + targetHit.Length - 1);
+				prev);
 
 			return (hits, targetIndex);
 		}
@@ -1199,8 +1233,7 @@ public sealed class SekaniDocument
 				step++;
 			}
 		}
-		// Selections = new(ranges, primaryIndex);
-		Selections = new(ranges, 0);
+		Selections = new(ranges, primaryIndex);
 	}
 
 	// Checks if two raw buffer coordinates align vertically

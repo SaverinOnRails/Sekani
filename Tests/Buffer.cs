@@ -9,7 +9,8 @@ public sealed class BufferTests
 	private static PieceTable CreateTable(string text = "")
 	{
 		var table = new PieceTable(text);
-		table.BeginNewTransaction([new Range(0)]);
+		SelectionSet selection = new([new Range(0)]);
+		table.BeginNewTransaction(selection);
 		return table;
 	}
 
@@ -221,7 +222,7 @@ public sealed class BufferTests
 		table.CommitTransaction(null);
 		Assert.AreEqual("abXYcd", table.Print());
 
-		table.BeginNewTransaction([new Range(6)]);
+		table.BeginNewTransaction(new([new Range(6)]));
 		table.Delete(1, 4);
 		table.CommitTransaction(null);
 		Assert.AreEqual("ad", table.Print());
@@ -253,7 +254,7 @@ public sealed class BufferTests
 		Assert.AreEqual("base one!", table.Print());
 		table.DoUndo(out _);
 
-		table.BeginNewTransaction([new Range(0)]);
+		table.BeginNewTransaction(new([new Range(0)]));
 		table.Insert(" new", 4);
 		table.CommitTransaction(null);
 		table.DoRedo(out _);

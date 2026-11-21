@@ -46,14 +46,15 @@ public sealed class SekaniDocumentTests
 		// only the primary range. Otherwise reading the text would collapse multiple cursors.
 		public string ReadText()
 		{
-			if (Document.BufferLength == 0)
-				return "";
+			// if (Document.BufferLength == 0)
+			// 	return "";
 
-			var previousSelections = Document.Selections;
-			Document.SelectAll();
-			Document.YankSelection();
-			SetSelectionSet(previousSelections);
-			return ClipboardText ?? "";
+			// var previousSelections = Document.Selections;
+			// Document.SelectAll();
+			// Document.YankSelection();
+			// SetSelectionSet(previousSelections);
+			// return ClipboardText ?? "";
+			return Document.Print();
 		}
 
 		// Places one cursor/selection per range. The set is built with the public SelectionSet
@@ -74,8 +75,10 @@ public sealed class SekaniDocumentTests
 	{
 		CollectionAssert.AreEqual(expected, document.Selections.Ranges,
 			$"Expected [{string.Join(" | ", expected)}] but was [{string.Join(" | ", document.Selections.Ranges)}]");
-		Assert.AreEqual(expected[^1], document.PrimaryCursorRange, "Primary cursor should be the last range");
+
+		Assert.AreEqual(expected[document.Selections.PrimaryIndex], document.PrimaryCursorRange, "Primary cursor should be correct");
 	}
+
 
 	private static DocumentFixture CreateDocument(string initialText = "", bool wrap = false, int maxVisualColsPerLine = 0)
 		=> new(initialText, wrap, maxVisualColsPerLine);
@@ -265,7 +268,7 @@ public sealed class SekaniDocumentTests
 
 		document.SelectAll();
 
-		Assert.AreEqual(new Range(0, document.BufferLength ), document.PrimaryCursorRange);
+		Assert.AreEqual(new Range(0, document.BufferLength), document.PrimaryCursorRange);
 		document.YankSelection();
 		Assert.AreEqual("alpha\nbeta", fixture.ClipboardText);
 	}

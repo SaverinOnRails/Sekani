@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.VisualBasic;
 namespace Sekani.EditorCore;
 
 public enum RBColor : byte
@@ -36,11 +35,11 @@ internal readonly record struct TextInsertionEdit(int Offset, PieceDescriptor In
 internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<PieceDescriptor> DeletedPieces) : ITextEdit;
 
 
-internal sealed class EditTransaction(List<Range> caretBefore)
+internal sealed class EditTransaction(SelectionSet selectionsBefore)
 {
 	public List<ITextEdit> TextEdits { get; } = [];
-	public List<Range> CursorsBefore = [.. caretBefore];
-	public List<Range> CursorsAfter { get; set; } = [.. caretBefore];
+	public SelectionSet SelectionsBefore = new(selectionsBefore); //deep copy range list inside
+	public SelectionSet SelectionsAfter { get; set; } = new(selectionsBefore);
 
 }
 
@@ -502,11 +501,11 @@ internal class PieceTable
 		}
 	}
 
-	public void CommitTransaction(List<Range>? cursorsAfter)
+	public void CommitTransaction(SelectionSet? selectionsAfter)
 	{
 		if (_activeTransaction is null) return;
-		if(cursorsAfter is not null)
-			_activeTransaction.CursorsAfter = [.. cursorsAfter];
+		if (selectionsAfter is not null)
+			_activeTransaction.SelectionsAfter = new(selectionsAfter.Value);
 		if (_activeTransaction.TextEdits.Count > 0) _undoStack.Push(_activeTransaction);
 		_activeTransaction = null;
 	}
@@ -529,10 +528,10 @@ internal class PieceTable
 		return transaction;
 	}
 
-	public void DoUndo(out List<Range>? range)
+	public void DoUndo(out SelectionSet? selections)
 	{
 		_replayingHistory = true;
-		range = null;
+		selections = null;
 		try
 		{
 			var transaction = PopUndo();
@@ -546,7 +545,7 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Reinsert(deletion.Offset, deletion.DeletedPieces);
 			}
-			range = transaction.CursorsBefore;
+			selections = transaction.SelectionsBefore;
 		}
 		finally
 		{
@@ -554,7 +553,7 @@ internal class PieceTable
 		}
 	}
 
-	public void DoRedo(out List<Range>? range)
+	public void DoRedo(out SelectionSet? range)
 	{
 		range = null;
 		var transaction = PopRedo();
@@ -571,17 +570,17 @@ internal class PieceTable
 				else if (edit is TextDeletionEdit deletion)
 					Delete(deletion.Offset, deletion.DeletedPieces.Sum(p => p.Length));
 			}
-			range = transaction.CursorsAfter;
+			range = transaction.SelectionsAfter;
 		}
 		finally
 		{
 			_replayingHistory = false;
 		}
 	}
-	public void BeginNewTransaction(List<Range> caretRange)
+	public void BeginNewTransaction(SelectionSet selections)
 	{
-		CommitTransaction(caretRange);
-		_activeTransaction ??= new(caretRange);
+		CommitTransaction(selections);
+		_activeTransaction ??= new(selections);
 	}
 
 	private void InsertCore(string text, int offset)

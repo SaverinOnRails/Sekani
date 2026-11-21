@@ -91,7 +91,6 @@ public readonly struct Range
 		return $"Anchor: {Anchor} , Head : {Head}";
 	}
 }
-
 public readonly record struct SelectionSet
 {
 	public List<Range> Ranges { get; }
@@ -99,40 +98,51 @@ public readonly record struct SelectionSet
 
 	public SelectionSet(List<Range> ranges, int primaryIndex = 0)
 	{
-		Ranges = ranges ?? throw new ArgumentNullException(nameof(ranges));
-
+		ArgumentNullException.ThrowIfNull(ranges);
 		if (ranges.Count > 0 && (primaryIndex < 0 || primaryIndex >= ranges.Count))
 			throw new ArgumentOutOfRangeException(nameof(primaryIndex));
-
-		// PrimaryIndex = primaryIndex;
-		Ranges = Normalize(ranges);
-
-		//TODO: This is technically not correct but just force the primary to the bottom for now
-		PrimaryIndex = Ranges.Count() - 1;
+		if (ranges.Count == 0)
+		{
+			Ranges = [];
+			PrimaryIndex = 0;
+			return;
+		}
+		(Ranges, PrimaryIndex) = Normalize(ranges, primaryIndex);
 	}
+
+	public SelectionSet(SelectionSet selectionSet)
+	{
+		(Ranges, PrimaryIndex) = Normalize(selectionSet.Ranges, selectionSet.PrimaryIndex);
+	}
+
 	public Range this[int index] => Ranges[index];
 	public int Count => Ranges.Count;
 
-	private List<Range> Normalize(List<Range> ranges)
+	private static (List<Range> Ranges, int PrimaryIndex) Normalize(List<Range> ranges, int primaryIndex)
 	{
-		var sorted = ranges.OrderBy(p => p.From).ToList();
-		List<Range> finalRanges = [sorted[0]];
+		var sorted = ranges
+			.Select((r, i) => (Range: r, IsPrimary: i == primaryIndex))
+			.OrderBy(p => p.Range.From)
+			.ToList();
+		var finalRanges = new List<(Range Range, bool IsPrimary)> { sorted[0] };
 		for (int i = 1; i < sorted.Count; i++)
 		{
 			var lastAccepted = finalRanges[^1];
 			var current = sorted[i];
-
-			if (lastAccepted.Intersects(current))
+			if (lastAccepted.Range.Intersects(current.Range))
 			{
-				var merged = lastAccepted.Merge(current);
-				finalRanges[^1] = merged;
+				var merged = lastAccepted.Range.Merge(current.Range);
+				finalRanges[^1] = (merged, lastAccepted.IsPrimary || current.IsPrimary);
 			}
 			else
 			{
 				finalRanges.Add(current);
 			}
 		}
-		return finalRanges;
+		int newPrimaryIndex = finalRanges.FindIndex(p => p.IsPrimary);
+		return (
+			finalRanges.Select(p => p.Range).ToList(),
+			newPrimaryIndex >= 0 ? newPrimaryIndex : 0
+		);
 	}
-
 }

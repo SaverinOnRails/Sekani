@@ -154,6 +154,7 @@ internal sealed class EditorView : Control
 			else
 			{
 				Document.SetCursor(smallSearch.OriginalCaretRange);
+				Document.Selections = smallSearch.OriginalSelectionSet;
 				EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 			}
 		}
@@ -1628,7 +1629,7 @@ internal sealed class EditorView : Control
 				Document.PasteAfterCursor();
 				break;
 			case "/":
-				Find();
+				Find(SmallInputPromptSearchType.Buffer);
 				break;
 			case "n":
 				NextSearchHit();
@@ -1642,6 +1643,9 @@ internal sealed class EditorView : Control
 			case ",":
 				CollapseCursors();
 				break;
+			case "s":
+				Find(SmallInputPromptSearchType.Selection);
+				break;
 			default:
 				return;
 		}
@@ -1650,6 +1654,7 @@ internal sealed class EditorView : Control
 		EnsureCaretVisible();
 		ClearMotionCountBuffer();
 	}
+
 
 	private void CollapseCursors() => Document.CollapseCursors();
 
@@ -1675,20 +1680,30 @@ internal sealed class EditorView : Control
 
 	private void PrevSearchHit() => NavigateSearchHit(-1);
 
-	private void Find()
+	private void Find(SmallInputPromptSearchType type)
 	{
-		var searchContext = new SmallInputPromptSearchContext() { OriginalCaretRange = Document.PrimaryCursorRange };
+		var searchContext = new SmallInputPromptSearchContext(Document.PrimaryCursorRange, type, Document.Selections);
 		_editorContext.SmallInputPromptContext = searchContext;
 		searchContext.SearchTermUpdated += SearchContextSearchTermUpdated;
 	}
+
 
 	private async void SearchContextSearchTermUpdated(object? sender, string? e)
 	{
 		var context = (SmallInputPromptSearchContext)_editorContext.SmallInputPromptContext!;
 		if (string.IsNullOrEmpty(e)) return;
-		var (Hits, TargetIndex) = await Document.FindInDocumentAsync(e, Document.PrimaryCursorRange.From);
-		context.SearchHits = Hits;
-		context.SearchHitOriginalIndex = TargetIndex;
+		if (context.Type == SmallInputPromptSearchType.Buffer)
+		{
+			var (Hits, TargetIndex) = await Document.FindInDocumentAsync(e, Document.PrimaryCursorRange.From);
+			context.SearchHits = Hits;
+			context.SearchHitOriginalIndex = TargetIndex;
+		}
+		else
+		{
+			var hits = await Document.FindInSelection(e,context.OriginalSelectionSet);
+			context.SearchHits = hits;
+			context.SearchHitOriginalIndex = 0;
+		}
 		EnsureCaretVisible(verticalScrollToCenterOfPage: true);
 		Redraw();
 	}
