@@ -57,9 +57,6 @@ public sealed class SekaniDocumentTests
 			return Document.Print();
 		}
 
-		// Places one cursor/selection per range. The set is built with the public SelectionSet
-		// constructor so it goes through the same normalization (sorting, merging, primary = last)
-		// the editor applies after every multi-cursor operation.
 		public void SetSelections(params Range[] ranges) => SetSelectionSet(new SelectionSet([.. ranges]));
 
 		// Selections has a private setter, and the only public way to create multiple cursors is
