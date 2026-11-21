@@ -70,7 +70,7 @@ public sealed class SekaniDocumentTests
 
 	private static void AssertSelections(SekaniDocument document, params Range[] expected)
 	{
-		CollectionAssert.AreEqual(expected, document.Selections.Ranges,
+		CollectionAssert.AreEqual(expected, document.Selections.Ranges.ToArray(),
 			$"Expected [{string.Join(" | ", expected)}] but was [{string.Join(" | ", document.Selections.Ranges)}]");
 
 		Assert.AreEqual(expected[document.Selections.PrimaryIndex], document.PrimaryCursorRange, "Primary cursor should be correct");
@@ -448,13 +448,13 @@ public sealed class SekaniDocumentTests
 		var document = CreateDocument("abcd\nabcd\nabcd").Document;
 		document.SetCursor(1, 0);
 		document.DuplicateRanges(count: 1, direction: CaretVerticalDirection.Down);
-		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges.ToArray());
 
 		document.CaretRight(2, extendSelection: false);
-		CollectionAssert.AreEqual(new[] { new Range(3), new Range(8) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(3), new Range(8) }, document.Selections.Ranges.ToArray());
 
 		document.CaretLeft(1, extendSelection: false);
-		CollectionAssert.AreEqual(new[] { new Range(2), new Range(7) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(2), new Range(7) }, document.Selections.Ranges.ToArray());
 	}
 
 	[TestMethod]
@@ -464,13 +464,13 @@ public sealed class SekaniDocumentTests
 		document.SetCursor(0, 0);
 		document.CaretRight(1, extendSelection: false);
 		document.DuplicateRanges(count: 1, direction: CaretVerticalDirection.Down);
-		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges.ToArray());
 
 		document.CaretDown(1, extendSelection: false);
-		CollectionAssert.AreEqual(new[] { new Range(6), new Range(11) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(6), new Range(11) }, document.Selections.Ranges.ToArray());
 
 		document.CaretUp(1, extendSelection: false);
-		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges);
+		CollectionAssert.AreEqual(new[] { new Range(1), new Range(6) }, document.Selections.Ranges.ToArray());
 	}
 
 	[TestMethod]
@@ -484,12 +484,12 @@ public sealed class SekaniDocumentTests
 
 		CollectionAssert.AreEqual(
 			new[] { new Range(1, 3), new Range(6, 8) },
-			document.Selections.Ranges);
+			document.Selections.Ranges.ToArray());
 
 		document.CaretLeft(1, extendSelection: true);
 		CollectionAssert.AreEqual(
 			new[] { new Range(1, 2), new Range(6, 7) },
-			document.Selections.Ranges);
+			document.Selections.Ranges.ToArray());
 	}
 
 	[TestMethod]

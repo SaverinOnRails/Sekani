@@ -93,7 +93,7 @@ public readonly struct Range
 }
 public readonly record struct SelectionSet
 {
-	public List<Range> Ranges { get; }
+	public IReadOnlyList<Range> Ranges { get; }
 	public int PrimaryIndex { get; }
 
 	public SelectionSet(List<Range> ranges, int primaryIndex = 0)
@@ -112,7 +112,20 @@ public readonly record struct SelectionSet
 
 	public SelectionSet(SelectionSet selectionSet)
 	{
-		(Ranges, PrimaryIndex) = Normalize(selectionSet.Ranges, selectionSet.PrimaryIndex);
+		(Ranges, PrimaryIndex) = Normalize(selectionSet.Ranges.ToList(), selectionSet.PrimaryIndex);
+	}
+
+	public SelectionSet WithRange(int index, Range newRange)
+	{
+		var copy = Ranges.ToList();
+		copy[index] = newRange;
+		return new SelectionSet(copy, PrimaryIndex);
+	}
+	public SelectionSet WithPrimaryRange(Range newRange) => WithRange(PrimaryIndex, newRange);
+	public SelectionSet WithHead(int index, int newHead, GetPosAdvanceDelegate advanceFunc, bool trailVisualLine = false)
+	{
+		var updated = Ranges[index].MoveHead(newHead, advanceFunc, trailVisualLine);
+		return WithRange(index, updated);
 	}
 
 	public Range this[int index] => Ranges[index];

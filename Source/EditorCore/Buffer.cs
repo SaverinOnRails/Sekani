@@ -38,8 +38,8 @@ internal readonly record struct TextDeletionEdit(int Offset, IReadOnlyList<Piece
 internal sealed class EditTransaction(SelectionSet selectionsBefore)
 {
 	public List<ITextEdit> TextEdits { get; } = [];
-	public SelectionSet SelectionsBefore = new(selectionsBefore); //deep copy range list inside
-	public SelectionSet SelectionsAfter { get; set; } = new(selectionsBefore);
+	public SelectionSet SelectionsBefore = selectionsBefore;
+	public SelectionSet SelectionsAfter { get; set; } = selectionsBefore;
 
 }
 
