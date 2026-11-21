@@ -322,7 +322,7 @@ internal class PieceTable
 
 			while (node != NULL_NODE && absolute < endOffset)
 			{
-				var span = CollectionsMarshal.AsSpan(((List<char>)GetPieceBuffer(node))[node.Start..node.End]);
+				var span = CollectionsMarshal.AsSpan(GetPieceBuffer(node))[node.Start..node.End];
 				for (int i = local; i < span.Length && absolute < endOffset; i++, absolute++)
 				{
 					char c = ignoreCase ? char.ToUpperInvariant(span[i]) : span[i];
@@ -1586,7 +1586,7 @@ internal class PieceTable
 		throw new ArgumentOutOfRangeException($"Max Offset : {BufferLength} , original passed offset {originalOffset}");
 	}
 
-	private IReadOnlyList<char> GetPieceBuffer(PieceNode node)
+	private List<char> GetPieceBuffer(PieceNode node)
 	{
 		if (node.pieceBuffer == PieceBuffer.Original) return _originalBuffer;
 		return _addBuffer;
