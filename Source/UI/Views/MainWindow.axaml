@@ -29,8 +29,8 @@
 
     <Grid RowDefinitions="*,Auto">
         <controls:EditorView
-            Document="{Binding Document}"
             Mode="{Binding Mode, Mode=TwoWay}"
+            DocumentView="{Binding ActiveDocumentView}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
         <!--  Command Dialog  -->
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />

@@ -79,6 +79,7 @@ public sealed class SekaniDocument
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
 	public Coordinate GetCoordinate(int offset) => _pieceTable.GetCoordinate(offset);
 	private string? _filePath = null;
+	public string FilePath => _filePath!;
 
 	//piece table stuff;
 	private PieceTable _pieceTable;

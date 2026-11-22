@@ -13,11 +13,12 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     [ObservableProperty]
     private SekaniDocument _document;
 
-    private DocumentManager _documentManager = new();
+    private DocumentManager _documentManager;
 
-    public MainViewModel(Avalonia.Input.Platform.IClipboard? clipboard)
+    public MainViewModel(IClipboard? clipboard)
     {
         CreateClipboard(clipboard);
+        _documentManager = new(Clipboard!, this);
         CreateDocument();
     }
 
@@ -42,6 +43,9 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
         Document = new(file, Clipboard);
         // Document = new();
+
+        //Manager API
+        _documentManager.OpenDocument(file);
     }
 
     public void HandleCommand(string? command)
@@ -60,6 +64,9 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     [ObservableProperty]
     public partial string Greeting { get; set; } = "Welcome to Sekani!";
+
+    [ObservableProperty]
+    private DocumentView _activeDocumentView;
 
     [ObservableProperty]
     private ISmallInputPromptContext? _smallInputPromptContext = null;

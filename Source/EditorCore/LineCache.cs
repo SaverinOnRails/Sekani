@@ -100,36 +100,6 @@ public sealed class LineCache
 		return lineLayout;
 
 	}
-	// public LineLayout? GetOrCreate(int index, bool updateVisualLineCount = true)
-	// {
-	// 	if (index > _buffer.Lines.Count) return null;
-	// 	//pad to fill up
-	// 	while (_lyoutCache.Count <= index)
-	// 		_layoutCache.Insert(_layoutCache.Count, null);
-	// 	while (_visualLineTree.Count <= index)
-	// 		_visualLineTree.Insert(_visualLineTree.Count, 1);
-	// 	if (_layoutCache[index] != null) return _layoutCache[index];
-	// 	var line = _buffer.Lines[index];
-	// 	var lineLayout = new LineLayout(
-	// 		line,
-	// 		_tabSize,
-	// 		_wordWrap,
-	// 		_maxVisualColsPerLine);
-	// 	_layoutCache[index] = lineLayout;
-	// 	if (updateVisualLineCount)
-	// 	{
-	// 		var oldCount = VisualLineCountAt(index);
-	// 		var newCount = lineLayout.VisualLines.Count;
-	// 		var delta = newCount - oldCount;
-	// 		if (delta != 0)
-	// 			VisualLineTreeUpdated?.Invoke(
-	// 				this,
-	// 				new(index, delta));
-	// 		SetVisualLineCount(index, newCount);
-	// 	}
-	// 	return lineLayout;
-
-	// }
 
 	private void InvalidateLayout(int line)
 	{

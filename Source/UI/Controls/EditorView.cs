@@ -21,8 +21,6 @@ internal sealed class EditorView : Control
 	private IEditorContext _editorContext;
 	private Typeface _normalLineNumberFontFace = Typeface.Default;
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
-	private IReadOnlyList<SearchHit> _searchHits = [];
-	private int _searchHintActiveIndex = 0;
 	private readonly double _fontSize = 16.5F;
 	private LineCache _lineCache = null!;
 	private
@@ -37,10 +35,7 @@ internal sealed class EditorView : Control
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
 	  _drawLineNumbers ? LineNumberSectDisplayWidth : 0;
-	private double _scrollXOffset = 0;
-	private double _scrollYOffset = 0;
 	private bool _didScrollWithWheel;
-	private double _targetScrollYOffset = 0;
 	private CursorStyle _cursorStyle
 	{
 		get
@@ -77,7 +72,6 @@ internal sealed class EditorView : Control
 	private double _scrollbarScrollStartX = 0;
 	private bool _caretVisible = true;
 	private double _scrollbarPointerStartY;
-	private int _preferredDragScrollVisualColumn = 0;
 	private double _scrollbarScrollStartY;
 	private bool _softWordWrap = true;
 	private bool _canScrollX => !_softWordWrap && GetDocumentWidthInPixels() > EditorArea.Width;
@@ -90,8 +84,8 @@ internal sealed class EditorView : Control
 		get => GetValue(ModeProperty);
 		set => SetValue(ModeProperty, value);
 	}
-	public static readonly StyledProperty<SekaniDocument> DocumentProperty = AvaloniaProperty.Register<EditorView, SekaniDocument>(nameof(Document));
-	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<EditorView, string?>(nameof(Document));
+	public static readonly StyledProperty<DocumentView> DocumentViewProperty = AvaloniaProperty.Register<EditorView, DocumentView>(nameof(DocumentView));
+	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<EditorView, string?>(nameof(MotionCountBuffer));
 
 	public string? MotionCountBuffer
 	{
@@ -99,11 +93,18 @@ internal sealed class EditorView : Control
 		set => SetValue(MotionCountBufferProperty, value);
 	}
 
-	public SekaniDocument Document
+	public SekaniDocument Document => DocumentView?.Document!;
+	// public SekaniDocument Document
+	// {
+	// 	get => GetValue(DocumentProperty);
+	// 	set => SetValue(DocumentProperty, value);
+	// }
+	public DocumentView DocumentView
 	{
-		get => GetValue(DocumentProperty);
-		set => SetValue(DocumentProperty, value);
+		get => GetValue(DocumentViewProperty);
+		set => SetValue(DocumentViewProperty, value);
 	}
+
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;
 	private DispatcherTimer? _caretFocusBubbleTimer;
@@ -112,7 +113,6 @@ internal sealed class EditorView : Control
 	private bool _isSmoothScrolling;
 	private double _originalSmoothScrollDistance = 0;
 	private TimeSpan _lastSmoothScrollFrameTime;
-	private int _firstVisibleLogicalLineForResizeRestore;
 	private int _visualLineTreeVersion;
 	private bool _retryCaretVisibilityAfterMeasure;
 
@@ -148,8 +148,8 @@ internal sealed class EditorView : Control
 		{
 			if (smallSearch.Committed)
 			{
-				_searchHits = smallSearch.SearchHits;
-				_searchHintActiveIndex = smallSearch.SearchHitOriginalIndex;
+				DocumentView.SearchHits = smallSearch.SearchHits;
+				DocumentView.SearchHintActiveIndex = smallSearch.SearchHitOriginalIndex;
 			}
 			else
 			{
@@ -179,14 +179,15 @@ internal sealed class EditorView : Control
 
 		var deltaPixels = e.delta * _editorMetrics.LineHeight;
 
-		_scrollYOffset += deltaPixels;
+		DocumentView.ScrollYOffset += deltaPixels;
 
-		_targetScrollYOffset += deltaPixels;
+		DocumentView.TargetScrollYOffset += deltaPixels;
 	}
 
 	private void SetLineCache()
 	{
 		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
+		Console.WriteLine(_lineCache);
 		_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
 		// Document.SetCaret(0);
 	}
@@ -348,8 +349,8 @@ internal sealed class EditorView : Control
 		double caretRight =
 		  caretX + _caretWidth;
 
-		double viewportLeft = _scrollXOffset;
-		double viewportRight = _scrollXOffset + EditorArea.Width;
+		double viewportLeft = DocumentView.ScrollXOffset;
+		double viewportRight = DocumentView.ScrollXOffset + EditorArea.Width;
 
 		// Caret is completely to the left of the viewport.
 		if (caretX < viewportLeft)
@@ -374,10 +375,10 @@ internal sealed class EditorView : Control
 		_retryCaretVisibilityAfterMeasure = true;
 		if (!_isSmoothScrolling)
 		{
-			_targetScrollYOffset = _scrollYOffset;
+			DocumentView.TargetScrollYOffset = DocumentView.ScrollYOffset;
 		}
 		if (!IsCaretVisibleVertical(
-			_targetScrollYOffset,
+			DocumentView.TargetScrollYOffset,
 			out bool caretAboveViewport,
 			out double correctiveDistance,
 			verticalScrollToCenterOfPage
@@ -388,9 +389,9 @@ internal sealed class EditorView : Control
 				correctiveDistance += EditorArea.Height / 2;
 			}
 			if (caretAboveViewport)
-				_targetScrollYOffset -= correctiveDistance;
+				DocumentView.TargetScrollYOffset -= correctiveDistance;
 			else
-				_targetScrollYOffset += correctiveDistance;
+				DocumentView.TargetScrollYOffset += correctiveDistance;
 
 			//only do this when we are not drag selecting
 			if (correctiveDistance > _editorMetrics.LineHeight * 5 && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
@@ -402,32 +403,32 @@ internal sealed class EditorView : Control
 
 		{
 			if (caretLeftOfViewport)
-				_scrollXOffset -= xCorrectiveDistance;
+				DocumentView.ScrollXOffset -= xCorrectiveDistance;
 			else
-				_scrollXOffset += xCorrectiveDistance;
+				DocumentView.ScrollXOffset += xCorrectiveDistance;
 			if (xCorrectiveDistance > _editorMetrics.CharAdvance && _autoDragScrollTimer is null) StartDrawCaretFocusBubble();
 		}
 		// CorrectScrollBarOffset();
 		if (_smoothScroll)
 			TryStartSmoothScroll();
 		else
-			_scrollYOffset = _targetScrollYOffset;
+			DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset;
 	}
 
 	private void TryStartSmoothScroll()
 	{
-		if (_scrollYOffset == _targetScrollYOffset)
+		if (DocumentView.ScrollYOffset == DocumentView.TargetScrollYOffset)
 			return;
 		if (_isSmoothScrolling)
 			return;
 
 		_isSmoothScrolling = true;
 		_lastSmoothScrollFrameTime = TimeSpan.Zero;
-		var diff = Math.Abs(_targetScrollYOffset - _scrollYOffset);
+		var diff = Math.Abs(DocumentView.TargetScrollYOffset - DocumentView.ScrollYOffset);
 		_originalSmoothScrollDistance = diff;
 		// if (diff >= EditorArea.Height / 2)
 		// {
-		// 	_scrollYOffset = _targetScrollYOffset;
+		// 	DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset ;
 		// 	CorrectScrollBarOffset();
 		// 	StopSmoothScroll();
 		// 	Redraw();
@@ -452,14 +453,14 @@ internal sealed class EditorView : Control
 		if (!_isSmoothScrolling)
 			return;
 
-		var distance = _targetScrollYOffset - _scrollYOffset;
+		var distance = DocumentView.TargetScrollYOffset - DocumentView.ScrollYOffset;
 		double dt = (frameTime - _lastSmoothScrollFrameTime).TotalSeconds;
 		_lastSmoothScrollFrameTime = frameTime;
 		dt = Math.Min(dt, 0.1);
 
 		if (Math.Abs(distance) < 0.5)
 		{
-			_scrollYOffset = _targetScrollYOffset;
+			DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset;
 			CorrectScrollBarOffset();
 			StopSmoothScroll();
 			Redraw();
@@ -467,7 +468,7 @@ internal sealed class EditorView : Control
 		}
 		double smoothing = _originalSmoothScrollDistance >= EditorArea.Height / 2 ? 45.0 : 14;
 		double t = 1.0 - Math.Exp(-smoothing * dt);
-		_scrollYOffset += distance * t;
+		DocumentView.ScrollYOffset += distance * t;
 		Redraw();
 		RequestSmoothScrollFrame();
 	}
@@ -495,13 +496,13 @@ internal sealed class EditorView : Control
 
 	private void CorrectScrollBarOffset()
 	{
-		_scrollXOffset = Math.Clamp(
-		  _scrollXOffset,
+		DocumentView.ScrollXOffset = Math.Clamp(
+		  DocumentView.ScrollXOffset,
 		  0,
 		  Math.Max(0, GetDocumentWidthInPixels() - EditorArea.Width));
 
-		_scrollYOffset = Math.Clamp(
-		  _scrollYOffset,
+		DocumentView.ScrollYOffset = Math.Clamp(
+		  DocumentView.ScrollYOffset,
 		  0,
 		  Math.Max(0, GetDocumentHeightInPixels() - EditorArea.Height));
 	}
@@ -642,7 +643,7 @@ internal sealed class EditorView : Control
 			}
 			ClearMotionCountBuffer();
 		}
-		if (e.Property == DocumentProperty)
+		if (e.Property == DocumentViewProperty)
 		{
 			SetLineCache();
 		}
@@ -651,15 +652,15 @@ internal sealed class EditorView : Control
 
 	private void RestoreScrollAnchor()
 	{
-		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(_firstVisibleLogicalLineForResizeRestore);
-		_scrollYOffset = visualLinesBefore * _editorMetrics.LineHeight;
+		var visualLinesBefore = _lineCache.VisualLinesPrefixSum(DocumentView.FirstVisibleLogicalLineForRestore);
+		DocumentView.ScrollYOffset = visualLinesBefore * _editorMetrics.LineHeight;
 	}
 
 	private void SaveScrollAnchor()
 	{
 		//Since visual lines will change, we need to retain the first visible logical line. 
 		(int firstLogicalLine, int lastLogicalLine, double pixelOffset) = ComputeVisibleText();
-		_firstVisibleLogicalLineForResizeRestore = firstLogicalLine;
+		DocumentView.FirstVisibleLogicalLineForRestore = firstLogicalLine;
 	}
 
 	private void HoldCaretAndRedraw()
@@ -855,7 +856,7 @@ internal sealed class EditorView : Control
 						endAtPixels = endVisualCoord.VisualCol * _editorMetrics.CharAdvance + EditorArea.Left;
 					}
 				}
-				var point = new Point(startAtPixels - _scrollXOffset, visualLineSum * _editorMetrics.LineHeight - _scrollYOffset);
+				var point = new Point(startAtPixels - DocumentView.ScrollXOffset, visualLineSum * _editorMetrics.LineHeight - DocumentView.ScrollYOffset);
 				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
 				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFCB3D"), 0.25), new Rect(point, size));
 				visualLineSum++;
@@ -944,12 +945,12 @@ internal sealed class EditorView : Control
 			return null;
 		int targetVisualLine = Math.Max(
 		  0,
-		  (int)((mousePoint.Y - EditorArea.Top + _scrollYOffset) /
+		  (int)((mousePoint.Y - EditorArea.Top + DocumentView.ScrollYOffset) /
 			_editorMetrics.LineHeight));
 
 		int visualCol = Math.Max(
 		  0,
-		  (int)((mousePoint.X - EditorArea.Left + _scrollXOffset) /
+		  (int)((mousePoint.X - EditorArea.Left + DocumentView.ScrollXOffset) /
 			_editorMetrics.CharAdvance));
 
 		// Find the logical line containing targetVisualLine.
@@ -995,7 +996,7 @@ internal sealed class EditorView : Control
 
 			_pointerPressedOnHorizontalScrollbar = true;
 			_scrollbarPointerStartX = point.X;
-			_scrollbarScrollStartX = _scrollXOffset;
+			_scrollbarScrollStartX = DocumentView.ScrollXOffset;
 			didHitTestScrollBars = true;
 			return;
 		}
@@ -1007,7 +1008,7 @@ internal sealed class EditorView : Control
 
 			_pointerPressedOnVerticalScrollbar = true;
 			_scrollbarPointerStartY = point.Y;
-			_scrollbarScrollStartY = _scrollYOffset;
+			_scrollbarScrollStartY = DocumentView.ScrollYOffset;
 			didHitTestScrollBars = true;
 			return;
 		}
@@ -1066,7 +1067,7 @@ internal sealed class EditorView : Control
 					if (posInLine.VisualLine != 0)
 					{
 						var newVisualCoord = new VisualCoordinate(
-						  _preferredDragScrollVisualColumn,
+						  DocumentView.PreferredDragScrollVisualColumn,
 						  posInLine.VisualLine - 1);
 
 						var newLogicalCol = layout.GetLogicalColumn(newVisualCoord);
@@ -1089,7 +1090,7 @@ internal sealed class EditorView : Control
 				  layoutOfPrevLine.VisualLines.Count - 1;
 
 				var newVisualCoordOfLastLine = new VisualCoordinate(
-				  _preferredDragScrollVisualColumn,
+				  DocumentView.PreferredDragScrollVisualColumn,
 				  lastVisualLineOfPrevLine);
 
 				var newLogicalColOfLastLine =
@@ -1113,7 +1114,7 @@ internal sealed class EditorView : Control
 					if (posInLine.VisualLine < layout.VisualLines.Count - 1)
 					{
 						var newVisualCoord = new VisualCoordinate(
-						  _preferredDragScrollVisualColumn,
+						  DocumentView.PreferredDragScrollVisualColumn,
 						  posInLine.VisualLine + 1);
 
 						var newLogicalCol = layout.GetLogicalColumn(
@@ -1134,7 +1135,7 @@ internal sealed class EditorView : Control
 				if (layoutOfNextLine is null) return;
 
 				var newVisualCoordOfFirstLine = new VisualCoordinate(
-				  _preferredDragScrollVisualColumn,
+				  DocumentView.PreferredDragScrollVisualColumn,
 				  0);
 
 				var newLogicalColOfFirstLine =
@@ -1158,7 +1159,7 @@ internal sealed class EditorView : Control
 		Document.MoveHead(Document.GetOffset(pos), Document.Selections.PrimaryIndex);
 		var layout = _lineCache.GetOrCreate(pos.Line);
 		if (layout is null) return;
-		_preferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.PrimaryCursorPosition).VisualCol;
+		DocumentView.PreferredDragScrollVisualColumn = layout.GetVisualCoordinate(Document.PrimaryCursorPosition).VisualCol;
 		Redraw();
 	}
 
@@ -1184,7 +1185,7 @@ internal sealed class EditorView : Control
 				var scrollDelta =
 				  pointerDelta / maxThumbOffset * maxScrollOffset;
 
-				_scrollXOffset = Math.Clamp(
+				DocumentView.ScrollXOffset = Math.Clamp(
 				  _scrollbarScrollStartX + scrollDelta,
 				  0,
 				  maxScrollOffset);
@@ -1213,7 +1214,7 @@ internal sealed class EditorView : Control
 				var scrollDelta =
 				  pointerDelta / maxThumbOffset * maxScrollOffset;
 
-				_scrollYOffset = Math.Clamp(
+				DocumentView.ScrollYOffset = Math.Clamp(
 				  _scrollbarScrollStartY + scrollDelta,
 				  0,
 				  maxScrollOffset);
@@ -1254,8 +1255,8 @@ internal sealed class EditorView : Control
 
 		var scrollAmount = 20.0;
 
-		_scrollYOffset = Math.Clamp(
-		  _scrollYOffset - (e.Delta.Y * scrollAmount),
+		DocumentView.ScrollYOffset = Math.Clamp(
+		  DocumentView.ScrollYOffset - (e.Delta.Y * scrollAmount),
 		  0,
 		  maxScrollOffset);
 		_didScrollWithWheel = true;
@@ -1269,7 +1270,7 @@ internal sealed class EditorView : Control
 	{
 		double startAt = Math.Max(
 		  0,
-		  (_scrollYOffset / _editorMetrics.LineHeight));
+		  (DocumentView.ScrollYOffset / _editorMetrics.LineHeight));
 
 		int targetVisualLine = (int)startAt;
 
@@ -1337,7 +1338,7 @@ internal sealed class EditorView : Control
 							0,
 							currentVisualLine));
 						y = point.Y - visibleTextBounds.pixelOffset;
-						x = point.X - _scrollXOffset;
+						x = point.X - DocumentView.ScrollXOffset;
 						point = point.WithY(y);
 						point = point.WithX(x);
 						//apply highlighting
@@ -1400,7 +1401,7 @@ internal sealed class EditorView : Control
 						int visualCol = 0;
 						Point basePoint = VisualToUI(new VisualCoordinate(0, currentVisualLine));
 						double baseY = basePoint.Y - visibleTextBounds.pixelOffset;
-						double baseX = basePoint.X - _scrollXOffset;
+						double baseX = basePoint.X - DocumentView.ScrollXOffset;
 
 						for (int k = startIndex; k < graphemeBoundaries.Count - 1; k++)
 						{
@@ -1473,7 +1474,7 @@ internal sealed class EditorView : Control
 
 		var point = VisualToUI(new VisualCoordinate(localVisualCoord.VisualCol, visualLine));
 		point = point.WithY(point.Y - pixelOffset);
-		point = point.WithX(point.X - _scrollXOffset);
+		point = point.WithX(point.X - DocumentView.ScrollXOffset);
 
 		var advanceWidth = caretLineLayout.CellSize(localVisualCoord) * _editorMetrics.CharAdvance;
 		var rect = GetCaretRectGeometry(point, advanceWidth);
@@ -1661,13 +1662,13 @@ internal sealed class EditorView : Control
 
 	private void NavigateSearchHit(int direction)
 	{
-		if (_searchHits.Count == 0) return;
+		if (DocumentView.SearchHits.Count == 0) return;
 
-		_searchHintActiveIndex =
-			(_searchHintActiveIndex + direction + _searchHits.Count)
-			% _searchHits.Count;
+		DocumentView.SearchHintActiveIndex =
+			(DocumentView.SearchHintActiveIndex + direction + DocumentView.SearchHits.Count)
+			% DocumentView.SearchHits.Count;
 
-		var hit = _searchHits[_searchHintActiveIndex];
+		var hit = DocumentView.SearchHits[DocumentView.SearchHintActiveIndex];
 
 		Document.SetAnchorAndHead(
 			hit.Offset,
@@ -1737,7 +1738,7 @@ internal sealed class EditorView : Control
 
 		var x = maxScrollOffset <= 0 ?
 		  0 :
-		  (_scrollXOffset / maxScrollOffset) * maxThumbX;
+		  (DocumentView.ScrollXOffset / maxScrollOffset) * maxThumbX;
 
 		var y = editorHeight - height;
 
@@ -1764,7 +1765,7 @@ internal sealed class EditorView : Control
 
 		var y = maxScrollOffset <= 0 ?
 		  0 :
-		  (_scrollYOffset / maxScrollOffset) * maxThumbY;
+		  (DocumentView.ScrollYOffset / maxScrollOffset) * maxThumbY;
 
 		var x = EditorArea.Right + _editorHorizontalMargin;
 

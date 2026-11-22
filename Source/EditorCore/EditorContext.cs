@@ -15,6 +15,9 @@ public interface IEditorContext
     void RaisePanelClosed(object? sender);
 
     event EventHandler? PanelClosed;
+
+    public DocumentView? ActiveDocumentView { get; set; }
+
 }
 
 public interface ISmallInputPromptContext

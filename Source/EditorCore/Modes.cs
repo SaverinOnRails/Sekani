@@ -2,8 +2,8 @@ namespace Sekani.EditorCore;
 
 public enum Mode
 {
-	Insert,
 	Normal,
+	Insert,
 	Command,
 	Visual,
 }
