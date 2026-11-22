@@ -29,8 +29,8 @@
 
     <Grid RowDefinitions="*,Auto">
         <controls:EditorView
-            Mode="{Binding Mode, Mode=TwoWay}"
             DocumentView="{Binding ActiveDocumentView}"
+            Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
         <!--  Command Dialog  -->
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />
@@ -43,7 +43,10 @@
             Height="30"
             Orientation="Horizontal"
             Spacing="20">
-            <TextBlock Text="{Binding Mode}" />
+            <StackPanel.Background>
+                <SolidColorBrush Color="{DynamicResource BackgroundColor}" />
+            </StackPanel.Background>
+            <TextBlock Text="{Binding Mode}" FontSize="15" />
             <TextBlock Text="{Binding MotionCountBuffer}" />
         </StackPanel>
     </Grid>

@@ -2,7 +2,7 @@ namespace Sekani.EditorCore;
 
 public class DocumentManager
 {
-	private IEditorContext _context;
+	private readonly IEditorContext _context;
 	public DocumentManager(Clipboard clipboard, IEditorContext context)
 	{
 		_clipboard = clipboard;
@@ -13,15 +13,23 @@ public class DocumentManager
 
 	public void OpenDocument(string path)
 	{
-		var exists = _documentViews.Exists(p => p.Document.FilePath == path);
-		if (exists) return;
+		var _view = _documentViews.FirstOrDefault(p => p.Document.FilePath == path);
+		if (_view is not null)
+		{
+			SetActive(_view);
+			return;
+		}
 		var document = new SekaniDocument(path, _clipboard);
 		var view = new DocumentView(document);
 		_documentViews.Add(view);
 		SetActive(view);
 	}
+	public void CloseDocument(string path)
+	{
 
-	public void SetActive(DocumentView view)
+	}
+
+	private void SetActive(DocumentView view)
 	{
 		_context.ActiveDocumentView = view;
 	}
@@ -31,8 +39,7 @@ public class DocumentView
 {
 	public SekaniDocument Document { get; init; }
 
-	public LineCache LineCache { get; init; }
-
+	public LineCache? LineCache { get; set; }
 	// View state
 	public double ScrollXOffset { get; set; } = 0;
 	public double ScrollYOffset { get; set; } = 0;
@@ -48,8 +55,6 @@ public class DocumentView
 	public DocumentView(SekaniDocument document)
 	{
 		Document = document;
-		//Create initial cache
-		LineCache = document.CreateLineCache(1, false, 0);
 	}
 }
 

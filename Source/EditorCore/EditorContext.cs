@@ -51,10 +51,20 @@ public class SmallInputPromptSearchContext : ISmallInputPromptContext
 
     public SelectionSet OriginalSelectionSet { get; private set; }
 
+    public event EventHandler? SearchHitsUpdated;
+
     public bool Committed { get; private set; } = false;
 
-    public List<SearchHit> SearchHits { get; set; } = [];
-
+    private List<SearchHit> _searchHits = [];
+    public List<SearchHit> SearchHits
+    {
+        get => _searchHits;
+        set
+        {
+            _searchHits = value;
+            SearchHitsUpdated?.Invoke(this, EventArgs.Empty);
+        }
+    }
     public int SearchHitOriginalIndex { get; set; }
 }
 

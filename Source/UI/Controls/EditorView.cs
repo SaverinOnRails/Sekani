@@ -30,7 +30,7 @@ internal sealed class EditorView : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = true;
+	private bool _drawLineNumbers = false;
 	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
@@ -186,8 +186,7 @@ internal sealed class EditorView : Control
 
 	private void SetLineCache()
 	{
-		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, 0);
-		Console.WriteLine(_lineCache);
+		_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, MaxVisualColsPerLine);
 		_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
 		// Document.SetCaret(0);
 	}
@@ -628,8 +627,6 @@ internal sealed class EditorView : Control
 			RestoreScrollAnchor();
 			CorrectScrollBarOffset();
 		}
-
-		//TODO: When we have multiple editor windows, focus should return to the right one
 		if (e.Property == ModeProperty)
 		{
 			var oldValue = (Mode)e.OldValue!;
@@ -645,7 +642,37 @@ internal sealed class EditorView : Control
 		}
 		if (e.Property == DocumentViewProperty)
 		{
-			SetLineCache();
+			if (e.OldValue is DocumentView && _lineCache is not null)
+			{
+				_lineCache.VisualLineTreeUpdated -= LineCacheVisualLineTreeUpdated;
+			}
+			_isSmoothScrolling = false;
+			if (e.NewValue is DocumentView newView)
+			{
+				bool canReuseCache = newView.LineCache is not null &&
+									 newView.LineCache.WordWrap == _softWordWrap &&
+									 newView.LineCache.TabSize == _editorMetrics.TabSize;
+				if (canReuseCache)
+				{
+					_lineCache = newView.LineCache!;
+					if (_softWordWrap && _lineCache.MaxVisualColsPerLine != MaxVisualColsPerLine)
+					{
+						_lineCache.SetMaxVisualColsForWrap(MaxVisualColsPerLine);
+						_lineCache.BuildVisualLinesIndexes();
+					}
+				}
+				else
+				{
+					_lineCache = Document.CreateLineCache(_editorMetrics.TabSize, _softWordWrap, MaxVisualColsPerLine);
+					_lineCache.BuildVisualLinesIndexes();
+					newView.LineCache = _lineCache;
+				}
+				_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
+				CorrectScrollBarOffset();
+			}
+
+			Focus();
+			Redraw();
 		}
 		base.OnPropertyChanged(e);
 	}
@@ -1786,3 +1813,4 @@ internal enum CursorStyle
 	Block,
 	Underline,
 }
+

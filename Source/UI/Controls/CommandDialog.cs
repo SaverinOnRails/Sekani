@@ -9,7 +9,7 @@ using SekaniUI.ViewModels;
 
 namespace SekaniUI.Controls;
 
-public class CommandDialog : FocusableTextInputControl
+public class CommandDialog : FocusablePromptControl
 {
 
 	public CommandDialog()

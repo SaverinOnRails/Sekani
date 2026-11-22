@@ -9,6 +9,9 @@ public sealed class LineCache
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
 	private int _maxVisualColsPerLine;
+	public int MaxVisualColsPerLine => _maxVisualColsPerLine;
+	public bool WordWrap => _wordWrap;
+	public int TabSize => _tabSize;
 	public event EventHandler<VisualLineTreeUpdatedParams> VisualLineTreeUpdated;
 
 	private VisualLineTree _visualLineTree = new();

@@ -6,7 +6,7 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-public abstract class FocusableTextInputControl : ContentControl
+public abstract class FocusablePromptControl : ContentControl
 {
 	protected TextBox _textBox = new();
 

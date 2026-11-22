@@ -159,7 +159,7 @@ public enum PieceBuffer
 
 internal class PieceTable
 {
-	//This should technically be a readonly list, but using a List helps us create a span view which is convinient
+	//This should technically be a readonly list, but using a List helps us create a span view which is convenient
 	private readonly List<char> _originalBuffer;
 	private IReadOnlyList<int> _originalBufferLineStarts = [0];
 	private PieceNode _root;
