@@ -36,7 +36,7 @@ public sealed class SekaniDocument
 	public int BufferLength => _pieceTable.BufferLength;
 	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
 	private int _preferredVisualColumn = 0;
-	private bool _useTreesitter = false;
+	private bool _useTreesitter = true;
 
 
 	public void SetCursor(Coordinate pos)
@@ -105,8 +105,10 @@ public sealed class SekaniDocument
 
 	~SekaniDocument()
 	{
-		InitialSelection();
-		_treeSitterClient.Dispose();
+		if (_useTreesitter)
+		{
+			_treeSitterClient.Dispose();
+		}
 	}
 
 	public SekaniDocument(string filePath, Clipboard? clipboard = null)

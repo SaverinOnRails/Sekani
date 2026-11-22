@@ -1,4 +1,5 @@
 using System;
+using System.Reflection.Metadata;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sekani.EditorCore;
@@ -11,6 +12,8 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     [ObservableProperty]
     private SekaniDocument _document;
+
+    private DocumentManager _documentManager = new();
 
     public MainViewModel(Avalonia.Input.Platform.IClipboard? clipboard)
     {
@@ -27,9 +30,9 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     private void CreateDocument()
     {
         // var file = "/home/noble/jquery.min.js.js";
-        var file = "/home/noble/longfile.text";
+        // var file = "/home/noble/longfile.text";
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
-        // var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
+        var file = "/home/noble/Documents/sekanitestfiles/xdisp.c";
         // var file = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
         // var file = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
         // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";

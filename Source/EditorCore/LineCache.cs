@@ -4,7 +4,7 @@ namespace Sekani.EditorCore;
 public sealed class LineCache
 {
 	private readonly PieceTable _pieceTable;
-	private readonly List<LineLayout?> _layoutCache = [];
+	private readonly List<WeakReference<LineLayout>?> _layoutCache = [];
 	public int Width { get; private set; } = 0;
 	private readonly int _tabSize;
 	private readonly bool _wordWrap;
@@ -56,7 +56,7 @@ public sealed class LineCache
 				_visualLineTree.InsertRange(startIndex, count, defaultValue: 1);
 				if (startIndex <= _layoutCache.Count)
 				{
-					_layoutCache.InsertRange(startIndex, Enumerable.Repeat<LineLayout?>(null, count));
+					_layoutCache.InsertRange(startIndex, Enumerable.Repeat<WeakReference<LineLayout>?>(null, count));
 				}
 			}
 		}
@@ -80,13 +80,14 @@ public sealed class LineCache
 			_layoutCache.Insert(_layoutCache.Count, null);
 		while (_visualLineTree.Count <= index)
 			_visualLineTree.Insert(_visualLineTree.Count, 1);
-		if (_layoutCache[index] != null) return _layoutCache[index];
+		if (_layoutCache[index]?.TryGetTarget(out var cachedLayout) == true)
+			return cachedLayout;
 		var lineLayout = new LineLayout(
 			_pieceTable.PrintCleanLine(index),
 			_tabSize,
 			_wordWrap,
 			_maxVisualColsPerLine);
-		_layoutCache[index] = lineLayout;
+		_layoutCache[index] = new WeakReference<LineLayout>(lineLayout);
 		UpdateDocumentWidth(lineLayout.VisualText.Length);
 		var oldCount = VisualLineCountAt(index);
 		var newCount = lineLayout.VisualLines.Count;

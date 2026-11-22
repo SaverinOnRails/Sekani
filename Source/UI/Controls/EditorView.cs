@@ -1223,7 +1223,8 @@ internal sealed class EditorView : Control
 		}
 	}
 
-	private void Redraw() => InvalidateVisual();
+	private void Redraw() => Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
+
 
 	protected override void OnPointerReleased(PointerReleasedEventArgs e)
 	{
@@ -1700,7 +1701,7 @@ internal sealed class EditorView : Control
 		}
 		else
 		{
-			var hits = await Document.FindInSelection(e,context.OriginalSelectionSet);
+			var hits = await Document.FindInSelection(e, context.OriginalSelectionSet);
 			context.SearchHits = hits;
 			context.SearchHitOriginalIndex = 0;
 		}
