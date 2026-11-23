@@ -39,7 +39,7 @@
         <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
 
         <!--  Big Input Prompt  -->
-        <controls:BigInputPrompt IsVisible="False"/>
+        <controls:BigInputPrompt IsVisible="{Binding BigInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
         <!--  Bottom Bar  -->
         <StackPanel
             Grid.Row="1"

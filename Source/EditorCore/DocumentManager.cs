@@ -33,6 +33,12 @@ public class DocumentManager
 	{
 		_context.ActiveDocumentView = view;
 	}
+
+	//This will contain a lot more details eventually
+	public List<string> GetOpenDocuments()
+	{
+		return [.. _documentViews.Select(p => p.Document.FilePath)];
+	}
 }
 
 public class DocumentView
@@ -40,7 +46,7 @@ public class DocumentView
 	public SekaniDocument Document { get; init; }
 
 	public LineCache? LineCache { get; set; }
-	 
+
 	// View state
 	public double ScrollXOffset { get; set; } = 0;
 	public double ScrollYOffset { get; set; } = 0;

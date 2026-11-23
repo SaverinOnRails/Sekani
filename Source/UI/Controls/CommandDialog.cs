@@ -12,9 +12,7 @@ public class CommandDialog : FocusablePromptControl
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
 		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
 		Background = Brushes.Transparent;
-		_textBox = new TextBox() { Height = 40, Width = 250 };
 		Focusable = true;
-		Build();
 	}
 
 	private void Build()
@@ -33,7 +31,10 @@ public class CommandDialog : FocusablePromptControl
 		switch (e.Key)
 		{
 			case Key.Enter:
-				Context.HandleCommand(_textBox.Text);
+				if (_textBox?.Text is not null)
+				{
+					Context.HandleCommand(_textBox.Text);
+				}
 				CloseControl(this);
 				break;
 		}
@@ -43,5 +44,15 @@ public class CommandDialog : FocusablePromptControl
 	{
 		Context.Mode = Mode.Normal;
 		base.CloseControl(this);
+	}
+
+	protected override void OnActivated()
+	{
+		_textBox = new TextBox() { Height = 40, Width = 250 };
+		Build();
+	}
+
+	protected override void OnDeactivated()
+	{
 	}
 }

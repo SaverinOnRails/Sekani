@@ -12,17 +12,37 @@ public interface IEditorContext
 
     public ISmallInputPromptContext? SmallInputPromptContext { get; set; }
 
+    public IBigInputPromptContext? BigInputPromptContext { get; set; }
+
     void RaisePanelClosed(object? sender);
 
     event EventHandler? PanelClosed;
 
     public DocumentView? ActiveDocumentView { get; set; }
 
+    public void OpenBufferPicker();
+
 }
 
-public interface ISmallInputPromptContext
+public interface IInputPromptContext
 {
     public void Commit();
+}
+public interface ISmallInputPromptContext : IInputPromptContext;
+
+public interface IBigInputPromptContext : IInputPromptContext;
+
+public class BigInputPrompBufferPickerContext : IBigInputPromptContext
+{
+    private List<string> _openDocuments;
+    public BigInputPrompBufferPickerContext(List<string> openDocuments)
+    {
+        _openDocuments = openDocuments;
+    }
+    public void Commit()
+    {
+        throw new NotImplementedException();
+    }
 }
 
 public class SmallInputPromptSearchContext : ISmallInputPromptContext

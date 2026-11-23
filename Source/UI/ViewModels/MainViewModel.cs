@@ -53,18 +53,16 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         }
     }
 
-    // public void OpenFileTwo()
-    // {
-    //     _documentManager.OpenDocument("/home/noble/Documents/sekanitestfiles/xdisp.c");
-    // }
-    // public void OpenFileOne()
-    // {
-    //     _documentManager.OpenDocument("/home/noble/Documents/sekanitestfiles/sqlite3.c");
-    // }
 
     public void RaisePanelClosed(object? sender)
     {
         PanelClosed?.Invoke(sender, new());
+    }
+
+    public void OpenBufferPicker()
+    {
+        var openDocuments = _documentManager.GetOpenDocuments();
+        BigInputPromptContext = new BigInputPrompBufferPickerContext(openDocuments);
     }
 
     [ObservableProperty]
@@ -75,6 +73,9 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     [ObservableProperty]
     private ISmallInputPromptContext? _smallInputPromptContext = null;
+
+    [ObservableProperty]
+    private IBigInputPromptContext? _bigInputPromptContext = null;
 
 
     [ObservableProperty]

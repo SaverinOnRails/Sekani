@@ -561,6 +561,16 @@ internal sealed class EditorView : Control
 					break;
 			}
 		}
+		else
+		{
+			switch (e.Key)
+			{
+				case Key.Space:
+					EnterSpaceMode();
+					handled = true;
+					break;
+			}
+		}
 		if (e.Key == Key.Escape)
 		{
 			ResetState();
@@ -574,6 +584,7 @@ internal sealed class EditorView : Control
 			EnsureCaretVisible();
 		}
 	}
+
 
 	private void ResetState()
 	{
@@ -591,6 +602,12 @@ internal sealed class EditorView : Control
 	private void EnterNormalMode()
 	{
 		Mode = Mode.Normal;
+	}
+
+
+	private void EnterSpaceMode()
+	{
+		Mode = Mode.Space;
 	}
 
 	private void UpdateMotionCountBuffer(char buf)
@@ -1548,10 +1565,30 @@ internal sealed class EditorView : Control
 		{
 			HandleNormalModeTextInput(e);
 		}
+		else if (Mode == Mode.Space)
+		{
+			HandleSpaceModeTextInput(e);
+		}
 		else if (Mode == Mode.Insert)
 		{
 			HandleInsertModeTextInput(e);
 		}
+	}
+
+	private void HandleSpaceModeTextInput(TextInputEventArgs e)
+	{
+		if (e.Text is null) return;
+		switch (e.Text)
+		{
+			case "b":
+				OpenBufferPicker();
+				break;
+		}
+	}
+
+	private void OpenBufferPicker()
+	{
+		_editorContext.OpenBufferPicker();
 	}
 
 	private void HandleNormalModeTextInput(TextInputEventArgs e)

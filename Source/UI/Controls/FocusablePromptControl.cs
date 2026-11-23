@@ -8,7 +8,7 @@ namespace SekaniUI.Controls;
 
 public abstract class FocusablePromptControl : ContentControl
 {
-	protected TextBox _textBox = new();
+	protected TextBox? _textBox = null;
 
 	protected IEditorContext Context => (DataContext as IEditorContext)!;
 
@@ -31,6 +31,7 @@ public abstract class FocusablePromptControl : ContentControl
 	protected virtual void CloseControl(object? sender)
 	{
 		Context.RaisePanelClosed(sender);
+		Context.Mode = Mode.Normal;
 	}
 
 	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
@@ -41,12 +42,16 @@ public abstract class FocusablePromptControl : ContentControl
 			var newValue = (bool)e.NewValue!;
 			if (newValue)
 			{
-				_textBox.Clear();
-				Dispatcher.UIThread.Post(() =>
-				{
-					_textBox.Focus();
-				});
+				OnActivated();
+				_textBox!.Clear();
+				Dispatcher.UIThread.Post(() => _textBox?.Focus());
+			}
+			else
+			{
+				OnDeactivated();
 			}
 		}
 	}
+	protected abstract void OnActivated();
+	protected abstract void OnDeactivated();
 }

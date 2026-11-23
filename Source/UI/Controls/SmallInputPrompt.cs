@@ -18,22 +18,9 @@ public class SmallInputPrompt : FocusablePromptControl
 		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
 		Height = 40;
 		Focusable = true;
-		_textBox.TextChanged += TextBoxTextChanged;
-		// _textBox.Width = 300;
-		_textBox.PlaceholderText = "Search file...";
-		_textBox.Margin = new(15);
-		Build();
 	}
 
-	private readonly TextBlock _resultCountTextBlock = new()
-	{
-		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-		FontSize = 15,
-		Margin = new(0, 0, 16, 0),
-		Opacity = 0.6
-	};
-
+	private TextBlock _resultCountTextBlock;
 	private void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
 	{
 		var context = (SmallInputPromptSearchContext)Context.SmallInputPromptContext!;
@@ -46,8 +33,7 @@ public class SmallInputPrompt : FocusablePromptControl
 		var panel = new Panel() { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
 		var grid = new Grid() { ColumnDefinitions = new("*,*") };
 		panel.Bind(Panel.BackgroundProperty,
-			this.GetResourceObservable("BackgroundColor", obj => obj is Color c ? new SolidColorBrush(c,0.5) : null));
-		panel.BackdropEffect = new BlurEffect() { Radius = 20 };
+			this.GetResourceObservable("BackgroundColor", obj => obj is Color c ? new SolidColorBrush(c) : null));
 		_textBox.InnerRightContent = new PathIcon
 		{
 			Data = Icons.Search,
@@ -122,5 +108,28 @@ public class SmallInputPrompt : FocusablePromptControl
 		}
 		base.CloseControl(Context.SmallInputPromptContext);
 		Context.SmallInputPromptContext = null;
+	}
+
+	//TODO: this design is dogshit
+	protected override void OnActivated()
+	{
+		_textBox = new();
+		_textBox.TextChanged += TextBoxTextChanged;
+		_textBox.PlaceholderText = "Search file...";
+		_textBox.Margin = new(15);
+
+		_resultCountTextBlock = new()
+		{
+			VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+			HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+			FontSize = 15,
+			Margin = new(0, 0, 16, 0),
+			Opacity = 0.6
+		};
+		Build();
+	}
+
+	protected override void OnDeactivated()
+	{
 	}
 }

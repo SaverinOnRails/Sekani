@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
@@ -12,9 +13,9 @@ public class BigInputPrompt : FocusablePromptControl
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
 		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
-		_textBox.Margin = new(15);
-		Build();
 	}
+
+	private BigInputPrompBufferPickerContext _bufferPickerContext => (Context.BigInputPromptContext as BigInputPrompBufferPickerContext)!;
 
 	public Control MainContainer()
 	{
@@ -74,6 +75,23 @@ public class BigInputPrompt : FocusablePromptControl
 	private void Build()
 	{
 		Content = MainContainer();
+	}
+
+	protected override void CloseControl(object? sender)
+	{
+		base.CloseControl(Context.SmallInputPromptContext);
+		Context.BigInputPromptContext = null;
+	}
+
+	protected override void OnActivated()
+	{
+		_textBox = new();
+		_textBox.Margin = new(15);
+		Build();
+	}
+
+	protected override void OnDeactivated()
+	{
 	}
 }
 
