@@ -46,7 +46,8 @@ public class SmallInputPrompt : FocusablePromptControl
 		var panel = new Panel() { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
 		var grid = new Grid() { ColumnDefinitions = new("*,*") };
 		panel.Bind(Panel.BackgroundProperty,
-			this.GetResourceObservable("BackgroundColor", obj => obj is Color c ? new SolidColorBrush(c) : null));
+			this.GetResourceObservable("BackgroundColor", obj => obj is Color c ? new SolidColorBrush(c,0.5) : null));
+		panel.BackdropEffect = new BlurEffect() { Radius = 20 };
 		_textBox.InnerRightContent = new PathIcon
 		{
 			Data = Icons.Search,

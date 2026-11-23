@@ -23,7 +23,6 @@ public interface IEditorContext
 public interface ISmallInputPromptContext
 {
     public void Commit();
-
 }
 
 public class SmallInputPromptSearchContext : ISmallInputPromptContext

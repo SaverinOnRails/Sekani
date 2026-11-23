@@ -40,6 +40,7 @@ public class DocumentView
 	public SekaniDocument Document { get; init; }
 
 	public LineCache? LineCache { get; set; }
+	 
 	// View state
 	public double ScrollXOffset { get; set; } = 0;
 	public double ScrollYOffset { get; set; } = 0;

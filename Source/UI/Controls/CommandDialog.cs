@@ -1,17 +1,12 @@
-using System;
-using Avalonia.Threading;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Sekani.EditorCore;
-using SekaniUI.ViewModels;
 
 namespace SekaniUI.Controls;
 
 public class CommandDialog : FocusablePromptControl
 {
-
 	public CommandDialog()
 	{
 		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;

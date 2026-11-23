@@ -35,8 +35,11 @@
         <!--  Command Dialog  -->
         <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />
 
-        <!--  Small Input  -->
+        <!--  Small Input Prompt  -->
         <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
+
+        <!--  Big Input Prompt  -->
+        <controls:BigInputPrompt IsVisible="False"/>
         <!--  Bottom Bar  -->
         <StackPanel
             Grid.Row="1"
@@ -46,7 +49,7 @@
             <StackPanel.Background>
                 <SolidColorBrush Color="{DynamicResource BackgroundColor}" />
             </StackPanel.Background>
-            <TextBlock Text="{Binding Mode}" FontSize="15" />
+            <TextBlock FontSize="15" Text="{Binding Mode}" />
             <TextBlock Text="{Binding MotionCountBuffer}" />
         </StackPanel>
     </Grid>
