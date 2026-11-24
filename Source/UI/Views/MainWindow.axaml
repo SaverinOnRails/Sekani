@@ -30,8 +30,16 @@
     <Grid RowDefinitions="*,Auto">
         <controls:EditorView
             DocumentView="{Binding ActiveDocumentView}"
+            IsVisible="{Binding ActiveDocumentView, Converter={x:Static ObjectConverters.IsNotNull}}"
             Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
+        <Panel IsVisible="{Binding ActiveDocumentView, Converter={x:Static ObjectConverters.IsNull}}">
+            <TextBlock
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                FontSize="60"
+                Text="No Buffer Open" />
+        </Panel>
 
         <!--  Small Input Prompt  -->
         <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
