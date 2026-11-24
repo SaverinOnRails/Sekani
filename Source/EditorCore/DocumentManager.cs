@@ -37,7 +37,17 @@ public class DocumentManager
 	//This will contain a lot more details eventually
 	public List<string> GetOpenDocuments()
 	{
-		return [.. _documentViews.Select(p => p.Document.FilePath)];
+		List<string> docs = [.. _documentViews.Select(p => p.Document.FilePath)];
+		if (_context.ActiveDocumentView?.Document.FilePath is string activeFile)
+		{
+			var idx = docs.IndexOf(activeFile);
+			if (idx > 0)
+			{
+				docs.RemoveAt(idx);
+				docs.Insert(0, activeFile);
+			}
+		}
+		return docs;
 	}
 }
 

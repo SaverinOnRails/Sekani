@@ -20,6 +20,8 @@ public interface IEditorContext
 
     public DocumentView? ActiveDocumentView { get; set; }
 
+    public DocumentManager DocumentManager { get; }
+
     public void OpenBufferPicker();
 
 }
@@ -34,14 +36,17 @@ public interface IBigInputPromptContext : IInputPromptContext;
 
 public class BigInputPrompBufferPickerContext : IBigInputPromptContext
 {
-    private List<string> _openDocuments;
-    public BigInputPrompBufferPickerContext(List<string> openDocuments)
+    public IReadOnlyList<string> OpenDocuments { get; init; }
+    public string SelectedFile { get; set; } = "";
+    private IEditorContext _editorContext;
+    public BigInputPrompBufferPickerContext(List<string> openDocuments, IEditorContext context)
     {
-        _openDocuments = openDocuments;
+        OpenDocuments = openDocuments;
+        _editorContext = context;
     }
     public void Commit()
     {
-        throw new NotImplementedException();
+        _editorContext.DocumentManager.OpenDocument(SelectedFile);
     }
 }
 

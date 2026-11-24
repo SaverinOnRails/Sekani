@@ -10,12 +10,12 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public Sekani.EditorCore.Clipboard Clipboard { get; set; } = null!;
     public event EventHandler? PanelClosed;
 
-    private DocumentManager _documentManager;
+    public DocumentManager DocumentManager {get;}
 
     public MainViewModel(IClipboard? clipboard)
     {
         CreateClipboard(clipboard);
-        _documentManager = new(Clipboard!, this);
+        DocumentManager = new(Clipboard!, this);
         CreateDocument();
     }
 
@@ -32,8 +32,8 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
         var file1 = "/home/noble/Documents/sekanitestfiles/xdisp.c";
         var file2 = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
-        // var file = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
-        // var file = "/home/noble/Projects/yin/daemon/Monitor.cpp";
+        var file4 = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
+        var file3 = "/home/noble/Projects/yin/daemon/Monitor.cpp";
         // var file = "/home/noble/Documents/Hyprland/src/render/OpenGL.cpp";
         // var file = "/home/noble/Documents/sekanitestfiles/unicodestresstest.txt";
         // var file = "/home/noble/Documents/sekanitestfiles/chinesetest.txt";
@@ -41,7 +41,10 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         // Document = new();
 
         //Manager API
-        _documentManager.OpenDocument(file1);
+        DocumentManager.OpenDocument(file3);
+        DocumentManager.OpenDocument(file4);
+        DocumentManager.OpenDocument(file2);
+        DocumentManager.OpenDocument(file1);
     }
 
     public void HandleCommand(string? command)
@@ -61,8 +64,8 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     public void OpenBufferPicker()
     {
-        var openDocuments = _documentManager.GetOpenDocuments();
-        BigInputPromptContext = new BigInputPrompBufferPickerContext(openDocuments);
+        var openDocuments = DocumentManager.GetOpenDocuments();
+        BigInputPromptContext = new BigInputPrompBufferPickerContext(openDocuments, this);
     }
 
     [ObservableProperty]
