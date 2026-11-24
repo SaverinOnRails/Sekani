@@ -30,7 +30,7 @@ internal sealed class EditorView : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
@@ -567,7 +567,6 @@ internal sealed class EditorView : Control
 			{
 				case Key.Space:
 					EnterSpaceMode();
-					handled = true;
 					break;
 			}
 		}
@@ -742,7 +741,7 @@ internal sealed class EditorView : Control
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = text.Height * 1.25;
-		var tabSize = 6;
+		var tabSize = 8;
 		_editorMetrics = new(charAdvance, lineHeight, tabSize);
 	}
 
@@ -1583,12 +1582,20 @@ internal sealed class EditorView : Control
 			case "b":
 				OpenBufferPicker();
 				break;
+			case "f":
+				OpenProjectFilePicker();
+				break;
 		}
 	}
 
 	private void OpenBufferPicker()
 	{
 		_editorContext.OpenBufferPicker();
+	}
+
+	private void OpenProjectFilePicker()
+	{
+		_editorContext.OpenProjectFilePicker();
 	}
 
 	private void HandleNormalModeTextInput(TextInputEventArgs e)

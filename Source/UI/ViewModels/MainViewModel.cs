@@ -10,12 +10,14 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public Sekani.EditorCore.Clipboard Clipboard { get; set; } = null!;
     public event EventHandler? PanelClosed;
 
-    public DocumentManager DocumentManager {get;}
+    public DocumentManager DocumentManager { get; }
+    public ProjectManager ProjectManager { get; }
 
     public MainViewModel(IClipboard? clipboard)
     {
         CreateClipboard(clipboard);
         DocumentManager = new(Clipboard!, this);
+        ProjectManager = new();
         CreateDocument();
     }
 
@@ -27,24 +29,20 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     private void CreateDocument()
     {
-        // var file = "/home/noble/jquery.min.js.js";
-        // var file = "/home/noble/longfile.text";
-        // var file = "/home/noble/Documents/sekanitestfiles/piecetabletestfile.txt";
         var file1 = "/home/noble/Documents/sekanitestfiles/xdisp.c";
         var file2 = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
         var file4 = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
         var file3 = "/home/noble/Projects/yin/daemon/Monitor.cpp";
-        // var file = "/home/noble/Documents/Hyprland/src/render/OpenGL.cpp";
-        // var file = "/home/noble/Documents/sekanitestfiles/unicodestresstest.txt";
-        // var file = "/home/noble/Documents/sekanitestfiles/chinesetest.txt";
-        // var file = "/home/noble/Documents/sekanitestfiles/PdfViewer.Viewport.cs";
-        // Document = new();
 
         //Manager API
-        DocumentManager.OpenDocument(file3);
+        // DocumentManager.OpenDocument(file3);
         DocumentManager.OpenDocument(file4);
-        DocumentManager.OpenDocument(file2);
-        DocumentManager.OpenDocument(file1);
+        // DocumentManager.OpenDocument(file2);
+        // DocumentManager.OpenDocument(file1);
+
+        //Project API
+        // ProjectManager.OpenProject("/home/noble/Projects/Sekani");
+        ProjectManager.OpenProject("/home/noble/Documents/emacs");
     }
 
     public void HandleCommand(string? command)
@@ -66,6 +64,12 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     {
         var openDocuments = DocumentManager.GetOpenDocuments();
         BigInputPromptContext = new BigInputPrompBufferPickerContext(openDocuments, this);
+    }
+
+    public void OpenProjectFilePicker()
+    {
+        var files = ProjectManager.AllFiles();
+        BigInputPromptContext = new BigInputPrompBufferPickerContext(files, this);
     }
 
     [ObservableProperty]

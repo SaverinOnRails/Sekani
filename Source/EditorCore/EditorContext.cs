@@ -24,6 +24,8 @@ public interface IEditorContext
 
     public void OpenBufferPicker();
 
+    public void OpenProjectFilePicker();
+
 }
 
 public interface IInputPromptContext

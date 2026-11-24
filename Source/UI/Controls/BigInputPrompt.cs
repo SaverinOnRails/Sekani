@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -17,8 +19,8 @@ public class BigInputPrompt : FocusablePromptControl
 
 	public BigInputPrompt()
 	{
-		HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-		VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+		HorizontalAlignment = HorizontalAlignment.Stretch;
+		VerticalAlignment = VerticalAlignment.Stretch;
 
 		AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
 	}
@@ -50,12 +52,17 @@ public class BigInputPrompt : FocusablePromptControl
 			{
 				Text = name,
 				Padding = new Thickness(8, 6),
-				VerticalAlignment = VerticalAlignment.Center
+				VerticalAlignment = VerticalAlignment.Center,
+				TextTrimming = TextTrimming.LeadingCharacterEllipsis,
 			})
 		};
+
+		ScrollViewer.SetHorizontalScrollBarVisibility(_fileList, ScrollBarVisibility.Disabled);
 		_fileList.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
 		{
-			Setters = { new Setter(InputElement.FocusableProperty, false) }
+			Setters = {
+				new Setter(FocusableProperty, false),
+			}
 		});
 		if (_bufferPickerContext?.OpenDocuments.Count > 0)
 			_fileList.SelectedIndex = 0;
@@ -119,9 +126,32 @@ public class BigInputPrompt : FocusablePromptControl
 	{
 		_textBox = new();
 		_textBox.Margin = new(15);
+		_textBox.TextChanged += TextBoxTextChanged;
 		Build();
 	}
 
+	private void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
+	{
+		var source = (TextBox)e.Source!;
+		if (string.IsNullOrEmpty(source.Text)) return;
+		FilterList(source.Text);
+	}
+
+	private void FilterList(string? query)
+	{
+		if (_fileList is null || _bufferPickerContext?.OpenDocuments is null)
+			return;
+		var allDocuments = _bufferPickerContext.OpenDocuments;
+		var filtered = allDocuments
+			.Where(file => file.Contains(query, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+		_fileList.ItemsSource = filtered;
+		_fileList.SelectedIndex = filtered.Count > 0 ? 0 : -1;
+		if (_fileList.SelectedIndex >= 0)
+		{
+			_fileList.ScrollIntoView(_fileList.SelectedIndex);
+		}
+	}
 	protected override void OnDeactivated()
 	{
 		_fileList = null;
