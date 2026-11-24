@@ -8,8 +8,7 @@ using Sekani.Integrations.TreeSitter;
 
 namespace Sekani.EditorCore;
 
-
-public sealed class SekaniDocument 
+public sealed class SekaniDocument : IDisposable
 {
 	public bool IsReadOnly { get; set; } = false;
 	private CancellationTokenSource _searchCancellationToken = new();
@@ -26,7 +25,8 @@ public sealed class SekaniDocument
 	}
 	private LineCache? _lineCache;
 	private LineCache? _nonWrappingLineCache;
-	private TreeSitterClient _treeSitterClient;
+	private TreeSitterClient? _treeSitterClient;
+	private bool _disposed;
 
 	public SelectionSet Selections { get; set; }
 
@@ -34,7 +34,7 @@ public sealed class SekaniDocument
 	public Range PrimaryCursorRange => Selections.Ranges[Selections.PrimaryIndex];
 	public int LineCount => _pieceTable.LineFeedCount;
 	public int BufferLength => _pieceTable.BufferLength;
-	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient.Active;
+	public bool TreeSitterClientActive => _useTreesitter && _treeSitterClient?.Active == true;
 	private int _preferredVisualColumn = 0;
 	private bool _useTreesitter = true;
 
@@ -73,7 +73,7 @@ public sealed class SekaniDocument
 	}
 	public List<TreeSitterHighlightSpan> GetHighlights(int start, int end)
 	{
-		return _treeSitterClient.GetHighlights(start, end);
+		return _treeSitterClient?.GetHighlights(start, end) ?? [];
 	}
 
 	public int GetOffset(Coordinate pos) => _pieceTable.GetOffset(pos);
@@ -104,11 +104,25 @@ public sealed class SekaniDocument
 		SubscribeToEvents();
 	}
 
-	~SekaniDocument()
+	public void Dispose()
 	{
-		if (_useTreesitter)
+		Dispose(disposing: true);
+		GC.SuppressFinalize(this);
+	}
+
+
+	private void Dispose(bool disposing)
+	{
+		if (_disposed) return;
+		_disposed = true;
+
+		_treeSitterClient?.Dispose();
+		_treeSitterClient = null;
+
+		if (disposing)
 		{
-			_treeSitterClient.Dispose();
+			_searchCancellationToken.Cancel();
+			_searchCancellationToken.Dispose();
 		}
 	}
 
@@ -209,7 +223,7 @@ public sealed class SekaniDocument
 				new_end_point = new_end_point
 			};
 		}
-		_treeSitterClient.ApplyEdit(edit);
+		_treeSitterClient?.ApplyEdit(edit);
 	}
 
 	public void TypeChars(string text, bool invokePieceTable = true)
@@ -1138,6 +1152,7 @@ public sealed class SekaniDocument
 		int offset)
 	{
 		_searchCancellationToken.Cancel();
+		_searchCancellationToken.Dispose();
 		_searchCancellationToken = new();
 		try
 		{

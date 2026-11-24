@@ -281,10 +281,14 @@ public class TreeSitterClient : IDisposable
 
 	public void Dispose()
 	{
-		_tsLanguage.Dispose();
-		_tsParser.Dispose();
-		_tsHighlightQuery?.Dispose();
+		// Stop GetHighlights/ApplyEdit/MaybeReparse from touching freed native memory.
+		Active = false;
 		_tsTree?.Dispose();
+		_tsTree = null;
+		_tsHighlightQuery?.Dispose();
+		_tsHighlightQuery = null;
+		_tsParser.Dispose();
+		_tsLanguage?.Dispose();
 	}
 }
 
