@@ -25,7 +25,7 @@ public class BigInputPrompt : FocusablePromptControl
 		AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
 	}
 
-	private BigInputPrompBufferPickerContext? _bufferPickerContext => Context.BigInputPromptContext as BigInputPrompBufferPickerContext;
+	private BigInputPromptListContext? _listContext => Context.BigInputPromptContext as BigInputPromptListContext;
 
 	public Control MainContainer()
 	{
@@ -43,7 +43,7 @@ public class BigInputPrompt : FocusablePromptControl
 
 		_fileList = new ListBox
 		{
-			ItemsSource = _bufferPickerContext?.OpenDocuments,
+			ItemsSource = _listContext?.Items,
 			Margin = new Thickness(15, 0, 15, 15),
 			Background = Brushes.Transparent,
 			VerticalAlignment = VerticalAlignment.Stretch,
@@ -64,7 +64,7 @@ public class BigInputPrompt : FocusablePromptControl
 				new Setter(FocusableProperty, false),
 			}
 		});
-		if (_bufferPickerContext?.OpenDocuments.Count > 0)
+		if (_listContext?.Items.Count > 0)
 			_fileList.SelectedIndex = 0;
 
 		Grid.SetRow(_fileList, 1);
@@ -105,8 +105,8 @@ public class BigInputPrompt : FocusablePromptControl
 	{
 		if (_fileList?.SelectedItem is string selected)
 		{
-			_bufferPickerContext?.SelectedFile = selected;
-			_bufferPickerContext?.Commit();
+			_listContext?.Selected = selected;
+			_listContext?.Commit();
 		}
 		CloseControl(this);
 	}
@@ -133,16 +133,15 @@ public class BigInputPrompt : FocusablePromptControl
 	private void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
 	{
 		var source = (TextBox)e.Source!;
-		if (string.IsNullOrEmpty(source.Text)) return;
-		FilterList(source.Text);
+		FilterList(source.Text ?? string.Empty);
 	}
 
 	private void FilterList(string? query)
 	{
-		if (_fileList is null || _bufferPickerContext?.OpenDocuments is null)
+		if (_fileList is null || _listContext?.Items is null)
 			return;
-		var allDocuments = _bufferPickerContext.OpenDocuments;
-		var filtered = allDocuments
+		var items = _listContext.Items;
+		var filtered = items
 			.Where(file => file.Contains(query, StringComparison.OrdinalIgnoreCase))
 			.ToList();
 		_fileList.ItemsSource = filtered;

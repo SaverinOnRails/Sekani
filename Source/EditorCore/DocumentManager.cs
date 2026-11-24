@@ -26,10 +26,18 @@ public class DocumentManager
 	}
 	public void CloseDocument(string path)
 	{
+		var activeDoc = _context.ActiveDocumentView?.Document.FilePath;
+		_documentViews.Remove(_documentViews.First(p => p.Document.FilePath == path));
 
+		if (activeDoc == path)
+		{
+			if (_documentViews.Count > 0)
+				SetActive(_documentViews[^1]);
+			else SetActive(null);
+		}
 	}
 
-	private void SetActive(DocumentView view)
+	private void SetActive(DocumentView? view)
 	{
 		_context.ActiveDocumentView = view;
 	}

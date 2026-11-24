@@ -22,9 +22,14 @@ public interface IEditorContext
 
     public DocumentManager DocumentManager { get; }
 
+
+    //Panels
+    
     public void OpenBufferPicker();
 
     public void OpenProjectFilePicker();
+
+    public void OpenCommandPalette();
 
 }
 
@@ -36,19 +41,40 @@ public interface ISmallInputPromptContext : IInputPromptContext;
 
 public interface IBigInputPromptContext : IInputPromptContext;
 
-public class BigInputPrompBufferPickerContext : IBigInputPromptContext
+public abstract class BigInputPromptListContext : IBigInputPromptContext
 {
-    public IReadOnlyList<string> OpenDocuments { get; init; }
-    public string SelectedFile { get; set; } = "";
-    private IEditorContext _editorContext;
-    public BigInputPrompBufferPickerContext(List<string> openDocuments, IEditorContext context)
+    public IReadOnlyList<string> Items { get; }
+    public string Selected { get; set; } = "";
+    protected readonly IEditorContext _editorContext;
+
+    protected BigInputPromptListContext(IReadOnlyList<string> items, IEditorContext context)
     {
-        OpenDocuments = openDocuments;
+        Items = items;
         _editorContext = context;
     }
-    public void Commit()
+
+    public abstract void Commit();
+}
+
+public class BigInputPrompBufferPickerContext : BigInputPromptListContext
+{
+    public BigInputPrompBufferPickerContext(IReadOnlyList<string> openDocuments, IEditorContext context)
+        : base(openDocuments, context) { }
+
+    public override void Commit()
     {
-        _editorContext.DocumentManager.OpenDocument(SelectedFile);
+        _editorContext.DocumentManager.OpenDocument(Selected);
+    }
+}
+
+public class CommandPaletteContext : BigInputPromptListContext
+{
+    public CommandPaletteContext(IReadOnlyList<string> commands, IEditorContext context)
+        : base(commands, context) { }
+
+    public override void Commit()
+    {
+        _editorContext.HandleCommand(Selected);
     }
 }
 

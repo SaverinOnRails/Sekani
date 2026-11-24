@@ -8,6 +8,5 @@ public enum Mode
 	Visual,
 
 	//MINOR(UI) MODES
-	Command,
 	Space,
 }

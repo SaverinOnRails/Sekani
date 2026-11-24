@@ -593,10 +593,6 @@ internal sealed class EditorView : Control
 		_editorContext.SmallInputPromptContext = null;
 	}
 
-	private void EnterCommandMode()
-	{
-		Mode = Mode.Command;
-	}
 
 	private void EnterNormalMode()
 	{
@@ -645,15 +641,7 @@ internal sealed class EditorView : Control
 		}
 		if (e.Property == ModeProperty)
 		{
-			var oldValue = (Mode)e.OldValue!;
-			var newValue = (Mode)e.NewValue!;
 			Document.BeginTransaction();
-			if (oldValue == Mode.Command && newValue == Mode.Normal)
-			{
-				Focus();
-				_caretVisible = true;
-				Redraw();
-			}
 			ClearMotionCountBuffer();
 		}
 		if (e.Property == DocumentViewProperty)
@@ -1686,7 +1674,7 @@ internal sealed class EditorView : Control
 				break;
 			case ":":
 				{
-					EnterCommandMode();
+					_editorContext.OpenCommandPalette();
 					return;
 				}
 			case "u":

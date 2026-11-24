@@ -14,7 +14,7 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public DocumentManager DocumentManager { get; }
     public ProjectManager ProjectManager { get; }
 
-    public static List<string> Commands = ["write" ,"buffer-close"];
+    public static List<string> Commands = ["write", "buffer-close"];
 
     public MainViewModel(IClipboard? clipboard)
     {
@@ -38,10 +38,10 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         var file3 = "/home/noble/Projects/yin/daemon/Monitor.cpp";
 
         //Manager API
-        // DocumentManager.OpenDocument(file3);
+        DocumentManager.OpenDocument(file3);
         DocumentManager.OpenDocument(file4);
-        // DocumentManager.OpenDocument(file2);
-        // DocumentManager.OpenDocument(file1);
+        DocumentManager.OpenDocument(file2);
+        DocumentManager.OpenDocument(file1);
 
         //Project API
         // ProjectManager.OpenProject("/home/noble/Projects/Sekani");
@@ -51,10 +51,23 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public void HandleCommand(string? command)
     {
         if (string.IsNullOrEmpty(command)) return;
-        if (command == "write" || command == "w")
+        switch (command)
         {
-            // Document.TrySave();
+            case "write":
+                // TODO: save the active document
+                Console.WriteLine("[Command] write");
+                break;
+            case "buffer-close":
+                CloseActiveBuffer();
+                break;
         }
+    }
+
+    private void CloseActiveBuffer()
+    {
+        if (ActiveDocumentView is null) return;
+        var path = ActiveDocumentView.Document.FilePath;
+        DocumentManager.CloseDocument(path);
     }
 
 
@@ -73,6 +86,11 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     {
         var files = ProjectManager.AllFiles();
         BigInputPromptContext = new BigInputPrompBufferPickerContext(files, this);
+    }
+
+    public void OpenCommandPalette()
+    {
+        BigInputPromptContext = new CommandPaletteContext(Commands, this);
     }
 
     [ObservableProperty]

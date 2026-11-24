@@ -9,7 +9,7 @@ using Sekani.Integrations.TreeSitter;
 namespace Sekani.EditorCore;
 
 
-public sealed class SekaniDocument
+public sealed class SekaniDocument 
 {
 	public bool IsReadOnly { get; set; } = false;
 	private CancellationTokenSource _searchCancellationToken = new();
@@ -1297,6 +1297,7 @@ public sealed class SekaniDocument
 		}
 		Selections = new(ranges);
 	}
+
 }
 
 public enum CaretVerticalDirection

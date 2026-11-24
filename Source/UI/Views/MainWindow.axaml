@@ -32,14 +32,13 @@
             DocumentView="{Binding ActiveDocumentView}"
             Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
-        <!--  Command Dialog  -->
-        <controls:CommandDialog IsVisible="{Binding Mode, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static editorCore:Mode.Command}}" />
 
         <!--  Small Input Prompt  -->
         <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
 
         <!--  Big Input Prompt  -->
         <controls:BigInputPrompt IsVisible="{Binding BigInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />
+
         <!--  Bottom Bar  -->
         <StackPanel
             Grid.Row="1"
