@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection.Metadata;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,6 +13,8 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     public DocumentManager DocumentManager { get; }
     public ProjectManager ProjectManager { get; }
+
+    public static List<string> Commands = ["write" ,"buffer-close"];
 
     public MainViewModel(IClipboard? clipboard)
     {
