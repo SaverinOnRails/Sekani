@@ -22,14 +22,8 @@ public interface IEditorContext
 
     public DocumentManager DocumentManager { get; }
 
+    public ProjectManager ProjectManager { get; }
 
-    //Panels
-    
-    public void OpenBufferPicker();
-
-    public void OpenProjectFilePicker();
-
-    public void OpenCommandPalette();
 
 }
 

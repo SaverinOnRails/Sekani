@@ -13,13 +13,14 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public DocumentManager DocumentManager { get; }
     public ProjectManager ProjectManager { get; }
 
-    public static List<string> Commands = ["write", "buffer-close"];
+    private readonly EditorCommands _commands;
 
     public MainViewModel(IClipboard? clipboard)
     {
         CreateClipboard(clipboard);
         DocumentManager = new(Clipboard!, this);
         ProjectManager = new();
+        _commands = new(this);
         ProjectManager.OpenProject("/home/noble/Projects/Sekani");
     }
 
@@ -33,52 +34,12 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
     public void HandleCommand(string? command)
     {
         if (string.IsNullOrEmpty(command)) return;
-        switch (command)
-        {
-            case "write":
-                WriteActiveBuffer();
-                break;
-            case "buffer-close":
-                CloseActiveBuffer();
-                break;
-        }
+        _commands.Execute(command);
     }
-
-    private void WriteActiveBuffer()
-    {
-        if (ActiveDocumentView is null) return;
-        var doc = ActiveDocumentView.Document;
-        doc.TrySave();
-    }
-
-    private void CloseActiveBuffer()
-    {
-        if (ActiveDocumentView is null) return;
-        var path = ActiveDocumentView.Document.FilePath;
-        DocumentManager.CloseDocument(path);
-    }
-
 
     public void RaisePanelClosed(object? sender)
     {
         PanelClosed?.Invoke(sender, new());
-    }
-
-    public void OpenBufferPicker()
-    {
-        var openDocuments = DocumentManager.GetOpenDocuments();
-        BigInputPromptContext = new BigInputPrompBufferPickerContext(openDocuments, this);
-    }
-
-    public void OpenProjectFilePicker()
-    {
-        var files = ProjectManager.AllFiles();
-        BigInputPromptContext = new BigInputPrompBufferPickerContext(files, this);
-    }
-
-    public void OpenCommandPalette()
-    {
-        BigInputPromptContext = new CommandPaletteContext(Commands, this);
     }
 
     [ObservableProperty]

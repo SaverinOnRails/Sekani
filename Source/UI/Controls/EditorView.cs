@@ -1588,22 +1588,12 @@ internal sealed class EditorView : Control
 		switch (e.Text)
 		{
 			case "b":
-				OpenBufferPicker();
+				_editorContext.HandleCommand(CommandNames.BufferPicker);
 				break;
 			case "f":
-				OpenProjectFilePicker();
+				_editorContext.HandleCommand(CommandNames.FilePicker);
 				break;
 		}
-	}
-
-	private void OpenBufferPicker()
-	{
-		_editorContext.OpenBufferPicker();
-	}
-
-	private void OpenProjectFilePicker()
-	{
-		_editorContext.OpenProjectFilePicker();
 	}
 
 	private void HandleNormalModeTextInput(TextInputEventArgs e)
@@ -1694,7 +1684,7 @@ internal sealed class EditorView : Control
 				break;
 			case ":":
 				{
-					_editorContext.OpenCommandPalette();
+					_editorContext.HandleCommand(CommandNames.CommandPalette);
 					return;
 				}
 			case "u":

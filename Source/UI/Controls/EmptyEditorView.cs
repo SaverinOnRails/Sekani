@@ -142,16 +142,16 @@ public class EmptyEditorView : ContentControl
 			switch (e.Text)
 			{
 				case "b":
-					_editorContext.OpenBufferPicker();
+					_editorContext.HandleCommand(CommandNames.BufferPicker);
 					break;
 				case "f":
-					_editorContext.OpenProjectFilePicker();
+					_editorContext.HandleCommand(CommandNames.FilePicker);
 					break;
 			}
 		}
 		else if (e.Text == ":")
 		{
-			_editorContext.OpenCommandPalette();
+			_editorContext.HandleCommand(CommandNames.CommandPalette);
 		}
 	}
 }
