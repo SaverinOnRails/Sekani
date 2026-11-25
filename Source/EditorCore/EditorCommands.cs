@@ -49,11 +49,12 @@ public class EditorCommands
 		try
 		{
 			_context.ActiveDocumentView.Document.TrySave();
-			_context.ToastManager.ShowSimpleToast($"Written to {path}");
+			FileInfo file = new(path);
+			_context.ToastManager.ShowSimpleToast($"Written {file.Length / 1024}kb to {path}");
 		}
-		catch
+		catch (Exception e)
 		{
-			//handle error here
+			_context.ToastManager.ShowErrorToast("Error", e.Message);
 		}
 	}
 
