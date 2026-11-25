@@ -430,7 +430,7 @@ internal sealed class EditorView : Control
 		_originalSmoothScrollDistance = diff;
 		if (diff < EditorArea.Height / 2)
 		{
-			DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset ;
+			DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset;
 			CorrectScrollBarOffset();
 			StopSmoothScroll();
 			Redraw();
@@ -1385,18 +1385,17 @@ internal sealed class EditorView : Control
 					{
 						expectedPixelWidth -= _editorMetrics.CharAdvance; //linebreaks are not measured by avalonia
 					}
+					Point point = VisualToUI(
+					  new VisualCoordinate(
+						0,
+						currentVisualLine));
+					y = point.Y - visibleTextBounds.pixelOffset;
+					x = point.X - DocumentView.ScrollXOffset;
 					const double epsilon = 0.01;
 					if (Math.Abs(expectedPixelWidth - actualPixelWidth) < epsilon)
 					{
-						Point point = VisualToUI(
-						  new VisualCoordinate(
-							0,
-							currentVisualLine));
-						y = point.Y - visibleTextBounds.pixelOffset;
-						x = point.X - DocumentView.ScrollXOffset;
 						point = point.WithY(y);
 						point = point.WithX(x);
-
 						//apply highlighting
 						var logicalOffset = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
 						var logicalEnd = logicalOffset + visualLine.LogicalLength;
