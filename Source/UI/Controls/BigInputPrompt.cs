@@ -3,6 +3,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Raffinert.FuzzySharp;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -141,11 +142,23 @@ public class BigInputPrompt : FocusablePromptControl
 		if (_fileList is null || _listContext?.Items is null)
 			return;
 		var items = _listContext.Items;
-		var filtered = items
-			.Where(file => file.Contains(query, StringComparison.OrdinalIgnoreCase))
+		if (string.IsNullOrWhiteSpace(query))
+		{
+			_fileList.ItemsSource = items;
+			return;
+		}
+		var all = Process.ExtractTop(query, items, limit: 30, cutoff: 40).ToList();
+		if (all.Count == 0) { return; }
+		var best = all[0].Score;
+		var filtered = all
+			.Where(r => r.Score >= Math.Max(50, best - 15))
+			.Take(10)
+			.Select(r => r.Value)
 			.ToList();
+
 		_fileList.ItemsSource = filtered;
 		_fileList.SelectedIndex = filtered.Count > 0 ? 0 : -1;
+
 		if (_fileList.SelectedIndex >= 0)
 		{
 			_fileList.ScrollIntoView(_fileList.SelectedIndex);
