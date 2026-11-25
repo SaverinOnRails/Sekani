@@ -24,6 +24,8 @@ public interface IEditorContext
 
     public ProjectManager ProjectManager { get; }
 
+    public IToastManager ToastManager { get; }
+
 
 }
 

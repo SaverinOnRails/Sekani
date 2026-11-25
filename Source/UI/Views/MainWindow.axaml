@@ -7,6 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:editorCore="using:Sekani.EditorCore"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
     xmlns:vm="using:SekaniUI.ViewModels"
     Title="SekaniUI"
     d:DesignHeight="450"
@@ -34,6 +35,7 @@
             Mode="{Binding Mode, Mode=TwoWay}"
             MotionCountBuffer="{Binding MotionCountBuffer, Mode=TwoWay}" />
         <controls:EmptyEditorView IsVisible="{Binding ActiveDocumentView, Converter={x:Static ObjectConverters.IsNull}}" Mode="{Binding Mode, Mode=TwoWay}" />
+        <shadui:ToastHost Manager="{Binding ShadToastManager}" />
 
         <!--  Small Input Prompt  -->
         <controls:SmallInputPrompt IsVisible="{Binding SmallInputPromptContext, Converter={x:Static, ObjectConverters.IsNotNull}}" />

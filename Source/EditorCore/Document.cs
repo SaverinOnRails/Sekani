@@ -623,18 +623,10 @@ public sealed class SekaniDocument : IDisposable
 
 	public void TrySave()
 	{
-		try
+		if (_filePath is null) TryCreateFileAndSave();
+		else
 		{
-			if (_filePath is null) TryCreateFileAndSave();
-			else
-			{
-				SaveCore();
-			}
-		}
-		catch (Exception e)
-		{
-			Console.WriteLine(e.Message);
-			return;
+			SaveCore();
 		}
 	}
 

@@ -45,7 +45,16 @@ public class EditorCommands
 	private void WriteActiveBuffer()
 	{
 		if (_context.ActiveDocumentView is null) return;
-		_context.ActiveDocumentView.Document.TrySave();
+		var path = _context.ActiveDocumentView.Document.FilePath;
+		try
+		{
+			_context.ActiveDocumentView.Document.TrySave();
+			_context.ToastManager.ShowSimpleToast($"Written to {path}");
+		}
+		catch
+		{
+			//handle error here
+		}
 	}
 
 	private void CloseActiveBuffer()

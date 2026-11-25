@@ -718,7 +718,7 @@ internal sealed class EditorView : Control
 	}
 	private void SetEditorMetrics()
 	{
-		_editorFontFace = new Typeface("Cascadia Code", FontStyle.Italic);
+		_editorFontFace = new Typeface("Jetbrains Mono", FontStyle.Italic);
 		_normalLineNumberFontFace = new Typeface(
 		_editorFontFace.FontFamily,
 		_editorFontFace.Style,

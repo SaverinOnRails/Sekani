@@ -1,8 +1,9 @@
 using System;
-using System.Collections.Generic;
+using System.ComponentModel;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sekani.EditorCore;
+using SekaniUI.Models;
 namespace SekaniUI.ViewModels;
 
 public partial class MainViewModel : ViewModelBase, IEditorContext
@@ -20,6 +21,7 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         CreateClipboard(clipboard);
         DocumentManager = new(Clipboard!, this);
         ProjectManager = new();
+        ToastManager = new ToastManager(ShadToastManager);
         _commands = new(this);
         ProjectManager.OpenProject("/home/noble/Projects/Sekani");
     }
@@ -60,5 +62,10 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
 
     [ObservableProperty]
     private string? _motionCountBuffer = null;
+
+    public ShadUI.ToastManager ShadToastManager { get; } = new();
+
+    public IToastManager ToastManager { get; }
+
 }
 
