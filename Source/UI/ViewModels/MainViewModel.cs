@@ -36,13 +36,19 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         switch (command)
         {
             case "write":
-                // TODO: save the active document
-                Console.WriteLine("[Command] write");
+                WriteActiveBuffer();
                 break;
             case "buffer-close":
                 CloseActiveBuffer();
                 break;
         }
+    }
+
+    private void WriteActiveBuffer()
+    {
+        if (ActiveDocumentView is null) return;
+        var doc = ActiveDocumentView.Document;
+        doc.TrySave();
     }
 
     private void CloseActiveBuffer()

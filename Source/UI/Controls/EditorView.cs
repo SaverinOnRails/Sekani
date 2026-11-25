@@ -900,7 +900,7 @@ internal sealed class EditorView : Control
 				}
 				var point = new Point(startAtPixels - DocumentView.ScrollXOffset, visualLineSum * _editorMetrics.LineHeight - DocumentView.ScrollYOffset);
 				var size = new Size(endAtPixels - startAtPixels, _editorMetrics.LineHeight);
-				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFCB3D"), 0.25), new Rect(point, size));
+				context.FillRectangle(new SolidColorBrush(Color.Parse("#FFA97B"), 0.25), new Rect(point, size));
 				visualLineSum++;
 			}
 		}
