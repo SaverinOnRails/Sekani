@@ -34,7 +34,7 @@ public class BigInputPrompt : FocusablePromptControl
 		var mainGrid = new Grid() { Height = 700, RowDefinitions = new("70, *") };
 		mainGrid.Bind(Grid.BackgroundProperty,
 			this.GetResourceObservable("BackgroundColor", obj => obj is Color c ? new SolidColorBrush(c, 0.8) : null));
-		mainGrid.BackdropEffect = new BlurEffect() { Radius = 20 };
+		mainGrid.BackdropEffect = new BlurEffect() { Radius = 30 };
 		Grid.SetColumn(mainGrid, 1);
 		wrapperGrid.Children.Add(mainGrid);
 

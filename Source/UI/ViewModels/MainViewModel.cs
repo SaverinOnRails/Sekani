@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection.Metadata;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sekani.EditorCore;
@@ -21,7 +20,7 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         CreateClipboard(clipboard);
         DocumentManager = new(Clipboard!, this);
         ProjectManager = new();
-        CreateDocument();
+        ProjectManager.OpenProject("/home/noble/Projects/Sekani");
     }
 
     private void CreateClipboard(IClipboard? clipboard)
@@ -30,23 +29,6 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         Clipboard = new(clipboard.TryGetTextAsync, clipboard.SetTextAsync);
     }
 
-    private void CreateDocument()
-    {
-        var file1 = "/home/noble/Documents/sekanitestfiles/xdisp.c";
-        var file2 = "/home/noble/Documents/sekanitestfiles/sqlite3.c";
-        var file4 = "/home/noble/Projects/noctalia/third_party/luau/Compiler/src/CostModel.cpp";
-        var file3 = "/home/noble/Projects/yin/daemon/Monitor.cpp";
-
-        //Manager API
-        DocumentManager.OpenDocument(file3);
-        DocumentManager.OpenDocument(file4);
-        DocumentManager.OpenDocument(file2);
-        DocumentManager.OpenDocument(file1);
-
-        //Project API
-        // ProjectManager.OpenProject("/home/noble/Projects/Sekani");
-        ProjectManager.OpenProject("/home/noble/Documents/emacs");
-    }
 
     public void HandleCommand(string? command)
     {

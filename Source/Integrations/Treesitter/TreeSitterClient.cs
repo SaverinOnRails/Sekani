@@ -12,8 +12,8 @@ public class TreeSitterClient : IDisposable
 	private TSParser _tsParser = new();
 	private TSTree? _tsTree;
 	private TSQuery? _tsHighlightQuery;
-	private string _treeSitterlib = "/home/noble/Documents/sekanitestfiles/treesitter/C/c.so";
-	private string _treeSitterHighlightQuery = "/home/noble/Documents/sekanitestfiles/treesitter/C/highlights.scm";
+	private string _treeSitterlib = "/home/noble/Documents/sekanitestfiles/treesitter/C#/c-sharp.so";
+	private string _treeSitterHighlightQuery = "/home/noble/Documents/sekanitestfiles/treesitter/C#/highlights.scm";
 	private int _readLength = 0;
 	private int _defaultPriority = 100;
 
@@ -47,7 +47,7 @@ public class TreeSitterClient : IDisposable
 			var libraryHandle = NativeLibrary.Load(_treeSitterlib);
 			var functionPtr = NativeLibrary.GetExport(
 				libraryHandle,
-				"tree_sitter_c");
+				"tree_sitter_c_sharp");
 			var getLanguage =
 				Marshal.GetDelegateForFunctionPointer<GetLanguageDelegate>(
 					functionPtr);

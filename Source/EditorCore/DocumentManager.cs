@@ -82,7 +82,3 @@ public class DocumentView
 		Document = document;
 	}
 }
-
-
-
-

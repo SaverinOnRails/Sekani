@@ -1,6 +1,7 @@
 using System.Globalization;
 using Wcwidth;
 using System.Text;
+using System.Runtime.CompilerServices;
 namespace Sekani.EditorCore;
 
 public record LineLayout
@@ -17,6 +18,8 @@ public record LineLayout
 	public IReadOnlyList<int> GraphemeBoundaries => _graphemeBoundaries;
 	private List<int> _logicalOffsetToVisualOffsetArena = [];
 	public IReadOnlyList<int> LogicalOffsetToVisualOffsetArena => _logicalOffsetToVisualOffsetArena;
+
+	public object?[] VisualLineRenderCache = [];
 
 	public LineLayout(string text, int tabSize, bool wrap, int maxVisualColsPerLine)
 	{
@@ -100,7 +103,6 @@ public record LineLayout
 			}
 			visualCol += width;
 		}
-		//if this line does not end with a line break(last line in buffer), still add an offset for it at the next utf18 offset to grapheme boundaries so the cursor can visit it
 		if (_logicalText.LastOrDefault() != '\n')
 		{
 			_graphemeBoundaries.Add(index + 1);
@@ -115,8 +117,8 @@ public record LineLayout
 				CellCount: visualCol,
 				ArenaLength: _logicalOffsetToVisualOffsetArena.Count - chunkStartIndex
 			));
-
 		VisualText = builder.ToString();
+		VisualLineRenderCache = new object?[_visualLines.Count];
 	}
 
 	public VisualCoordinate GetVisualCoordinate(Coordinate coord, bool forceTrailVisualLine = false)

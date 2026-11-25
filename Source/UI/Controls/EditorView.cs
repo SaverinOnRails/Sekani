@@ -23,6 +23,7 @@ internal sealed class EditorView : Control
 	private Typeface _focusedLineNumberTypeFace = Typeface.Default;
 	private readonly double _fontSize = 16.5F;
 	private LineCache _lineCache = null!;
+	private bool HasDocument => DocumentView is not null && _lineCache is not null;
 	private
 	const float _baseLineNumberWidth = 20;
 
@@ -31,6 +32,7 @@ internal sealed class EditorView : Control
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
 	private bool _drawLineNumbers = true;
+
 	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
 	private double LineNumberSectWidth =>
@@ -273,6 +275,7 @@ internal sealed class EditorView : Control
 	protected override void OnKeyDown(KeyEventArgs e)
 	{
 		base.OnKeyDown(e);
+		if (!HasDocument) return;
 		HandleKeyInput(e);
 	}
 
@@ -425,14 +428,14 @@ internal sealed class EditorView : Control
 		_lastSmoothScrollFrameTime = TimeSpan.Zero;
 		var diff = Math.Abs(DocumentView.TargetScrollYOffset - DocumentView.ScrollYOffset);
 		_originalSmoothScrollDistance = diff;
-		// if (diff >= EditorArea.Height / 2)
-		// {
-		// 	DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset ;
-		// 	CorrectScrollBarOffset();
-		// 	StopSmoothScroll();
-		// 	Redraw();
-		// 	return;
-		// }
+		if (diff < EditorArea.Height / 2)
+		{
+			DocumentView.ScrollYOffset = DocumentView.TargetScrollYOffset ;
+			CorrectScrollBarOffset();
+			StopSmoothScroll();
+			Redraw();
+			return;
+		}
 		RequestSmoothScrollFrame();
 	}
 
@@ -628,7 +631,7 @@ internal sealed class EditorView : Control
 
 	protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
 	{
-		if (e.Property == BoundsProperty)
+		if (e.Property == BoundsProperty && HasDocument)
 		{
 			SaveScrollAnchor();
 			if (_softWordWrap)
@@ -639,9 +642,13 @@ internal sealed class EditorView : Control
 			RestoreScrollAnchor();
 			CorrectScrollBarOffset();
 		}
+		if (e.Property == IsVisibleProperty && e.GetNewValue<bool>())
+		{
+			Dispatcher.UIThread.Post(() => Focus(), DispatcherPriority.Loaded);
+		}
 		if (e.Property == ModeProperty)
 		{
-			Document.BeginTransaction();
+			Document?.BeginTransaction();
 			ClearMotionCountBuffer();
 		}
 		if (e.Property == DocumentViewProperty)
@@ -673,10 +680,13 @@ internal sealed class EditorView : Control
 				}
 				_lineCache.VisualLineTreeUpdated += LineCacheVisualLineTreeUpdated;
 				CorrectScrollBarOffset();
+				Focus();
+				Redraw();
 			}
-
-			Focus();
-			Redraw();
+			else
+			{
+				_lineCache = null!;
+			}
 		}
 		base.OnPropertyChanged(e);
 	}
@@ -729,7 +739,7 @@ internal sealed class EditorView : Control
 
 		var charAdvance = (float)text.WidthIncludingTrailingWhitespace;
 		var lineHeight = text.Height * 1.25;
-		var tabSize = 8;
+		var tabSize = 4;
 		_editorMetrics = new(charAdvance, lineHeight, tabSize);
 	}
 
@@ -757,6 +767,7 @@ internal sealed class EditorView : Control
 	public override void Render(DrawingContext context)
 	{
 		base.Render(context);
+		if (!HasDocument) return;
 		var visualLineTreeVersion = _visualLineTreeVersion;
 		var visibleTextBounds = ComputeVisibleText();
 		DrawMainRectangle(context);
@@ -962,6 +973,7 @@ internal sealed class EditorView : Control
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)
 	{
+		if (!HasDocument) return;
 		Focus();
 		StopSmoothScroll();
 		base.OnPointerPressed(e);
@@ -1049,6 +1061,7 @@ internal sealed class EditorView : Control
 	protected override void OnPointerMoved(PointerEventArgs e)
 	{
 		base.OnPointerMoved(e);
+		if (!HasDocument) return;
 		TryMoveScrollbars(e, out bool didMoveScrollBars);
 		if (didMoveScrollBars)
 		{
@@ -1255,7 +1268,7 @@ internal sealed class EditorView : Control
 		}
 	}
 
-	private void Redraw() => Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
+	private void Redraw() => InvalidateVisual();
 
 
 	protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -1276,6 +1289,7 @@ internal sealed class EditorView : Control
 	protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
 	{
 		base.OnPointerWheelChanged(e);
+		if (!HasDocument) return;
 		StopSmoothScroll();
 		if (!_canScrollY)
 			return;
@@ -1347,13 +1361,23 @@ internal sealed class EditorView : Control
 					var text = lineLayout.VisualText.AsSpan(
 					  visualLine.VisualOffset,
 					  visualLine.VisualStringLength);
-					var ft = new FormattedText(
-					  text.ToString(),
-					  CultureInfo.InvariantCulture,
-					  FlowDirection.LeftToRight,
-					  _editorFontFace,
-					  _fontSize,
-					  _mainTextBrush);
+
+					FormattedText ft;
+					if (lineLayout.VisualLineRenderCache[j] is FormattedText _ft)
+					{
+						ft = _ft;
+					}
+					else
+					{
+						ft = new FormattedText(
+						  text.ToString(),
+						  CultureInfo.InvariantCulture,
+						  FlowDirection.LeftToRight,
+						  _editorFontFace,
+						  _fontSize,
+						  _mainTextBrush);
+						lineLayout.VisualLineRenderCache[j] = ft;
+					}
 
 					var expectedPixelWidth = _editorMetrics.CharAdvance * visualLine.VisualStringLength;
 					var actualPixelWidth = ft.WidthIncludingTrailingWhitespace;
@@ -1372,6 +1396,7 @@ internal sealed class EditorView : Control
 						x = point.X - DocumentView.ScrollXOffset;
 						point = point.WithY(y);
 						point = point.WithX(x);
+
 						//apply highlighting
 						var logicalOffset = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
 						var logicalEnd = logicalOffset + visualLine.LogicalLength;
@@ -1384,14 +1409,10 @@ internal sealed class EditorView : Control
 								if (hightlightBrush is not null)
 								{
 									var logicalToVisualOffsetArena = lineLayout.LogicalOffsetToVisualOffsetArena;
-									//all this bullshit becuase i decided to convert tabs to spaces
 									var map = CollectionsMarshal.AsSpan((List<int>)logicalToVisualOffsetArena).Slice(visualLine.ArenaStartIndex, visualLine.ArenaLength);
 									int s = map[Math.Clamp(span.Start - logicalOffset, 0, map.Length - 1)];
 									int e = map[Math.Clamp(span.End - logicalOffset, 0, map.Length - 1)];
 									var vtext = text[s..e];
-									// Console.WriteLine(span.Capture);
-									// Console.WriteLine(vtext);
-									// Console.WriteLine($"range is {span.Start} - {span.End}");
 									if (e <= s) continue;
 									ft.SetForegroundBrush(hightlightBrush, s, e - s);
 								}
@@ -1399,7 +1420,6 @@ internal sealed class EditorView : Control
 						}
 						context.DrawText(ft, point);
 					}
-
 					else
 					{
 						var lineLogicalStart = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
@@ -1547,7 +1567,7 @@ internal sealed class EditorView : Control
 	protected override void OnTextInput(TextInputEventArgs e)
 	{
 		base.OnTextInput(e);
-		if (e.Text is null) return;
+		if (e.Text is null || !HasDocument) return;
 		if (Mode == Mode.Normal || Mode == Mode.Visual)
 		{
 			HandleNormalModeTextInput(e);
