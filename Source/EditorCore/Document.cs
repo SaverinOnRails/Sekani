@@ -579,7 +579,7 @@ public sealed class SekaniDocument : IDisposable
 	{
 		BeginTransaction();
 		var insertionOffsets = new int[Selections.Count];
-		var text = Environment.NewLine;
+		var text = "\n";
 		for (int i = 0; i < Selections.Count; i++)
 		{
 			var cursor = Selections[i];
@@ -592,7 +592,7 @@ public sealed class SekaniDocument : IDisposable
 		int delta = 0;
 		ForEachCursor((workingRanges, index) =>
 		{
-			TypeCharsCore(workingRanges, index, insertionOffsets[index], insertionOffsets[index] + text.Length, text, ref delta);
+			TypeCharsCore(workingRanges, index, insertionOffsets[index], text, ref delta);
 		});
 		UpdatePreferredVisualColumn();
 	}
@@ -603,21 +603,21 @@ public sealed class SekaniDocument : IDisposable
 								ref int delta)
 	{
 		var insertOffset = workingRanges[cursorIndex].Head;
-		TypeCharsCore(workingRanges, cursorIndex, insertOffset, insertOffset + text.Length, text, ref delta);
+		TypeCharsCore(workingRanges, cursorIndex, insertOffset, text, ref delta);
 	}
 
 	private void TypeCharsCore(List<Range> workingRanges,
 								int cursorIndex,
 								int insertOffset,
-								int setCursorTo,
 								string text,
-								ref int delta)
+								ref int delta,
+								bool cursorAtBeginning = false)
 	{
 		var insertPos = insertOffset + delta;
-		_pieceTable.Insert(text, insertPos);
-		workingRanges[cursorIndex] = new(setCursorTo + delta);
-		// SetCursor(setCursorTo + delta, cursorIndex);
-		delta += text.Length;
+		var written = _pieceTable.Insert(text, insertPos);
+		var cursorHead = cursorAtBeginning ? insertPos : insertPos + written;
+		workingRanges[cursorIndex] = new(cursorHead);
+		delta += written;
 		UpdatePreferredVisualColumn();
 	}
 
@@ -757,7 +757,7 @@ public sealed class SekaniDocument : IDisposable
 	{
 		BeginTransaction();
 		var insertionOffsets = new int[Selections.Count];
-		var text = Environment.NewLine;
+		var text = "\n";
 		for (int i = 0; i < Selections.Count; i++)
 		{
 			var cursor = Selections[i];
@@ -769,7 +769,7 @@ public sealed class SekaniDocument : IDisposable
 		int delta = 0;
 		ForEachCursor((workingRanges, index) =>
 		{
-			TypeCharsCore(workingRanges, index, insertionOffsets[index], insertionOffsets[index] + text.Length - 1, Environment.NewLine, ref delta);
+			TypeCharsCore(workingRanges, index, insertionOffsets[index], text, ref delta, cursorAtBeginning: true);
 		});
 		UpdatePreferredVisualColumn();
 	}

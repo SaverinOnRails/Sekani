@@ -7,6 +7,13 @@ public enum RBColor : byte
 	Red,
 	Black,
 }
+
+public enum LineEnding
+{
+	LF,
+	CRLF
+}
+
 public enum BufferLineChangeKind
 {
 	LineChanged,
@@ -166,6 +173,7 @@ internal class PieceTable
 	private readonly List<char> _addBuffer = [];
 	private readonly List<int> _addBufferLineStarts = [0];
 	private bool _replayingHistory = false;
+	private LineEnding _defaultLineEnding = LineEnding.LF;
 
 	private EditTransaction? _activeTransaction = null;
 
@@ -187,6 +195,7 @@ internal class PieceTable
 
 	public PieceTable(string original)
 	{
+		original = NormalizeLineEndings(original);
 		_originalBuffer = [.. original];
 		var root = CreatePieceNode(PieceBuffer.Original, 0, original.Length, RBColor.Black);
 		var originalLineStarts = GetLineStarts(original, 0);
@@ -194,6 +203,16 @@ internal class PieceTable
 		root.LineFeedCount = originalLineStarts.Count;
 		_root = root;
 		UpdateTableMetadata();
+	}
+
+	//Normalize => \r\n -> \n
+	private string NormalizeLineEndings(string text)
+	{
+		if (string.IsNullOrEmpty(text) || !text.Contains('\r'))
+		{
+			return text;
+		}
+		return text.Replace("\r\n", "\n").Replace('\r', '\n');
 	}
 
 	static PieceTable()
@@ -266,11 +285,12 @@ internal class PieceTable
 		return offset;
 	}
 
-	public void Insert(string text, int offset)
+	public int Insert(string text, int offset)
 	{
 		try
 		{
-			if (text.Length == 0) return;
+			text = NormalizeLineEndings(text);
+			if (text.Length == 0) return 0;
 			int line = GetCoordinate(offset).Line;
 			var linestarts = GetLineStarts(text, 0);
 			int lineCount = linestarts.Count;
@@ -285,10 +305,12 @@ internal class PieceTable
 			}
 			UpdateTableMetadata();
 			RaiseBufferNetChangedEvent(offset, text.Length, null, BufferOperation.Insertion);
+			return text.Length;
 		}
 		catch (ArgumentOutOfRangeException)
 		{
 			Console.WriteLine("argument was out of range, ignoring action");
+			return 0;
 		}
 	}
 
