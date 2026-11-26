@@ -1,7 +1,6 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Wayland;
 using System;
-
 namespace SekaniUI;
 
 sealed class Program

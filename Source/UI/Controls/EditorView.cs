@@ -31,7 +31,7 @@ internal sealed class EditorView : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = true;
+	private bool _drawLineNumbers = false;
 
 	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
@@ -1381,6 +1381,7 @@ internal sealed class EditorView : Control
 
 					var expectedPixelWidth = _editorMetrics.CharAdvance * visualLine.VisualStringLength;
 					var actualPixelWidth = ft.WidthIncludingTrailingWhitespace;
+
 					if (text.Contains('\n'))
 					{
 						expectedPixelWidth -= _editorMetrics.CharAdvance; //linebreaks are not measured by avalonia
@@ -1399,6 +1400,7 @@ internal sealed class EditorView : Control
 						//apply highlighting
 						var logicalOffset = logicalLineAbsoluteOffset + visualLine.LogicalOffset;
 						var logicalEnd = logicalOffset + visualLine.LogicalLength;
+						//TODO: Reuse this in the FormattedText Cache, invalidate precisely from treesitter
 						if (Document.TreeSitterClientActive)
 						{
 							var highlights = Document.GetHighlights(logicalOffset, logicalEnd);

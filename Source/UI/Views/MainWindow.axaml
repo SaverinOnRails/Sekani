@@ -52,8 +52,14 @@
             <StackPanel.Background>
                 <SolidColorBrush Color="{DynamicResource BackgroundColor}" />
             </StackPanel.Background>
-            <TextBlock FontSize="15" Text="{Binding Mode}" />
+            <StackPanel.Styles>
+                <Style Selector="TextBlock">
+                    <Setter Property="FontSize" Value="15" />
+                </Style>
+            </StackPanel.Styles>
+            <TextBlock  Text="{Binding Mode}" />
             <TextBlock Text="{Binding MotionCountBuffer}" />
+            <TextBlock Text="{Binding ActiveDocumentView.Document.FilePath}" />
         </StackPanel>
     </Grid>
 </Window>

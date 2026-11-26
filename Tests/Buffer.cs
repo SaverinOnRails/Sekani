@@ -43,6 +43,44 @@ public sealed class BufferTests
 	}
 
 	[TestMethod]
+	public void Constructor_NormalizesCrLfAndCrToLf()
+	{
+		const string input = "one\r\ntwo\rthree\nfour\r\n";
+		const string expected = "one\ntwo\nthree\nfour\n";
+		var table = new PieceTable(input);
+
+		Assert.AreEqual(expected, table.Print());
+		Assert.AreEqual(expected.Length, table.BufferLength);
+		Assert.AreEqual(5, table.LineFeedCount);
+		for (var offset = 0; offset <= table.BufferLength; offset++)
+		{
+			var coordinate = table.GetCoordinate(offset);
+			Assert.AreEqual(offset, table.GetOffset(coordinate), $"Offset {offset} mapped through {coordinate}");
+		}
+	}
+
+	[TestMethod]
+	public void Insert_NormalizesCrLfAndCrAndUndoRedoPreserveNormalizedText()
+	{
+		var table = CreateTable("ab");
+		var insertedLength = table.Insert("\r\nx\ry\n", 1);
+		table.CommitTransaction(null);
+
+		Assert.AreEqual(5, insertedLength);
+		Assert.AreEqual("a\nx\ny\nb", table.Print());
+		Assert.AreEqual(7, table.BufferLength);
+		Assert.AreEqual(4, table.LineFeedCount);
+
+		table.DoUndo(out _);
+		Assert.AreEqual("ab", table.Print());
+
+		table.DoRedo(out _);
+		Assert.AreEqual("a\nx\ny\nb", table.Print());
+		Assert.AreEqual(7, table.BufferLength);
+		Assert.AreEqual(4, table.LineFeedCount);
+	}
+
+	[TestMethod]
 	public void Insert_AddsTextAtBeginningMiddleAndEnd()
 	{
 		var table = CreateTable("abcd");

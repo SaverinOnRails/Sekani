@@ -137,7 +137,7 @@ public sealed class SekaniDocument : IDisposable
 		if (_useTreesitter)
 		{
 			_treeSitterClient = new(_pieceTable.Slice);
-			_treeSitterClient.ParseBuffer(buffer);
+			_treeSitterClient.ParseBuffer(string.Concat(_pieceTable.OriginalBuffer));
 		}
 		SubscribeToEvents();
 	}
@@ -742,16 +742,6 @@ public sealed class SekaniDocument : IDisposable
 				SetCursor(workingRanges, offset, index);
 		});
 	}
-
-	// public int GetHigherEnd(Range range)
-	// {
-	// 	if (!range.HasActiveSelection || range.Head == range.To)
-	// 	{
-	// 		return NextGraphemeBoundary(range.To);
-	// 	}
-	// 	return range.To;
-	// }
-
 
 	public void AddNewLineAboveSelection()
 	{

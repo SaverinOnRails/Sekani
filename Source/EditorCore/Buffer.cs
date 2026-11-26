@@ -168,6 +168,7 @@ internal class PieceTable
 {
 	//This should technically be a readonly list, but using a List helps us create a span view which is convenient
 	private readonly List<char> _originalBuffer;
+	public IReadOnlyList<char> OriginalBuffer => _originalBuffer;
 	private IReadOnlyList<int> _originalBufferLineStarts = [0];
 	private PieceNode _root;
 	private readonly List<char> _addBuffer = [];
@@ -810,8 +811,8 @@ internal class PieceTable
 
 	private void DeleteNode(PieceNode z)
 	{
-		PieceNode x; // always points to replacement for y or z.
-		PieceNode y; // always points to node to be deleted or replaced.
+		PieceNode x; 
+		PieceNode y; 
 
 		if (z.Left == NULL_NODE)
 		{
