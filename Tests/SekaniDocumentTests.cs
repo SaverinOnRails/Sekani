@@ -258,7 +258,7 @@ public sealed class SekaniDocumentTests
 	}
 
 	[TestMethod]
-	public void SelectAll_SelectsAndYanksEntireNonEmptyDocument()
+	public async Task SelectAll_SelectsAndYanksEntireNonEmptyDocument()
 	{
 		var fixture = CreateDocument("alpha\nbeta");
 		var document = fixture.Document;
@@ -266,7 +266,7 @@ public sealed class SekaniDocumentTests
 		document.SelectAll();
 
 		Assert.AreEqual(new Range(0, document.BufferLength), document.PrimaryCursorRange);
-		document.YankSelection();
+		await document.YankSelection();
 		Assert.AreEqual("alpha\nbeta", fixture.ClipboardText);
 	}
 
@@ -389,42 +389,84 @@ public sealed class SekaniDocumentTests
 	}
 
 	[TestMethod]
-	public void YankSelection_WritesSelectedTextToInjectedClipboard()
+	public async Task YankSelection_WritesSelectedTextToInjectedClipboard()
 	{
 		var fixture = CreateDocument("abcde");
 		fixture.Document.SetAnchorAndHead(1, 2);
 
-		fixture.Document.YankSelection();
+		await fixture.Document.YankSelection();
 
 		Assert.AreEqual("bc", fixture.ClipboardText);
 	}
 
 	[TestMethod]
-	public void PasteAfterCursor_InsertsClipboardTextAndMovesCaretAfterIt()
+	public async Task PasteAfterCursor_InsertsClipboardTextAndMovesCaretAfterIt()
 	{
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
 		fixture.ClipboardText = "XY";
 		document.SetCursor(1, 0);
 
-		document.PasteAfterCursor();
+		await document.PasteAfterCursor();
 
 		Assert.AreEqual("aXYbc", fixture.ReadText());
 		Assert.AreEqual(new Range(3), document.PrimaryCursorRange);
 	}
 
 	[TestMethod]
-	public void PasteAfterCursor_NullClipboardTextLeavesDocumentUnchanged()
+	public async Task PasteAfterCursor_NullClipboardTextLeavesDocumentUnchanged()
 	{
 		var fixture = CreateDocument("abc");
 		var document = fixture.Document;
 		fixture.ClipboardText = null;
 		document.SetCursor(1, 0);
 
-		document.PasteAfterCursor();
+		await document.PasteAfterCursor();
 
 		Assert.AreEqual("abc", fixture.ReadText());
 		Assert.AreEqual(new Range(1), document.PrimaryCursorRange);
+	}
+
+	[TestMethod]
+	public async Task YankSelection_WithAsyncClipboard_WritesSelectedText()
+	{
+		string? stored = null;
+		var clipboard = new Clipboard(
+			() => Task.FromResult<string?>(stored),
+			async text =>
+			{
+				await Task.Yield();
+				stored = text;
+			});
+		var doc = new SekaniDocument(clipboard);
+		doc.CreateLineCache(tabSize: 4, wordWrap: false, maxVisualColsPerLine: 0);
+		doc.TypeChars("hello world");
+		doc.SetAnchorAndHead(0, 4);
+
+		await doc.YankSelection();
+
+		Assert.AreEqual("hello", stored);
+	}
+
+	[TestMethod]
+	public async Task PasteAfterCursor_WithAsyncClipboard_InsertsClipboardText()
+	{
+		var clipboard = new Clipboard(
+			async () =>
+			{
+				await Task.Yield();
+				return "awesome ";
+			},
+			_ => Task.CompletedTask);
+		var doc = new SekaniDocument(clipboard);
+		doc.CreateLineCache(tabSize: 4, wordWrap: false, maxVisualColsPerLine: 0);
+		doc.TypeChars("hello world");
+		doc.SetCursor(6, 0);
+
+		await doc.PasteAfterCursor();
+
+		Assert.AreEqual("hello awesome world", doc.Print());
+		Assert.AreEqual(new Range(14), doc.PrimaryCursorRange);
 	}
 
 	[TestMethod]
@@ -739,14 +781,14 @@ public sealed class SekaniDocumentTests
 	}
 
 	[TestMethod]
-	public void MultiCursor_PasteAfterCursor_InsertsClipboardAtEveryCursor()
+	public async Task MultiCursor_PasteAfterCursor_InsertsClipboardAtEveryCursor()
 	{
 		var fixture = CreateDocument("abc\nabc");
 		var document = fixture.Document;
 		fixture.SetSelections(new Range(1), new Range(5));
 		fixture.ClipboardText = "XY";
 
-		document.PasteAfterCursor();
+		await document.PasteAfterCursor();
 
 		AssertSelections(document, new Range(3), new Range(9));
 		Assert.AreEqual("aXYbc\naXYbc", fixture.ReadText());

@@ -11,13 +11,9 @@ public sealed class Clipboard(
 	private readonly TryGetTextAsyncDelegate _tryGetSystemClipboardTextAsync = tryGetTextAsync;
 	private readonly SetTextAsyncDelegate _setSystemClipboardTextAsync = setTextAsync;
 
-	public void Yank(string text)
-	{
-		_setSystemClipboardTextAsync(text).GetAwaiter().GetResult();
-	}
+	public Task Yank(string text) => _setSystemClipboardTextAsync(text);
+	public Task YankAsync(string text) => Yank(text);
 
-	public async Task<string?> Paste()
-	{
-		return await _tryGetSystemClipboardTextAsync();
-	}
+	public Task<string?> Paste() => _tryGetSystemClipboardTextAsync();
+	public Task<string?> PasteAsync() => Paste();
 }

@@ -31,7 +31,7 @@ public class TreeSitterClient : IDisposable
 		_tsInputRead = TsInputRead;
 		_readLength = 8192;
 		_getBufferSlice = getBufferSlice;
-		if (_tsLanguage.Ptr == nint.Zero) return;
+		if (_tsLanguage is null || _tsLanguage.Ptr == nint.Zero) return;
 		_tsParser.set_language(_tsLanguage);
 		var highlightsQuery = _tsLanguage.query_new(File.ReadAllText(_treeSitterHighlightQuery), out uint errorCode, out TSQueryError error);
 		if (highlightsQuery is null) return;

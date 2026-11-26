@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -1565,13 +1566,13 @@ internal sealed class EditorView : Control
 		);
 	}
 
-	protected override void OnTextInput(TextInputEventArgs e)
+	protected override async void OnTextInput(TextInputEventArgs e)
 	{
 		base.OnTextInput(e);
 		if (e.Text is null || !HasDocument) return;
 		if (Mode == Mode.Normal || Mode == Mode.Visual)
 		{
-			HandleNormalModeTextInput(e);
+			await HandleNormalModeTextInput(e);
 		}
 		else if (Mode == Mode.Space)
 		{
@@ -1597,7 +1598,7 @@ internal sealed class EditorView : Control
 		}
 	}
 
-	private void HandleNormalModeTextInput(TextInputEventArgs e)
+	private async Task HandleNormalModeTextInput(TextInputEventArgs e)
 	{
 		if (e.Text is null) return;
 		if (e.Text.Length == 1 && char.IsNumber(e.Text[0]))
@@ -1695,11 +1696,33 @@ internal sealed class EditorView : Control
 				Document.Redo(MotionCount);
 				break;
 			case "y":
-				Document.YankSelection();
-				break;
+				e.Handled = true;
+				try
+				{
+					await Document.YankSelection();
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"Failed to yank to clipboard: {ex.Message}");
+				}
+				HoldCaretAndRedraw();
+				EnsureCaretVisible();
+				ClearMotionCountBuffer();
+				return;
 			case "p":
-				Document.PasteAfterCursor();
-				break;
+				e.Handled = true;
+				try
+				{
+					await Document.PasteAfterCursor();
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"Failed to paste from clipboard: {ex.Message}");
+				}
+				HoldCaretAndRedraw();
+				EnsureCaretVisible();
+				ClearMotionCountBuffer();
+				return;
 			case "/":
 				Find(SmallInputPromptSearchType.Buffer);
 				break;

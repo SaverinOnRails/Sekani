@@ -1064,22 +1064,25 @@ public sealed class SekaniDocument : IDisposable
 		return _pieceTable.Print();
 	}
 
-	public void YankSelection()
+	public async Task YankSelection()
 	{
+		if (_clipboard is null) return;
 		var textspanend = PrimaryCursorRange.GetTextSpan(GetPosAdvance).End;
 		int width = textspanend - PrimaryCursorRange.From;
 		var buf = new char[textspanend - PrimaryCursorRange.From];
 		var written = _pieceTable.Slice(PrimaryCursorRange.From, width, buf.AsSpan());
 		var text = buf.AsSpan()[..written];
-		_clipboard!.Yank(text.ToString());
+		await _clipboard.Yank(text.ToString());
 	}
 
-	public void PasteAfterCursor()
+	public Task YankSelectionAsync() => YankSelection();
+
+	public async Task PasteAfterCursor()
 	{
-		BeginTransaction();
-		//TODO:fix this deadlock
-		var text = _clipboard!.Paste().GetAwaiter().GetResult();
+		if (_clipboard is null) return;
+		var text = await _clipboard.Paste();
 		if (text is null) return;
+		BeginTransaction();
 		int delta = 0;
 		ForEachCursor((workingRanges, index) =>
 		{
@@ -1087,6 +1090,8 @@ public sealed class SekaniDocument : IDisposable
 		});
 		CommitTransaction();
 	}
+
+	public Task PasteAfterCursorAsync() => PasteAfterCursor();
 
 	public async Task<List<SearchHit>> FindInSelection(string text, SelectionSet originalSelectionSet)
 	{
