@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
@@ -15,7 +16,7 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-internal sealed class EditorView : Control
+internal sealed partial class EditorView : Control
 {
 	public EditorMetrics _editorMetrics;
 	private Typeface _editorFontFace = Typeface.Default;
@@ -81,32 +82,17 @@ internal sealed class EditorView : Control
 	private bool _canScrollY => GetDocumentHeightInPixels() > EditorArea.Height;
 	private static IBrush _scollBarBrush = new SolidColorBrush(Color.Parse("#BFC9D1"), 0.5);
 
-	public static readonly StyledProperty<Mode> ModeProperty = AvaloniaProperty.Register<EditorView, Mode>(nameof(Mode));
-	public Mode Mode
-	{
-		get => GetValue(ModeProperty);
-		set => SetValue(ModeProperty, value);
-	}
-	public static readonly StyledProperty<DocumentView> DocumentViewProperty = AvaloniaProperty.Register<EditorView, DocumentView>(nameof(DocumentView));
-	public static readonly StyledProperty<string?> MotionCountBufferProperty = AvaloniaProperty.Register<EditorView, string?>(nameof(MotionCountBuffer));
 
-	public string? MotionCountBuffer
-	{
-		get => GetValue(MotionCountBufferProperty);
-		set => SetValue(MotionCountBufferProperty, value);
-	}
+	[GeneratedStyledProperty]
+	public partial Mode Mode { get; set; }
+
+	[GeneratedStyledProperty]
+	public partial DocumentView? DocumentView { get; set; }
+
+	[GeneratedStyledProperty]
+	public partial string? MotionCountBuffer { get; set; }
 
 	public SekaniDocument Document => DocumentView?.Document!;
-	// public SekaniDocument Document
-	// {
-	// 	get => GetValue(DocumentProperty);
-	// 	set => SetValue(DocumentProperty, value);
-	// }
-	public DocumentView DocumentView
-	{
-		get => GetValue(DocumentViewProperty);
-		set => SetValue(DocumentViewProperty, value);
-	}
 
 	private readonly DispatcherTimer _caretBlinkTimer;
 	private DispatcherTimer? _autoDragScrollTimer;

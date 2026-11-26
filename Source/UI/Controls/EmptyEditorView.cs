@@ -9,16 +9,10 @@ using Sekani.EditorCore;
 
 namespace SekaniUI.Controls;
 
-public class EmptyEditorView : ContentControl
+internal sealed partial class EmptyEditorView : ContentControl
 {
-	public static readonly StyledProperty<Mode> ModeProperty =
-		AvaloniaProperty.Register<EmptyEditorView, Mode>(nameof(Mode));
-
-	public Mode Mode
-	{
-		get => GetValue(ModeProperty);
-		set => SetValue(ModeProperty, value);
-	}
+	[GeneratedStyledProperty]
+	public partial Mode Mode { get; set; }
 
 	private IEditorContext? _editorContext;
 
