@@ -21,7 +21,7 @@ internal sealed partial class EmptyEditorView : ContentControl
 		Focusable = true;
 		HorizontalAlignment = HorizontalAlignment.Stretch;
 		VerticalAlignment = VerticalAlignment.Stretch;
-		Background = Brush.Parse("#1e1e2e");
+		Background = Brush.Parse("#0c1017");
 		Content = MainContainer();
 	}
 

@@ -181,47 +181,46 @@ internal sealed partial class EditorView : Control
 
 	private Dictionary<string, IBrush> _highlightBrushes = new()
 	{
-		["attribute"] = Brush.Parse("#f9e2af"),                 // yellow
-		["type"] = Brush.Parse("#f9e2af"),                      // yellow
-		["type.enum.variant"] = Brush.Parse("#94e2d5"),         // teal
-		["constructor"] = Brush.Parse("#74c7ec"),             // sapphire
-		["constant"] = Brush.Parse("#fab387"),                  // peach
-		["constant.character"] = Brush.Parse("#94e2d5"),        // teal
-		["constant.character.escape"] = Brush.Parse("#f5c2e7"), // pink
-		["string"] = Brush.Parse("#a6e3a1"),                  // green
-		["string.regexp"] = Brush.Parse("#f5c2e7"),             // pink
-		["string.special"] = Brush.Parse("#89b4fa"),            // blue
-		["string.special.symbol"] = Brush.Parse("#f38ba8"),     // red
-		["string.special.path"] = Brush.Parse("#89b4fa"),       // blue
-		["path"] = Brush.Parse("#89b4fa"),                      // blue
-		["comment"] = Brush.Parse("#9399b2"),                   // overlay2
-		["variable"] = Brush.Parse("#cdd6f4"),                  // text
-		["variable.builtin"] = Brush.Parse("#f38ba8"),          // red
-		["variable.parameter"] = Brush.Parse("#eba0ac"),        // maroon
-		["variable.other.member"] = Brush.Parse("#89b4fa"),     // blue
-		["label"] = Brush.Parse("#74c7ec"),                     // sapphire
-		["punctuation"] = Brush.Parse("#9399b2"),               // overlay2
-		["keyword"] = Brush.Parse("#cba6f7"),                   // mauve
-		["keyword.control.conditional"] = Brush.Parse("#cba6f7"), // mauve
-		["operator"] = Brush.Parse("#89dceb"),                  // sky
-		["function"] = Brush.Parse("#89b4fa"),                  // blue
-		["function.macro"] = Brush.Parse("#f5e0dc"),            // rosewater
-		["tag"] = Brush.Parse("#89b4fa"),                       // blue
-		["namespace"] = Brush.Parse("#f9e2af"),                 // yellow
-		["special"] = Brush.Parse("#89b4fa"),                   // blue
-		["markup.heading"] = Brush.Parse("#f38ba8"),            // red
-		["markup.list"] = Brush.Parse("#94e2d5"),               // teal
-		["markup.bold"] = Brush.Parse("#f38ba8"),               // red
-		["markup.italic"] = Brush.Parse("#f38ba8"),             // red
-		["markup.link.url"] = Brush.Parse("#89b4fa"),           // blue
-		["markup.link.label"] = Brush.Parse("#74c7ec"),         // sapphire
-		["markup.raw"] = Brush.Parse("#a6e3a1"),                // green
-		["markup.quote"] = Brush.Parse("#f5c2e7"),              // pink
-		["diff.plus"] = Brush.Parse("#a6e3a1"),                 // green
-		["diff.minus"] = Brush.Parse("#f38ba8"),                // red
-		["diff.delta"] = Brush.Parse("#89b4fa")                 // blue
-	};
-	private bool _didMoveScrollBar;
+		["attribute"] = Brush.Parse("#c4a82e"),                 // primary
+		["type"] = Brush.Parse("#c4a82e"),                      // primary
+		["type.enum.variant"] = Brush.Parse("#d14358"),         // secondary
+		["constructor"] = Brush.Parse("#00a66c"),             // tertiary
+		["constant"] = Brush.Parse("#d14358"),                  // secondary
+		["constant.character"] = Brush.Parse("#471f2a"),        // secondaryContainer
+		["constant.character.escape"] = Brush.Parse("#083d30"), // tertiaryContainer
+		["string"] = Brush.Parse("#00a66c"),                  // tertiary
+		["string.regexp"] = Brush.Parse("#083d30"),             // tertiaryContainer
+		["string.special"] = Brush.Parse("#00a66c"),            // tertiary
+		["string.special.symbol"] = Brush.Parse("#00a66c"),     // tertiary
+		["string.special.path"] = Brush.Parse("#d14358"),       // secondary
+		["path"] = Brush.Parse("#d14358"),                      // secondary
+		["comment"] = Brush.Parse("#45a0d6"),                   // outline
+		["variable"] = Brush.Parse("#5c8ac4"),                  // onSurface
+		["variable.builtin"] = Brush.Parse("#d14358"),          // secondary
+		["variable.parameter"] = Brush.Parse("#9b6bc1"),        // onSurfaceVariant
+		["variable.other.member"] = Brush.Parse("#c4a82e"),     // primary
+		["label"] = Brush.Parse("#d14358"),                     // secondary
+		["punctuation"] = Brush.Parse("#45a0d6"),               // outline
+		["keyword"] = Brush.Parse("#c4a82e"),                   // primary
+		["keyword.control.conditional"] = Brush.Parse("#00a66c"), // tertiary
+		["operator"] = Brush.Parse("#d14358"),                  // secondary
+		["function"] = Brush.Parse("#00a66c"),                  // tertiary
+		["function.macro"] = Brush.Parse("#00a66c"),            // tertiary
+		["tag"] = Brush.Parse("#d14358"),                       // secondary
+		["namespace"] = Brush.Parse("#d14358"),                 // secondary
+		["special"] = Brush.Parse("#d14358"),                   // secondary
+		["markup.heading"] = Brush.Parse("#c4a82e"),            // primary
+		["markup.list"] = Brush.Parse("#5c8ac4"),               // onSurface
+		["markup.bold"] = Brush.Parse("#d14358"),               // secondary
+		["markup.italic"] = Brush.Parse("#d14358"),             // secondary
+		["markup.link.url"] = Brush.Parse("#d14358"),           // secondary
+		["markup.link.label"] = Brush.Parse("#c4a82e"),         // primary
+		["markup.raw"] = Brush.Parse("#5c8ac4"),                // onSurface
+		["markup.quote"] = Brush.Parse("#d14358"),              // secondary
+		["diff.plus"] = Brush.Parse("#a6e3a1"),                 // plus
+		["diff.minus"] = Brush.Parse("#b32d2d"),                // error
+		["diff.delta"] = Brush.Parse("#89b4fa")                 // delta
+	}; private bool _didMoveScrollBar;
 
 	private IBrush? TryGetHighlight(string capture)
 	{
@@ -812,9 +811,9 @@ internal sealed partial class EditorView : Control
 
 		var color = Color.FromArgb(
 			(byte)(255 * opacity),
-			0,
-			220,
-			255);
+			196,
+			168,
+			46);
 
 		context.DrawEllipse(
 			Brushes.Transparent,
@@ -954,7 +953,7 @@ internal sealed partial class EditorView : Control
 
 	private void DrawMainRectangle(DrawingContext context)
 	{
-		context.DrawRectangle(Brush.Parse("#1e1e2e"), new Pen(Brushes.Black, 1), Bounds);
+		context.DrawRectangle(Brush.Parse("#0c1017"), new Pen(Brushes.Black, 1), Bounds);
 	}
 
 	protected override void OnPointerPressed(PointerPressedEventArgs e)

@@ -263,7 +263,6 @@ public class TreeSitterClient : IDisposable
 		Active = false;
 		_tsTree?.Dispose();
 		_tsTree = null;
-		// Language and highlight query belong to the shared registry.
 		_tsHighlightQuery = null;
 		_assets = null;
 		_tsParser.Dispose();

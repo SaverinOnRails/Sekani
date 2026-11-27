@@ -1,9 +1,5 @@
 //Lifted verbatim from: https://github.com/tree-sitter/csharp-tree-sitter
 //This will only work on Linux for now 
-
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace Sekani.Integrations.TreeSitter;
