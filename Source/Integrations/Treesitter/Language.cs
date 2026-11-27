@@ -13,7 +13,9 @@ internal static class TreeSitterLanguageRegistry
 		//TODO: query inheritance
 		new ("C++","/home/noble/Documents/sekanitestfiles/treesitter/Cpp/cpp.so","tree_sitter_cpp", "/home/noble/Documents/sekanitestfiles/treesitter/Cpp/highlights.scm", ["cpp","cc","hpp"]),
 
-		new ("Jai","/home/noble/Documents/sekanitestfiles/treesitter/jai/jai.so","tree_sitter_jai", "/home/noble/Documents/sekanitestfiles/treesitter/jai/highlights.scm", ["jai"])
+		new ("Jai","/home/noble/Documents/sekanitestfiles/treesitter/jai/jai.so","tree_sitter_jai", "/home/noble/Documents/sekanitestfiles/treesitter/jai/highlights.scm", ["jai"]),
+
+		new ("Rust","/home/noble/Documents/sekanitestfiles/treesitter/Rust/rust.so","tree_sitter_rust", "/home/noble/Documents/sekanitestfiles/treesitter/Rust/highlights.scm", ["rs"])
 	];
 	public static TreeSitterAssets? TryGetAssets(string extension)
 	{

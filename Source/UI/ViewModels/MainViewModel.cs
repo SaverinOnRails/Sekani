@@ -22,7 +22,6 @@ public partial class MainViewModel : ViewModelBase, IEditorContext
         ProjectManager = new();
         ToastManager = new ToastManager(ShadToastManager);
         _commands = new(this);
-        // ProjectManager.OpenProject("/home/noble/Projects/Sekani");
     }
 
     private void CreateClipboard(IClipboard? clipboard)

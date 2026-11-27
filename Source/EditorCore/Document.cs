@@ -1,9 +1,7 @@
 using System.Buffers;
-using System.ComponentModel;
 using System.Globalization;
-using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
+using Sekani.Integrations.LanguageServer;
 using Sekani.Integrations.TreeSitter;
 
 namespace Sekani.EditorCore;
@@ -25,6 +23,7 @@ public sealed class SekaniDocument : IDisposable
 	}
 	private LineCache? _lineCache;
 	private LineCache? _nonWrappingLineCache;
+	private LSPClient? _languageServer;
 	private TreeSitterClient? _treeSitterClient;
 	private bool _disposed;
 

@@ -10,6 +10,7 @@ public class ProjectManager
 		_projects.Add(project);
 	}
 
+	//TODO: Find a way to stream this to the prompt or whoever needs this
 	public List<string> AllFiles()
 	{
 		List<string> files = [];

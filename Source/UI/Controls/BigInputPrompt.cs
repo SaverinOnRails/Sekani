@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -11,12 +12,14 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Sekani.EditorCore;
+using System.Collections.Generic;
 
 namespace SekaniUI.Controls;
 
 public class BigInputPrompt : FocusablePromptControl
 {
 	private ListBox? _fileList;
+	private int _filterRequestVersion;
 
 	public BigInputPrompt()
 	{
@@ -131,41 +134,57 @@ public class BigInputPrompt : FocusablePromptControl
 		Build();
 	}
 
-	private void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
+	private async void TextBoxTextChanged(object? sender, TextChangedEventArgs e)
 	{
 		var source = (TextBox)e.Source!;
-		FilterList(source.Text ?? string.Empty);
+		await FilterListAsync(source.Text ?? string.Empty);
 	}
 
-	private void FilterList(string? query)
+	//TODO: CancellationToken style dismissal to kill previous search
+	private async Task FilterListAsync(string? query)
 	{
-		if (_fileList is null || _listContext?.Items is null)
+		var fileList = _fileList;
+		var listContext = _listContext;
+		if (fileList is null || listContext?.Items is null)
 			return;
-		var items = _listContext.Items;
+
+		var requestVersion = ++_filterRequestVersion;
+		var items = listContext.Items;
 		if (string.IsNullOrWhiteSpace(query))
 		{
-			_fileList.ItemsSource = items;
+			fileList.ItemsSource = items;
 			return;
 		}
-		var all = Process.ExtractTop(query, items, limit: 30, cutoff: 40).ToList();
-		if (all.Count == 0) { return; }
-		var best = all[0].Score;
-		var filtered = all
-			.Where(r => r.Score >= Math.Max(50, best - 15))
-			.Take(10)
-			.Select(r => r.Value)
-			.ToList();
 
-		_fileList.ItemsSource = filtered;
-		_fileList.SelectedIndex = filtered.Count > 0 ? 0 : -1;
-
-		if (_fileList.SelectedIndex >= 0)
+		var filtered = await Task.Run(() =>
 		{
-			_fileList.ScrollIntoView(_fileList.SelectedIndex);
+			var all = Process.ExtractTop(query, items, limit: 30, cutoff: 40).ToList();
+			if (all.Count == 0) return new List<string>();
+
+			var best = all[0].Score;
+			return all
+				.Where(r => r.Score >= Math.Max(50, best - 15))
+				.Take(10)
+				.Select(r => r.Value)
+				.ToList();
+		});
+
+		if (requestVersion != _filterRequestVersion ||
+			!ReferenceEquals(_fileList, fileList) ||
+			!ReferenceEquals(_listContext, listContext))
+			return;
+
+		fileList.ItemsSource = filtered;
+		fileList.SelectedIndex = filtered.Count > 0 ? 0 : -1;
+
+		if (fileList.SelectedIndex >= 0)
+		{
+			fileList.ScrollIntoView(fileList.SelectedIndex);
 		}
 	}
 	protected override void OnDeactivated()
 	{
+		_filterRequestVersion++;
 		_fileList = null;
 	}
 }

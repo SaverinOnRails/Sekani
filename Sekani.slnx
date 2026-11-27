@@ -3,6 +3,7 @@
     <Project Path="Source/EditorCore/EditorCore.csproj" />
   </Folder>
   <Folder Name="/Source/Integrations/">
+    <Project Path="Source/Integrations/LanguageServer/LanguageServer.csproj" />
     <Project Path="Source/Integrations/Treesitter/Treesitter.csproj" />
   </Folder>
   <Folder Name="/Source/UI/">
