@@ -98,7 +98,7 @@ public sealed class SekaniDocument : IDisposable
 		BeginTransaction();
 		if (_useTreesitter)
 		{
-			_treeSitterClient = new(_pieceTable.Slice);
+			_treeSitterClient = new(_pieceTable.Slice, null);
 			_treeSitterClient.ParseBuffer("");
 		}
 		SubscribeToEvents();
@@ -136,7 +136,7 @@ public sealed class SekaniDocument : IDisposable
 		BeginTransaction();
 		if (_useTreesitter)
 		{
-			_treeSitterClient = new(_pieceTable.Slice);
+			_treeSitterClient = new(_pieceTable.Slice, Path.GetExtension(filePath).TrimStart('.'));
 			_treeSitterClient.ParseBuffer(string.Concat(_pieceTable.OriginalBuffer));
 		}
 		SubscribeToEvents();

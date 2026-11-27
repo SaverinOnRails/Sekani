@@ -8,12 +8,10 @@ namespace Sekani.Integrations.TreeSitter;
 public class TreeSitterClient : IDisposable
 {
 	public bool Active { get; private set; } = false;
-	private TSLanguage _tsLanguage = null!;
 	private TSParser _tsParser = new();
 	private TSTree? _tsTree;
 	private TSQuery? _tsHighlightQuery;
-	private string _treeSitterlib = "/home/noble/Documents/sekanitestfiles/treesitter/C#/c-sharp.so";
-	private string _treeSitterHighlightQuery = "/home/noble/Documents/sekanitestfiles/treesitter/C#/highlights.scm";
+	private TreeSitterAssets? _assets;
 	private int _readLength = 0;
 	private int _defaultPriority = 100;
 
@@ -23,41 +21,22 @@ public class TreeSitterClient : IDisposable
 	private readonly Func<int, int, Span<char>, int> _getBufferSlice;
 	private char[] _tsReadBuffer = Array.Empty<char>();
 	private nint _tsReadPtr;
-    private bool _needsReparse;
+	private bool _needsReparse;
 
-    public TreeSitterClient(Func<int, int, Span<char>, int> getBufferSlice)
+	public TreeSitterClient(Func<int, int, Span<char>, int> getBufferSlice, string? extension)
 	{
-		LoadNative();
+		if (extension is null) return;
+		extension = extension.ToLower();
+		_assets = TreeSitterLanguageRegistry.TryGetAssets(extension);
 		_tsInputRead = TsInputRead;
 		_readLength = 8192;
 		_getBufferSlice = getBufferSlice;
-		if (_tsLanguage is null || _tsLanguage.Ptr == nint.Zero) return;
-		_tsParser.set_language(_tsLanguage);
-		var highlightsQuery = _tsLanguage.query_new(File.ReadAllText(_treeSitterHighlightQuery), out uint errorCode, out TSQueryError error);
-		if (highlightsQuery is null) return;
-		_tsHighlightQuery = highlightsQuery;
+		if (_assets is null || _assets.Language.Ptr == nint.Zero) return;
+		_tsParser.set_language(_assets.Language);
+		_tsHighlightQuery = _assets.HighlightQuery;
 		ParsePatternPredicates();
 		EnsureReadBuffer(_readLength);
 		Active = true;
-	}
-	private void LoadNative()
-	{
-		try
-		{
-			var libraryHandle = NativeLibrary.Load(_treeSitterlib);
-			var functionPtr = NativeLibrary.GetExport(
-				libraryHandle,
-				"tree_sitter_c_sharp");
-			var getLanguage =
-				Marshal.GetDelegateForFunctionPointer<GetLanguageDelegate>(
-					functionPtr);
-			nint languagePtr = getLanguage();
-			_tsLanguage = new(languagePtr);
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine(ex);
-		}
 	}
 
 	public void ParseBuffer(string buf)
@@ -76,7 +55,7 @@ public class TreeSitterClient : IDisposable
 	public void MaybeReparse()
 	{
 		if (Active == false || _tsTree is null || _tsHighlightQuery is null) return;
-		if(_needsReparse == false) return; 
+		if (_needsReparse == false) return;
 		_needsReparse = false;
 		TSInput input = new()
 		{
@@ -281,14 +260,13 @@ public class TreeSitterClient : IDisposable
 
 	public void Dispose()
 	{
-		// Stop GetHighlights/ApplyEdit/MaybeReparse from touching freed native memory.
 		Active = false;
 		_tsTree?.Dispose();
 		_tsTree = null;
-		_tsHighlightQuery?.Dispose();
+		// Language and highlight query belong to the shared registry.
 		_tsHighlightQuery = null;
+		_assets = null;
 		_tsParser.Dispose();
-		_tsLanguage?.Dispose();
 	}
 }
 

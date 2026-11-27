@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
@@ -33,7 +32,7 @@ internal sealed partial class EditorView : Control
 	  _baseLineNumberWidth +
 	  Math.Max(0, Math.Max(Document.LineCount.ToString().Length - 1, 7)) * _editorMetrics.CharAdvance;
 
-	private bool _drawLineNumbers = false;
+	private bool _drawLineNumbers = true;
 
 	private bool _smoothScroll = true;
 	private bool _useRelativeLineNumber = false;
