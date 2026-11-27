@@ -8,7 +8,12 @@ internal static class TreeSitterLanguageRegistry
 
 	//Will be built dynamically from config
 	private static List<Language> _languages = [
-		new ("c-sharp","/home/noble/Documents/sekanitestfiles/treesitter/C#/c-sharp.so","tree_sitter_c_sharp", "/home/noble/Documents/sekanitestfiles/treesitter/C#/highlights.scm", ["cs"])
+		new ("C-sharp","/home/noble/Documents/sekanitestfiles/treesitter/C#/c-sharp.so","tree_sitter_c_sharp", "/home/noble/Documents/sekanitestfiles/treesitter/C#/highlights.scm", ["cs"]),
+		 
+		//TODO: query inheritance
+		new ("C++","/home/noble/Documents/sekanitestfiles/treesitter/Cpp/cpp.so","tree_sitter_cpp", "/home/noble/Documents/sekanitestfiles/treesitter/Cpp/highlights.scm", ["cpp","cc","hpp"]),
+
+		new ("Jai","/home/noble/Documents/sekanitestfiles/treesitter/jai/jai.so","tree_sitter_jai", "/home/noble/Documents/sekanitestfiles/treesitter/jai/highlights.scm", ["jai"])
 	];
 	public static TreeSitterAssets? TryGetAssets(string extension)
 	{
@@ -53,8 +58,9 @@ internal static class TreeSitterLanguageRegistry
 
 			return new TreeSitterAssets(tsLanguage, highlightQuery, libraryHandle);
 		}
-		catch
+		catch (Exception e)
 		{
+			Console.WriteLine(e);
 			highlightQuery?.Dispose();
 			tsLanguage?.Dispose();
 			if (libraryHandle != nint.Zero)

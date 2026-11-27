@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Sekani.EditorCore;
 
@@ -25,7 +26,7 @@ internal sealed partial class EmptyEditorView : ContentControl
 		Content = MainContainer();
 	}
 
-	private static Control MainContainer()
+	private Control MainContainer()
 	{
 		var stack = new StackPanel
 		{
@@ -44,12 +45,38 @@ internal sealed partial class EmptyEditorView : ContentControl
 			HorizontalAlignment = HorizontalAlignment.Center,
 			Margin = new Thickness(0, 0, 0, 30)
 		});
+		var openFolderButton = new Button
+		{
+			Content = "Open folder",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			Margin = new Thickness(0, 0, 0, 20),
+		};
+		openFolderButton.Classes.Add("Primary");
+		openFolderButton.Click += OpenFolderClicked;
 
 		stack.Children.Add(Hint(":", "Command palette"));
 		stack.Children.Add(Hint("space f", "Open project file"));
 		stack.Children.Add(Hint("space b", "Open buffers"));
+		stack.Children.Add(openFolderButton);
 
 		return stack;
+	}
+
+	private async void OpenFolderClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+	{
+		if (_editorContext is null) return;
+		var topLevel = TopLevel.GetTopLevel(this);
+		if (topLevel is null || !topLevel.StorageProvider.CanPickFolder) return;
+
+		var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+		{
+			Title = "Open folder",
+			AllowMultiple = false
+		});
+		if (folders.Count == 0 || !folders[0].Path.IsFile) return;
+
+		_editorContext.ProjectManager.OpenProject(folders[0].Path.LocalPath);
+		Focus();
 	}
 
 	private static Control Hint(string keys, string description)
